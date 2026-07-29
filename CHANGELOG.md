@@ -7,12 +7,12 @@
 #### 说明
 
 - v0.4.0 首次加入 macOS 15–26 菜单栏 App 支持；macOS App 第一版为 Beta，仅提供 TUN 模式，不提供系统代理模式，有问题请及时反馈。
-- 本版本从 `main` 的同一个干净 tag 构建 Linux、Unraid、fnOS、macOS 与 Docker；GitHub Release 增加已签名、公证的 Universal 2 DMG/ZIP 及 SHA-256。
+- 本版本从 `main` 的同一个干净 tag 构建 Linux、Unraid、fnOS、macOS 与 Docker；GitHub Release 增加名称带 `-unsigned` 的 Universal 2 DMG/ZIP 及 SHA-256。首个 macOS Beta 未使用 Apple Developer ID 或公证，首次打开需要用户手动允许。
 
 #### 新增
 
 - 新增原生 SwiftUI Universal 2 菜单栏 App，覆盖 Apple Silicon 与 Intel，支持启动、LAN 直连保活停止、重启、完全停止、打开网页管理页和实时上下行速度。
-- 新增 root LaunchDaemon 和统一 Network Runtime API；macOS 启用时保存并恢复网络服务 DNS 与原始 IPv4 转发状态，允许系统动态分配 `utunN`，并验证 DNS、Fake-IP 路由和 IPv4 转发状态。
+- 新增 root LaunchDaemon 和统一 Network Runtime API；未签名 Beta 通过管理员授权的 legacy Installer 安装到 `/Library`，默认不调用 `SMAppService`。macOS 启用时保存并恢复网络服务 DNS 与原始 IPv4 转发状态，允许系统动态分配 `utunN`，并验证 DNS、Fake-IP 路由和 IPv4 转发状态。
 - 组件下载增加 Mihomo 官方 Darwin 资产、兼容扩展插件的 mssb MosDNS Darwin 资产、GitHub SHA-256 digest 和 Mach-O 架构校验；Web 初始化与系统设置在 macOS 下强制 TUN 并隐藏 nftables。
 
 #### 修复
@@ -26,12 +26,12 @@
 #### Notes
 
 - v0.4.0 introduces the macOS 15–26 menu bar app. The first macOS release is Beta, supports TUN only, does not provide system-proxy mode, and users are encouraged to report problems promptly.
-- Linux, Unraid, fnOS, macOS, and Docker are built from the same clean tag on `main`. GitHub Release now includes signed and notarized Universal 2 DMG/ZIP assets with SHA-256 files.
+- Linux, Unraid, fnOS, macOS, and Docker are built from the same clean tag on `main`. GitHub Release includes Universal 2 DMG/ZIP assets named with `-unsigned` plus SHA-256 files. The first macOS Beta is not Developer ID signed or notarized, so users must explicitly allow the first launch.
 
 #### Added
 
 - Added a native SwiftUI Universal 2 menu bar app for Apple Silicon and Intel with start, LAN-safe direct stop, restart, full stop, WebUI access, and live upload/download speed.
-- Added a root LaunchDaemon and unified Network Runtime API. macOS activation snapshots and restores network-service DNS and the original IPv4 forwarding value, lets the system allocate `utunN`, and validates DNS, Fake-IP routing, and forwarding readiness.
+- Added a root LaunchDaemon and unified Network Runtime API. The unsigned Beta installs it into `/Library` through an administrator-authorized legacy installer and does not call `SMAppService` by default. macOS activation snapshots and restores network-service DNS and the original IPv4 forwarding value, lets the system allocate `utunN`, and validates DNS, Fake-IP routing, and forwarding readiness.
 - Component downloads now use official Mihomo Darwin assets and mssb MosDNS Darwin builds with the required extension plugins, GitHub SHA-256 digests, and Mach-O architecture validation. Web setup/settings force TUN and hide nftables on macOS.
 
 #### Fixed

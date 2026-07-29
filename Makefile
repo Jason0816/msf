@@ -1,4 +1,4 @@
-.PHONY: dev build frontend import-web package release-package release-assets checksums verify-release-source verify-release-assets unraid fnos test audit-compliance macos-app-project macos-app-test macos-app-build macos-app-build-debug macos-app-build-release macos-app-build-signed macos-app-verify macos-release-assets macos-app-open clean
+.PHONY: dev build frontend import-web package release-package release-assets checksums verify-release-source verify-release-assets unraid fnos test audit-compliance macos-app-project macos-app-test macos-app-build macos-app-build-debug macos-app-build-release macos-app-build-release-assets macos-app-build-signed macos-app-verify macos-release-assets macos-release-assets-signed macos-app-open clean
 
 APP_NAME := msf
 DIST := dist
@@ -153,6 +153,29 @@ macos-app-build-release: frontend macos-app-project
 		CODE_SIGNING_ALLOWED=NO \
 		build
 
+macos-app-build-release-assets: frontend macos-app-project
+	@test "$(VERSION)" != "0.1.0-dev" || { echo "VERSION must be set for a macOS release build" >&2; exit 1; }
+	cd $(MACOS_APP_DIR) && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) xcodebuild \
+		-project MSFMenuBar.xcodeproj \
+		-scheme MSFMenuBar \
+		-configuration Release \
+		-derivedDataPath DerivedData \
+		ONLY_ACTIVE_ARCH=NO \
+		ARCHS="arm64 x86_64" \
+		MARKETING_VERSION="$(VERSION)" \
+		CURRENT_PROJECT_VERSION="$(MACOS_BUILD_NUMBER)" \
+		MSF_VERSION="$(VERSION)" \
+		MSF_BUILD_COMMIT="$(GIT_COMMIT)" \
+		MSF_BUILD_TAG="$(BUILD_TAG)" \
+		MSF_BUILD_TAG_COMMIT="$(TAG_COMMIT)" \
+		MSF_BUILD_SOURCE_COMMIT="$(SOURCE_COMMIT)" \
+		MSF_BUILD_DIRTY="$(BUILD_DIRTY)" \
+		MSF_BUILD_TIME="$(BUILD_TIME)" \
+		ENABLE_HARDENED_RUNTIME=NO \
+		CODE_SIGNING_ALLOWED=NO \
+		CODE_SIGNING_REQUIRED=NO \
+		build
+
 macos-app-build-signed: frontend macos-app-project
 	@test "$(VERSION)" != "0.1.0-dev" || { echo "VERSION must be set for a signed macOS build" >&2; exit 1; }
 	@test -n "$(MACOS_DEVELOPMENT_TEAM)" || { echo "MACOS_DEVELOPMENT_TEAM is required" >&2; exit 1; }
@@ -173,6 +196,7 @@ macos-app-build-signed: frontend macos-app-project
 		MSF_BUILD_SOURCE_COMMIT="$(SOURCE_COMMIT)" \
 		MSF_BUILD_DIRTY="$(BUILD_DIRTY)" \
 		MSF_BUILD_TIME="$(BUILD_TIME)" \
+		SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) MSF_SIGNED_RELEASE' \
 		CODE_SIGNING_ALLOWED=YES \
 		CODE_SIGNING_REQUIRED=YES \
 		CODE_SIGN_STYLE=Manual \
@@ -185,12 +209,16 @@ macos-app-build-signed: frontend macos-app-project
 macos-app-verify:
 	cd $(MACOS_APP_DIR) && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) Scripts/verify-app.sh $(MACOS_CONFIGURATION)
 
-macos-release-assets: verify-release-source macos-app-build-signed
+macos-release-assets: verify-release-source macos-app-build-release-assets
+	cd $(MACOS_APP_DIR) && \
+		Scripts/package-release.sh "$(VERSION)" "$(RELEASE_TAG)" "$(GIT_COMMIT)" "$(abspath $(MACOS_RELEASE_DIR))"
+
+macos-release-assets-signed: verify-release-source macos-app-build-signed
 	@test -n "$(MACOS_NOTARY_PROFILE)" || { echo "MACOS_NOTARY_PROFILE is required" >&2; exit 1; }
 	cd $(MACOS_APP_DIR) && \
 		MACOS_SIGNING_IDENTITY="$(MACOS_SIGNING_IDENTITY)" \
 		MACOS_NOTARY_PROFILE="$(MACOS_NOTARY_PROFILE)" \
-		Scripts/package-release.sh "$(VERSION)" "$(RELEASE_TAG)" "$(GIT_COMMIT)" "$(abspath $(MACOS_RELEASE_DIR))"
+		Scripts/package-release-signed.sh "$(VERSION)" "$(RELEASE_TAG)" "$(GIT_COMMIT)" "$(abspath $(MACOS_RELEASE_DIR))"
 
 macos-app-open: macos-app-build-debug
 	open $(MACOS_APP_DIR)/DerivedData/Build/Products/Debug/MSF.app
