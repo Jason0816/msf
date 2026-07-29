@@ -40,6 +40,9 @@ interface NetworkInterface {
   primary_ip?: string;
   is_loopback?: boolean;
   is_up?: boolean;
+  is_usable?: boolean;
+  is_default?: boolean;
+  recommended?: boolean;
   speed?: string | number;
 }
 
@@ -63,6 +66,7 @@ interface PrivilegeInfo {
   runtime?: {
     docker?: boolean;
     docker_network_mode?: string;
+    macos?: boolean;
   };
 }
 
@@ -947,15 +951,37 @@ export function SetupPage() {
     ]).then(([privilegeResult, systemResult, networkResult]) => {
       if (privilegeResult.status === "fulfilled") {
         setPrivilege(privilegeResult.value);
-        if (privilegeResult.value?.runtime?.docker) {
-          setForm((current) => ({ ...current, linux_proxy_mode: "tun", enableIPv6: false }));
+        const dockerRuntime = Boolean(privilegeResult.value?.runtime?.docker);
+        const macOSRuntime = Boolean(privilegeResult.value?.runtime?.macos);
+        if (dockerRuntime || macOSRuntime) {
+          setForm((current) => ({
+            ...current,
+            linux_proxy_mode: "tun",
+            enableIPv6: false,
+            ...(macOSRuntime ? { auto_set_dns: true, dns_on: "127.0.0.1" } : {}),
+          }));
         }
       }
-      if (systemResult.status === "fulfilled") setSystem(systemResult.value);
+      if (systemResult.status === "fulfilled") {
+        setSystem(systemResult.value);
+        if (systemResult.value?.system?.os === "darwin") {
+          setForm((current) => ({
+            ...current,
+            linux_proxy_mode: "tun",
+            auto_set_dns: true,
+            dns_on: "127.0.0.1",
+            enableIPv6: false,
+          }));
+        }
+      }
       if (networkResult.status === "fulfilled") {
         const rows = networkRows(networkResult.value);
         setIfaces(rows);
-        const first = rows.find((item) => item.is_up && !item.is_loopback) || rows[0];
+        const first =
+          rows.find((item) => item.recommended || (item.is_default && item.is_usable !== false))
+          || rows.find((item) => item.is_up && !item.is_loopback && Boolean(item.primary_ip || item.ip))
+          || rows.find((item) => item.is_usable)
+          || rows[0];
         if (first?.name) setForm((current) => ({ ...current, selected_interface: first.name }));
       }
       const firstError = [privilegeResult, systemResult, networkResult].find((result) => result.status === "rejected");
@@ -987,6 +1013,8 @@ export function SetupPage() {
   const occupiedPorts = useMemo(() => occupiedReservedPorts(preflight), [preflight]);
   const hasPortWarnings = occupiedPorts.length > 0;
   const isDockerRuntime = Boolean(privilege?.runtime?.docker);
+  const isMacOSRuntime = Boolean(privilege?.runtime?.macos) || system?.system?.os === "darwin";
+  const isTunOnlyRuntime = isDockerRuntime || isMacOSRuntime;
 
   const fetchPreflight = useCallback(async () => {
     setPreflightBusy(true);
@@ -1010,7 +1038,8 @@ export function SetupPage() {
   }, [downloadStatus, fetchPreflight, step]);
 
   const update = (key: keyof SetupForm, value: string | boolean) => {
-    if (key === "linux_proxy_mode" && isDockerRuntime && value !== "tun") return;
+    if (key === "linux_proxy_mode" && isTunOnlyRuntime && value !== "tun") return;
+    if (key === "auto_set_dns" && isMacOSRuntime && value !== true) return;
     if (key === "timezone" || key === "linux_proxy_mode") {
       setPreflight(null);
       setPortRiskAccepted(false);
@@ -1415,8 +1444,8 @@ export function SetupPage() {
                           >
                             {ifaces.length === 0 && <option value="">请选择网络接口</option>}
                             {ifaces.map((iface) => (
-                              <option key={iface.name} value={iface.name}>
-                                {iface.name} - {iface.primary_ip || iface.ip || "-"} {iface.speed ? `(${iface.speed})` : ""}
+                              <option key={iface.name} value={iface.name} disabled={isMacOSRuntime && iface.is_usable === false}>
+                                {iface.name} - {iface.primary_ip || iface.ip || "无可用 IP"} {iface.recommended ? "（默认出口）" : iface.speed ? `(${iface.speed})` : ""}
                               </option>
                             ))}
                           </select>
@@ -1437,15 +1466,22 @@ export function SetupPage() {
                     <div className="rounded-lg border border-border bg-background p-3">
                       <div className="flex items-center justify-between gap-4">
                         <div>
-                          <div className="text-xs font-semibold">自动修改本机 DNS</div>
+                          <div className="text-xs font-semibold">{isMacOSRuntime ? "macOS DNS 自动接管" : "自动修改本机 DNS"}</div>
                           <div className="mt-1 text-[11px] leading-5 text-muted-foreground">
-                            开启后自动将系统 DNS 切换为 mosdns（127.0.0.1），关闭则仅生成配置不改动系统 DNS
+                            {isMacOSRuntime
+                              ? "TUN 启动时固定切换到本机 MosDNS（127.0.0.1）；完全停止时按启动前快照恢复各网络服务的原始 DNS。"
+                              : "开启后自动将系统 DNS 切换为 mosdns（127.0.0.1），关闭则仅生成配置不改动系统 DNS"}
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => update("auto_set_dns", !form.auto_set_dns)}
-                          className={cn("relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0", form.auto_set_dns ? "bg-primary" : "bg-muted")}
+                          disabled={isMacOSRuntime}
+                          className={cn(
+                            "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0",
+                            form.auto_set_dns ? "bg-primary" : "bg-muted",
+                            isMacOSRuntime && "cursor-not-allowed opacity-80"
+                          )}
                           aria-label="自动修改本机 DNS"
                           aria-pressed={form.auto_set_dns}
                         >
@@ -1454,11 +1490,21 @@ export function SetupPage() {
                       </div>
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <Field label="服务启动后本机 DNS" hint="服务启动后系统将使用的 DNS 地址，默认 127.0.0.1">
-                        <input className={cn(inputClass, "h-8 text-xs")} value={form.dns_on} onChange={(event) => update("dns_on", event.target.value)} />
+                      <Field label="服务启动后本机 DNS" hint={isMacOSRuntime ? "macOS TUN 固定使用本机 MosDNS" : "服务启动后系统将使用的 DNS 地址，默认 127.0.0.1"}>
+                        <input
+                          className={cn(inputClass, "h-8 text-xs")}
+                          value={isMacOSRuntime ? "127.0.0.1" : form.dns_on}
+                          disabled={isMacOSRuntime}
+                          onChange={(event) => update("dns_on", event.target.value)}
+                        />
                       </Field>
-                      <Field label="服务停止后本机 DNS" hint="服务停止后恢复的 DNS 地址，默认 223.5.5.5">
-                        <input className={cn(inputClass, "h-8 text-xs")} value={form.dns_off} onChange={(event) => update("dns_off", event.target.value)} />
+                      <Field label="服务停止后本机 DNS" hint={isMacOSRuntime ? "完整停止时恢复启动前捕获的系统 DNS 快照" : "服务停止后恢复的 DNS 地址，默认 223.5.5.5"}>
+                        <input
+                          className={cn(inputClass, "h-8 text-xs")}
+                          value={isMacOSRuntime ? "按启动前系统快照恢复" : form.dns_off}
+                          disabled={isMacOSRuntime}
+                          onChange={(event) => update("dns_off", event.target.value)}
+                        />
                       </Field>
                     </div>
                   </div>
@@ -1583,15 +1629,17 @@ export function SetupPage() {
                       <SlidersHorizontal className="h-4 w-4" />
                     </span>
                     <div>
-                      <div className="text-sm font-semibold">Linux 透明代理</div>
-                      <div className="text-xs text-muted-foreground">Linux 透明代理配置</div>
+                      <div className="text-sm font-semibold">{isMacOSRuntime ? "macOS TUN 网络" : "Linux 透明代理"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {isMacOSRuntime ? "由系统 LaunchDaemon 管理 DNS、utun 与 LAN 转发" : "Linux 透明代理配置"}
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <div className="mb-2 text-sm font-medium">Linux 透明代理模式</div>
+                      <div className="mb-2 text-sm font-medium">{isMacOSRuntime ? "macOS 接管模式" : "Linux 透明代理模式"}</div>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        {!isDockerRuntime && (
+                        {!isTunOnlyRuntime && (
                           <ChoiceCard
                             title="nftables 转发（TProxy + Redirect）"
                             description="Linux 下 Mihomo 支持 nftables 转发，默认使用 nftables 转发。"
@@ -1600,9 +1648,17 @@ export function SetupPage() {
                           />
                         )}
                         <ChoiceCard
-                          title={isDockerRuntime ? "TUN 模式（Docker 唯一支持模式）" : "TUN 模式"}
+                          title={
+                            isMacOSRuntime
+                              ? "TUN 模式（macOS 唯一支持模式）"
+                              : isDockerRuntime
+                                ? "TUN 模式（Docker 唯一支持模式）"
+                                : "TUN 模式"
+                          }
                           description={
-                            isDockerRuntime
+                            isMacOSRuntime
+                              ? "MosDNS 接管本机与局域网 DNS，Mihomo utun 接管 Fake-IP 路由；停止时保留 TUN 并切换为直连。"
+                              : isDockerRuntime
                               ? "需要 /dev/net/tun 与 NET_ADMIN；由 MosDNS 负责 DNS 分流，Mihomo TUN 接管 Fake-IP 路由。"
                               : "需要 /dev/net/tun、NET_ADMIN 和正确 DNS 链路；Mihomo TUN 接管 Fake-IP 路由，不写 nftables 策略。"
                           }
