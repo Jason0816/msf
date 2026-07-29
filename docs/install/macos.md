@@ -8,13 +8,13 @@ MSF v0.4.0 首次提供 macOS Beta 版菜单栏 App，最低支持 macOS 15，�
 
 从 [v0.4.0 GitHub Release](https://github.com/scoltzero/msf/releases/tag/v0.4.0) 下载：
 
-- `MSF-0.4.0-macos-universal.dmg`：推荐安装包。
-- `MSF-0.4.0-macos-universal.zip`：直接解压版本。
+- `MSF-0.4.0-macos-universal-unsigned.dmg`：推荐安装包。
+- `MSF-0.4.0-macos-universal-unsigned.zip`：直接解压版本。
 - 对应的 `.sha256`：用于校验下载文件。
 
-DMG、ZIP 与其中的 `MSF.app` 均使用 Apple Developer ID 签名并完成 Apple 公证。使用 DMG 时，将 `MSF.app` 拖入 `/Applications` 后再打开。
+首个 macOS Beta 未使用 Apple Developer ID 签名，也未提交 Apple 公证。使用 DMG 时，将 `MSF.app` 拖入 `/Applications`，然后在 Finder 中按住 Control 点击或右键 `MSF.app`，选择“打开”并再次确认。若系统仍阻止启动，请到“系统设置 → 隐私与安全”找到 MSF 的拦截提示并选择“仍要打开”。该确认只应对从本项目 GitHub Release 下载且 SHA-256 校验正确的文件执行。
 
-首次打开后进入“连接设置”，点击“安装后台”。Release App 使用 `SMAppService` 注册 root LaunchDaemon；如果 macOS 要求批准后台项目，请前往“系统设置 → 通用 → 登录项与扩展”允许 MSF，然后回到 App 刷新状态。
+首次打开后进入“连接设置”，点击“安装后台”并输入管理员密码。App 使用 legacy 管理员安装器，把 daemon 与 plist 安装到 `/Library/PrivilegedHelperTools` 和 `/Library/LaunchDaemons`，再由系统级 `launchd` 启动；不使用 `SMAppService`，也不需要在“登录项与扩展”中批准后台项目。
 
 ## 使用边界
 
@@ -29,7 +29,7 @@ DMG、ZIP 与其中的 `MSF.app` 均使用 Apple Developer ID 签名并完成 Ap
 ## 首次使用
 
 1. 将 `MSF.app` 放入 `/Applications` 并打开。
-2. 进入“连接设置”，点击“安装后台”，按系统提示批准 MSF 后台项目。
+2. 进入“连接设置”，点击“安装后台”，在系统授权窗口中输入管理员密码。
 3. 后台状态显示“运行中”后，点击“打开网页管理页”，完成六步初始化；macOS 页面只允许选择 TUN。
 4. 在初始化页下载 Mihomo、与现有配置兼容的 mssb MosDNS 和 Zashboard，填写订阅或手动节点。
 5. 回到“连接设置”，使用管理员账户绑定。密码仅用于这一次登录；App 创建的 `operate` Token 保存在 macOS Keychain。
@@ -63,7 +63,7 @@ networksetup -getdnsservers "Wi-Fi"
 sysctl net.inet.ip.forwarding
 ```
 
-启用后，`route -n get 28.0.0.1` 的 `interface` 应为某个 `utunN`。Release App 的 LaunchDaemon 输出可在 macOS“控制台”中按进程 `io.github.scoltzero.msf.daemon` 或 `msf` 检索。
+启用后，`route -n get 28.0.0.1` 的 `interface` 应为某个 `utunN`。LaunchDaemon 输出可在 macOS“控制台”中按进程 `io.github.scoltzero.msf.daemon` 或 `msf` 检索。
 
 系统数据位于 `/Library/Application Support/MSF`，网络恢复快照位于 `configs/network/darwin-state.json`。快照会记录原始 DNS 和 `net.inet.ip.forwarding`，恢复时不会假定其初始值一定为 `0`。
 
@@ -71,7 +71,7 @@ sysctl net.inet.ip.forwarding
 
 更新 App 时，先退出 MSF，将新版 `MSF.app` 替换到 `/Applications`，重新打开后在“连接设置”中执行后台修复，使 LaunchDaemon 使用新版内嵌后台。
 
-卸载前优先执行“完全停止服务…”，然后到“连接设置”点击“卸载后台”。后台和 LaunchDaemon 注册会被移除，`/Library/Application Support/MSF` 用户数据默认保留；确认不再需要时再手工清理该目录。
+卸载前优先执行“完全停止服务…”，然后到“连接设置”点击“卸载后台”。后台可执行文件和 LaunchDaemon plist 会从 `/Library` 移除，`/Library/Application Support/MSF` 用户数据默认保留；确认不再需要时再手工清理该目录。
 
 ## 源码构建
 
@@ -96,4 +96,4 @@ make macos-app-verify MACOS_CONFIGURATION=Debug
 make macos-app-verify MACOS_CONFIGURATION=Release
 ```
 
-Debug 构建产物为 `macos/MSFMenuBar/DerivedData/Build/Products/Debug/MSF.app`。执行 `make macos-app-open` 可重新构建并打开 Debug App。Debug App 使用管理员授权的 legacy LaunchDaemon 安装器，只用于本地开发测试。
+Debug 构建产物为 `macos/MSFMenuBar/DerivedData/Build/Products/Debug/MSF.app`。执行 `make macos-app-open` 可重新构建并打开 Debug App。当前 Debug、普通 Release 与 GitHub Release 均默认使用管理员授权的 legacy LaunchDaemon 安装器；保留的 `SMAppService` 实现只有在显式启用 `MSF_SIGNED_RELEASE` 编译条件时才会参与构建。

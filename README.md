@@ -22,7 +22,7 @@
 - 支持 Mihomo 自定义配置、CodeMirror YAML 编辑器、组件更新检查、自动下载、更新通知和升级方式配置。
 - 支持 MosDNS、Mihomo、Zashboard 本地上传安装，网络困难时可用预下载核心离线安装。
 - Linux tarball/systemd、fnOS FPK、Unraid PLG 均支持 nftables 与 TUN；Docker `host-tun` / `macvlan-tun` 正式支持且仅允许 TUN。
-- macOS 15–26 提供 Beta 版原生 Universal 2 菜单栏 App、root LaunchDaemon 和 TUN-only 运行时，不提供系统代理模式。
+- macOS 15–26 提供未签名 Beta 版原生 Universal 2 菜单栏 App、root LaunchDaemon 和 TUN-only 运行时，不提供系统代理模式；首次打开需由用户手动允许。
 - Docker 部署必须把宿主机数据目录映射到容器 `/opt/msf`，默认示例使用 `./msf-data:/opt/msf`。
 
 ## 架构原理图
@@ -39,7 +39,7 @@
 | fnOS FPK | 支持 | [fnOS FPK 安装](docs/install/fnos-fpk.md) | fnOS / 飞牛应用中心或 FPK 包管理器 |
 | Unraid PLG | 稳定支持 | [Unraid PLG 安装](docs/install/unraid-plg.md) | Unraid 插件管理页面 |
 | Docker TUN host/macvlan | 支持（仅 TUN） | [Docker TUN 部署](docs/docker.md) | Docker / Compose / 容器管理器 |
-| macOS 15–26 菜单栏 App | Beta（仅 TUN） | [macOS 安装与使用](docs/install/macos.md) | App 内安装、修复和卸载后台 |
+| macOS 15–26 菜单栏 App | 未签名 Beta（仅 TUN） | [macOS 安装与使用](docs/install/macos.md) | App 内管理员授权安装、修复和卸载后台 |
 
 `msf update` 和 `msf uninstall` 只面向 Linux tarball/systemd 安装。fnOS FPK、Unraid PLG、Docker 请通过各自平台管理器更新或卸载，避免绕过包状态。
 
@@ -58,8 +58,8 @@ https://github.com/scoltzero/msf/releases/tag/v0.4.0
 | fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_x86.fpk` |
 | fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_arm.fpk` |
 | Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf.plg` |
-| macOS Universal 2 DMG（Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal.dmg` |
-| macOS Universal 2 ZIP（Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal.zip` |
+| macOS Universal 2 DMG（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal-unsigned.dmg` |
+| macOS Universal 2 ZIP（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal-unsigned.zip` |
 
 ## 快速开始
 

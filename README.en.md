@@ -22,7 +22,7 @@ Current release: `v0.4.0`
 - Mihomo custom configs, CodeMirror YAML editing, component update checks, automatic downloads, update notices, and configurable upgrade behavior.
 - Local upload installation for MosDNS, Mihomo, and Zashboard when online downloads are difficult.
 - Linux tarball/systemd, fnOS FPK, and Unraid PLG support both nftables and TUN. Docker `host-tun` / `macvlan-tun` is supported and TUN-only.
-- macOS 15–26 has a Beta native Universal 2 menu bar app, a root LaunchDaemon, and a TUN-only runtime. It does not use macOS system-proxy mode.
+- macOS 15–26 has an unsigned Beta native Universal 2 menu bar app, a root LaunchDaemon, and a TUN-only runtime. It does not use macOS system-proxy mode, and users must explicitly allow the first launch.
 - Docker deployments must mount a host data directory to container `/opt/msf`; the default examples use `./msf-data:/opt/msf`.
 
 ## Architecture Diagram
@@ -39,7 +39,7 @@ Current release: `v0.4.0`
 | fnOS FPK | Supported | [fnOS FPK install](docs/install/fnos-fpk.md) | fnOS / Feiniu App Center or FPK package manager |
 | Unraid PLG | Stable | [Unraid PLG install](docs/install/unraid-plg.md) | Unraid plugin manager |
 | Docker TUN host/macvlan | Supported (TUN-only) | [Docker TUN deployment](docs/docker.en.md) | Docker / Compose / container manager |
-| macOS 15–26 menu bar app | Beta (TUN-only) | [macOS installation and usage](docs/install/macos.md) | In-app daemon installation, repair, and removal |
+| macOS 15–26 menu bar app | Unsigned Beta (TUN-only) | [macOS installation and usage](docs/install/macos.md) | In-app administrator-authorized daemon installation, repair, and removal |
 
 `msf update` and `msf uninstall` are only for Linux tarball/systemd installs. fnOS FPK, Unraid PLG, and Docker installs must be updated or removed through their platform manager.
 
@@ -58,8 +58,8 @@ https://github.com/scoltzero/msf/releases/tag/v0.4.0
 | fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_x86.fpk` |
 | fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_arm.fpk` |
 | Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf.plg` |
-| macOS Universal 2 DMG (Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal.dmg` |
-| macOS Universal 2 ZIP (Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal.zip` |
+| macOS Universal 2 DMG (unsigned Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal-unsigned.dmg` |
+| macOS Universal 2 ZIP (unsigned Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal-unsigned.zip` |
 
 ## Quick Start
 

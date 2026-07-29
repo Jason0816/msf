@@ -19,18 +19,11 @@ git status --short
 
 最后一条必须无输出。发布版本以 `0.4.0` 这类不带 `v` 的值传给 Make，tag 使用 `v0.4.0`。
 
-## 2. macOS 发布凭据
+## 2. macOS 未签名 Beta 发布策略
 
-macOS 正式资产必须使用 Developer ID Application 签名并完成 Apple 公证。GitHub Actions 需要以下 Secrets：
+v0.4.0 的 macOS App 作为未签名 Beta 发布，不需要 Apple Developer、Developer ID 或公证 Secrets。Release 默认使用 legacy 管理员安装器，而不是 `SMAppService`；资产名称必须包含 `-unsigned`，安装文档和更新日志必须明确说明首次启动需要用户右键“打开”或在“隐私与安全”中手动允许。
 
-- `MACOS_CERTIFICATE_P12`：Developer ID Application `.p12` 的 Base64。
-- `MACOS_CERTIFICATE_PASSWORD`：`.p12` 密码。
-- `APPLE_TEAM_ID`：Apple Developer Team ID。
-- `APPLE_API_KEY_ID`：App Store Connect API Key ID。
-- `APPLE_API_ISSUER_ID`：App Store Connect Issuer ID。
-- `APPLE_API_PRIVATE_KEY`：API Key `.p8` 完整内容。
-
-未配置这些凭据时不要创建正式 tag。未签名 App 只能用于本地开发测试，不能上传到正式 Release。
+签名公证代码保留在非默认的 `MSF_SIGNED_RELEASE` 编译条件、`macos-app-build-signed` 和 `macos-release-assets-signed` 目标中。除非未来明确恢复 Developer ID 发布，否则 GitHub Actions 不得启用这些目标。
 
 ## 3. 创建不可变 tag
 
@@ -44,7 +37,7 @@ git push origin "v$VERSION"
 
 tag push 会触发两个工作流：
 
-- `Release assets`：分别构建 Linux/Unraid/fnOS 和签名公证的 macOS 资产，全部成功后一次性创建 GitHub Release。
+- `Release assets`：分别构建 Linux/Unraid/fnOS 和未签名 macOS Beta 资产，全部成功后一次性创建 GitHub Release。
 - `Docker GHCR`：构建并验证 `host-tun`、`macvlan-tun`，再推送 amd64/arm64 多架构镜像。
 
 两个工作流都会确认：
@@ -58,9 +51,9 @@ tag push 会触发两个工作流：
 macOS 工作流还会确认：
 
 - App 与 daemon 都包含 `arm64` 和 `x86_64`；
-- App 与 daemon 都使用 Developer ID Application 和 Hardened Runtime；
-- App、DMG 已通过 Apple Notarization 和 Staple；
-- Gatekeeper、Bundle 版本和 daemon 来源信息验证通过。
+- App 默认未链接 `ServiceManagement.framework`，Release 使用 legacy Installer；
+- Bundle 版本、daemon 来源信息、DMG/ZIP 内容和 SHA-256 验证通过；
+- 工作流不读取任何 Apple 签名或公证 Secret。
 
 ## 4. 发布资产
 
@@ -74,10 +67,10 @@ GitHub Release 应包含 20 个资产：
 macOS 资产名称：
 
 ```text
-MSF-0.4.0-macos-universal.dmg
-MSF-0.4.0-macos-universal.dmg.sha256
-MSF-0.4.0-macos-universal.zip
-MSF-0.4.0-macos-universal.zip.sha256
+MSF-0.4.0-macos-universal-unsigned.dmg
+MSF-0.4.0-macos-universal-unsigned.dmg.sha256
+MSF-0.4.0-macos-universal-unsigned.zip
+MSF-0.4.0-macos-universal-unsigned.zip.sha256
 ```
 
 fnOS 构建必须使用真正的 `fnpack`；下载失败会中止，绝不生成伪装成 `.fpk` 的 tar.gz fallback。
@@ -91,17 +84,14 @@ VERSION=0.4.0
 make release-assets VERSION="$VERSION" RELEASE_TAG="v$VERSION"
 ```
 
-已在 Keychain 中配置 Developer ID 与 Notary Profile 时，可构建 macOS：
+可直接构建未签名 macOS Beta，不需要 Apple 凭据：
 
 ```bash
 VERSION=0.4.0
 make macos-release-assets \
   VERSION="$VERSION" \
   RELEASE_TAG="v$VERSION" \
-  MACOS_BUILD_NUMBER=1 \
-  MACOS_DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-  MACOS_SIGNING_IDENTITY="$MACOS_SIGNING_IDENTITY" \
-  MACOS_NOTARY_PROFILE="$MACOS_NOTARY_PROFILE"
+  MACOS_BUILD_NUMBER=1
 ```
 
 ## 6. 发布后核验
@@ -114,12 +104,14 @@ docker buildx imagetools inspect "ghcr.io/scoltzero/msf:v$VERSION"
 
 确认 GitHub Release 包含全部 20 个安装资产和 SHA-256，GHCR 同时存在 `v0.4.0` 和 `latest`，且 revision 与 Release tag commit 相同。
 
-下载线上 DMG 后再执行一次：
+下载线上 macOS 资产后再校验摘要：
 
 ```bash
-xcrun stapler validate MSF-0.4.0-macos-universal.dmg
-spctl --assess --type open --context context:primary-signature --verbose=2 MSF-0.4.0-macos-universal.dmg
+shasum -a 256 -c MSF-0.4.0-macos-universal-unsigned.dmg.sha256
+shasum -a 256 -c MSF-0.4.0-macos-universal-unsigned.zip.sha256
 ```
+
+还应在一台未安装过 MSF 的 macOS 15 或更新系统上验证：右键打开 App、管理员授权安装后台、修复后台、卸载后台，以及卸载后 `/Library/Application Support/MSF` 数据保留行为。
 
 如需更新仓库根目录供 Unraid Community Apps 使用的 `msf.plg`，应直接下载本次 Release 中已经验证过的 `msf.plg`，逐字节替换并单独提交；不要重新打包生成另一个 txz 哈希。
 
@@ -135,6 +127,6 @@ spctl --assess --type open --context context:primary-signature --verbose=2 MSF-0
 
 ## 8. 失败处理
 
-- 任何测试、来源、dirty、签名、公证、摘要或黑盒检查失败，都不要创建 GitHub Release。
+- 任何测试、来源、dirty、Universal 2、legacy Installer、摘要或黑盒检查失败，都不要创建 GitHub Release。
 - 正式 tag 推送前必须完成候选构建；tag 一旦推送不再移动或覆盖。
 - 如果已推送 tag 的发布流程失败，修复后使用新的补丁版本，不替换旧 tag 或旧资产。

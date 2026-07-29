@@ -1,5 +1,8 @@
 import Foundation
+
+#if MSF_SIGNED_RELEASE
 @preconcurrency import ServiceManagement
+#endif
 
 @MainActor
 final class DaemonServiceModel: ObservableObject {
@@ -19,7 +22,10 @@ final class DaemonServiceModel: ObservableObject {
   private static let label = "io.github.scoltzero.msf.daemon"
   private static let plistName = label + ".plist"
   private static let helperPath = "/Library/PrivilegedHelperTools/" + label
+
+  #if MSF_SIGNED_RELEASE
   private let service = SMAppService.daemon(plistName: plistName)
+  #endif
 
   var title: String {
     switch state {
@@ -54,7 +60,7 @@ final class DaemonServiceModel: ObservableObject {
   }
 
   var canInstall: Bool {
-    !isBusy && state != .running
+    !isBusy
   }
 
   var canUninstall: Bool {
@@ -79,20 +85,25 @@ final class DaemonServiceModel: ObservableObject {
       detail = "后台文件已安装，但端口 7777 尚未就绪"
       return
     }
-    switch service.status {
-    case .enabled:
-      state = .installed
-      detail = "系统服务已启用，正在等待后台启动"
-    case .requiresApproval:
-      state = .approvalRequired
-      detail = "请在“系统设置 → 通用 → 登录项与扩展”中允许 MSF"
-    case .notRegistered, .notFound:
+    #if MSF_SIGNED_RELEASE
+      switch service.status {
+      case .enabled:
+        state = .installed
+        detail = "系统服务已启用，正在等待后台启动"
+      case .requiresApproval:
+        state = .approvalRequired
+        detail = "请在“系统设置 → 通用 → 登录项与扩展”中允许 MSF"
+      case .notRegistered, .notFound:
+        state = .notInstalled
+        detail = "安装后由 root LaunchDaemon 管理 TUN、DNS 和路由"
+      @unknown default:
+        state = .notInstalled
+        detail = "尚未安装 MSF 系统后台"
+      }
+    #else
       state = .notInstalled
       detail = "安装后由 root LaunchDaemon 管理 TUN、DNS 和路由"
-    @unknown default:
-      state = .notInstalled
-      detail = "尚未安装 MSF 系统后台"
-    }
+    #endif
   }
 
   func install() {
@@ -102,10 +113,7 @@ final class DaemonServiceModel: ObservableObject {
     Task {
       defer { isBusy = false }
       do {
-        #if DEBUG
-          let output = try await Self.runLegacyInstaller(action: "install")
-          detail = output.isEmpty ? "后台安装完成，正在等待启动" : output
-        #else
+        #if MSF_SIGNED_RELEASE
           if service.status == .enabled {
             try await service.unregister()
           }
@@ -113,6 +121,9 @@ final class DaemonServiceModel: ObservableObject {
           if service.status == .requiresApproval {
             SMAppService.openSystemSettingsLoginItems()
           }
+        #else
+          let output = try await Self.runLegacyInstaller(action: "install")
+          detail = output.isEmpty ? "后台安装完成，正在等待启动" : output
         #endif
         await waitForBackend()
         await refresh()
@@ -130,14 +141,14 @@ final class DaemonServiceModel: ObservableObject {
     Task {
       defer { isBusy = false }
       do {
-        #if DEBUG
-          let output = try await Self.runLegacyInstaller(action: "uninstall")
-          detail = output.isEmpty ? "后台已卸载，配置数据已保留" : output
-        #else
+        #if MSF_SIGNED_RELEASE
           if service.status != .notRegistered && service.status != .notFound {
             try await service.unregister()
           }
           detail = "后台已取消注册，配置数据已保留"
+        #else
+          let output = try await Self.runLegacyInstaller(action: "uninstall")
+          detail = output.isEmpty ? "后台已卸载，配置数据已保留" : output
         #endif
         try? await Task.sleep(for: .milliseconds(500))
         await refresh()
@@ -149,7 +160,9 @@ final class DaemonServiceModel: ObservableObject {
   }
 
   func openApprovalSettings() {
-    SMAppService.openSystemSettingsLoginItems()
+    #if MSF_SIGNED_RELEASE
+      SMAppService.openSystemSettingsLoginItems()
+    #endif
   }
 
   private func waitForBackend() async {

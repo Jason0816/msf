@@ -3,7 +3,7 @@ set -euo pipefail
 
 configuration="${1:-Debug}"
 project_root="$(cd "$(dirname "$0")/.." && /bin/pwd)"
-app="$project_root/DerivedData/Build/Products/$configuration/MSF.app"
+app="${MSF_APP_PATH:-$project_root/DerivedData/Build/Products/$configuration/MSF.app}"
 main_binary="$app/Contents/MacOS/MSF"
 helper_name="io.github.scoltzero.msf.daemon"
 helper="$app/Contents/Library/HelperTools/$helper_name"
@@ -14,6 +14,7 @@ expected_version="${MSF_EXPECTED_VERSION:-}"
 expected_commit="${MSF_EXPECTED_COMMIT:-}"
 expected_tag="${MSF_EXPECTED_TAG:-}"
 require_developer_id="${MSF_REQUIRE_DEVELOPER_ID:-0}"
+require_legacy_only="${MSF_REQUIRE_LEGACY_ONLY:-0}"
 
 fail() {
   echo "verify-app: $*" >&2
@@ -55,6 +56,12 @@ fi
 /bin/zsh -n "$project_root/Resources/msf-daemon-installer.sh"
 /bin/zsh -n "$installer"
 /usr/bin/codesign --verify --strict "$helper"
+
+if [[ "$require_legacy_only" == "1" ]]; then
+  if /usr/bin/otool -L "$main_binary" | /usr/bin/grep -q '/ServiceManagement.framework/'; then
+    fail "unsigned beta must not link ServiceManagement or use SMAppService"
+  fi
+fi
 
 provenance="$("$helper" version --json)" || fail "cannot read embedded daemon provenance"
 /usr/bin/python3 - "$provenance" "$expected_version" "$expected_commit" "$expected_tag" <<'PY' \

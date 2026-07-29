@@ -58,10 +58,10 @@ jobs:
         run: make macos-app-build-debug macos-app-build-release XCODE_DEVELOPER_DIR="$(xcode-select -p)"
 
       - name: Verify Debug app bundle
-        run: make macos-app-verify MACOS_CONFIGURATION=Debug XCODE_DEVELOPER_DIR="$(xcode-select -p)"
+        run: MSF_REQUIRE_LEGACY_ONLY=1 make macos-app-verify MACOS_CONFIGURATION=Debug XCODE_DEVELOPER_DIR="$(xcode-select -p)"
 
       - name: Verify Release app bundle
-        run: make macos-app-verify MACOS_CONFIGURATION=Release XCODE_DEVELOPER_DIR="$(xcode-select -p)"
+        run: MSF_REQUIRE_LEGACY_ONLY=1 make macos-app-verify MACOS_CONFIGURATION=Release XCODE_DEVELOPER_DIR="$(xcode-select -p)"
 
       - uses: actions/upload-artifact@v4
         with:
