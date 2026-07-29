@@ -1,5 +1,5 @@
 import Foundation
-import ServiceManagement
+@preconcurrency import ServiceManagement
 
 @MainActor
 final class DaemonServiceModel: ObservableObject {
