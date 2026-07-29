@@ -24,20 +24,20 @@ type ServiceManager struct {
 }
 
 type ServiceStatus struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Installed   bool   `json:"installed"`
-	Running     bool   `json:"running"`
-	PID         int    `json:"pid,omitempty"`
-	Status      string `json:"status"`
-	Version     string `json:"version,omitempty"`
-	Uptime      int64  `json:"uptime,omitempty"`
-	Memory      int64  `json:"memory,omitempty"`
-	CPU         int64  `json:"cpu,omitempty"`
-	BinaryPath  string `json:"binary_path,omitempty"`
-	ConfigPath  string `json:"config_path,omitempty"`
-	LogPath     string `json:"log_path,omitempty"`
-	Error       string `json:"error,omitempty"`
+	Name        string  `json:"name"`
+	DisplayName string  `json:"display_name"`
+	Installed   bool    `json:"installed"`
+	Running     bool    `json:"running"`
+	PID         int     `json:"pid,omitempty"`
+	Status      string  `json:"status"`
+	Version     string  `json:"version,omitempty"`
+	Uptime      int64   `json:"uptime,omitempty"`
+	Memory      int64   `json:"memory,omitempty"`
+	CPU         float64 `json:"cpu,omitempty"`
+	BinaryPath  string  `json:"binary_path,omitempty"`
+	ConfigPath  string  `json:"config_path,omitempty"`
+	LogPath     string  `json:"log_path,omitempty"`
+	Error       string  `json:"error,omitempty"`
 }
 
 func NewServiceManager(app *App) *ServiceManager {
@@ -124,18 +124,34 @@ func (sm *ServiceManager) Start(ctx context.Context, name string) (ServiceStatus
 	}
 	sm.procs[name] = cmd
 	_ = os.WriteFile(spec.PIDFile, []byte(strconv.Itoa(cmd.Process.Pid)), 0644)
+	waitDone := make(chan struct{})
 	go func() {
 		_ = cmd.Wait()
 		stdout.Close()
 		stderr.Close()
 		_ = os.Remove(spec.PIDFile)
+		close(waitDone)
 		sm.mu.Lock()
 		delete(sm.procs, name)
 		sm.mu.Unlock()
 	}()
-	time.Sleep(300 * time.Millisecond)
+	timer := time.NewTimer(300 * time.Millisecond)
+	exitedDuringStartup := false
+	select {
+	case <-waitDone:
+		exitedDuringStartup = true
+		if !timer.Stop() {
+			<-timer.C
+		}
+	case <-timer.C:
+		select {
+		case <-waitDone:
+			exitedDuringStartup = true
+		default:
+		}
+	}
 	st := sm.Status(name)
-	if st.Running {
+	if !exitedDuringStartup && st.Running {
 		sm.setDesired(name, true)
 		sm.app.afterServiceStart(name)
 		return st, nil

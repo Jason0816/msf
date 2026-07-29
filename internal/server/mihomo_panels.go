@@ -44,8 +44,8 @@ func (a *App) mihomoFullSnapshot() map[string]any {
 	cfg := a.mihomoConfigMap()
 	service := a.Services.Status("mihomo")
 	controllerCfg := a.mihomoControllerConfig()
-	traffic := a.mihomoTrafficPayload()
 	connections := a.mihomoConnectionsPayload(nil)
+	traffic := a.mihomoTrafficFromConnections(connections, time.Now())
 	proxies := a.mihomoProxiesPayload(nil)
 	rules := a.mihomoRulesRuntime(nil)
 	providers := a.mihomoProvidersPayload()
@@ -122,7 +122,7 @@ func (a *App) mihomoOverviewSnapshot() map[string]any {
 	service := a.Services.Status("mihomo")
 	controllerCfg := a.mihomoControllerConfig()
 	connections := a.mihomoConnectionsSummary()
-	traffic := a.mihomoTrafficCachedPayload()
+	traffic := a.mihomoTrafficFromConnections(connections, time.Now())
 	version := a.mihomoVersion()
 	if raw, ok, _ := a.mihomoControllerJSON(http.MethodGet, "/version", nil); ok {
 		if m, ok := raw.(map[string]any); ok {
@@ -380,26 +380,121 @@ func mihomoPortsFromConfig(cfg map[string]any) map[string]int {
 
 const mihomoTrafficCacheTTL = 2 * time.Second
 
-func (a *App) mihomoTrafficPayload() map[string]any {
-	if cached, ok := a.cachedMihomoTraffic(); ok {
+const mihomoTrafficMinSampleInterval = 750 * time.Millisecond
+
+type mihomoTrafficTotalsSample struct {
+	At            time.Time
+	DownloadTotal float64
+	UploadTotal   float64
+	DownloadRate  float64
+	UploadRate    float64
+}
+
+func (a *App) mihomoTrafficFromConnections(connections map[string]any, now time.Time) map[string]any {
+	if !boolMapValue(connections, "available", true) {
+		return a.mihomoTrafficCachedPayload()
+	}
+	if cached, ok := a.cachedMihomoTraffic(); ok && stringMapValue(cached, "source") == "traffic" {
 		return cached
 	}
-	payload := a.fetchMihomoTrafficPayload()
+	payload := a.deriveMihomoTrafficFromTotals(
+		numericMapValue(connections, "downloadTotal"),
+		numericMapValue(connections, "uploadTotal"),
+		now,
+	)
+	a.storeMihomoTraffic(payload)
+	return payload
+}
+
+func (a *App) deriveMihomoTrafficFromTotals(downloadTotal, uploadTotal float64, now time.Time) map[string]any {
+	a.mihomoTrafficTotalsMu.Lock()
+	last := a.mihomoTrafficTotalsLast
+	downloadRate, uploadRate := float64(0), float64(0)
+	if !last.At.IsZero() && now.After(last.At) {
+		elapsed := now.Sub(last.At).Seconds()
+		if elapsed < mihomoTrafficMinSampleInterval.Seconds() {
+			downloadRate = last.DownloadRate
+			uploadRate = last.UploadRate
+			a.mihomoTrafficTotalsMu.Unlock()
+			return mihomoTrafficRatePayload(uploadRate, downloadRate, uploadTotal, downloadTotal, "connections")
+		}
+		if downloadTotal >= last.DownloadTotal {
+			downloadRate = (downloadTotal - last.DownloadTotal) / elapsed
+		}
+		if uploadTotal >= last.UploadTotal {
+			uploadRate = (uploadTotal - last.UploadTotal) / elapsed
+		}
+	}
+	a.mihomoTrafficTotalsLast = mihomoTrafficTotalsSample{
+		At:            now,
+		DownloadTotal: downloadTotal,
+		UploadTotal:   uploadTotal,
+		DownloadRate:  downloadRate,
+		UploadRate:    uploadRate,
+	}
+	a.mihomoTrafficTotalsMu.Unlock()
+	return mihomoTrafficRatePayload(uploadRate, downloadRate, uploadTotal, downloadTotal, "connections")
+}
+
+func mihomoTrafficRatePayload(uploadRate, downloadRate, uploadTotal, downloadTotal float64, source string) map[string]any {
+	return map[string]any{
+		"up":             uploadRate,
+		"down":           downloadRate,
+		"upload":         uploadRate,
+		"download":       downloadRate,
+		"uploadTotal":    uploadTotal,
+		"downloadTotal":  downloadTotal,
+		"upload_total":   uploadTotal,
+		"download_total": downloadTotal,
+		"source":         source,
+		"raw":            map[string]any{},
+	}
+}
+
+func (a *App) mihomoTrafficPayload() map[string]any {
+	payload, ok := a.fetchMihomoTrafficPayloadResult()
+	if !ok {
+		a.mihomoTrafficMu.Lock()
+		cached := cloneAnyMap(a.mihomoTrafficCache)
+		hasCached := a.mihomoTrafficCache != nil
+		a.mihomoTrafficMu.Unlock()
+		if hasCached {
+			return cached
+		}
+		return zeroMihomoTrafficPayload()
+	}
 	a.storeMihomoTraffic(payload)
 	return payload
 }
 
 func (a *App) mihomoTrafficCachedPayload() map[string]any {
-	if cached, ok := a.cachedMihomoTraffic(); ok {
+	a.mihomoTrafficMu.Lock()
+	hasCached := a.mihomoTrafficCache != nil && !a.mihomoTrafficAt.IsZero()
+	stale := hasCached && time.Since(a.mihomoTrafficAt) > mihomoTrafficCacheTTL
+	cached := cloneAnyMap(a.mihomoTrafficCache)
+	refresh := (!hasCached || stale) && !a.mihomoTrafficRefreshing
+	if refresh {
+		a.mihomoTrafficRefreshing = true
+	}
+	a.mihomoTrafficMu.Unlock()
+	if refresh {
+		go a.refreshMihomoTrafficCache()
+	}
+	if hasCached {
 		return cached
 	}
-	go a.refreshMihomoTrafficCache()
 	return zeroMihomoTrafficPayload()
 }
 
 func (a *App) refreshMihomoTrafficCache() {
-	payload := a.fetchMihomoTrafficPayload()
-	a.storeMihomoTraffic(payload)
+	payload, ok := a.fetchMihomoTrafficPayloadResult()
+	a.mihomoTrafficMu.Lock()
+	defer a.mihomoTrafficMu.Unlock()
+	if ok {
+		a.mihomoTrafficCache = cloneAnyMap(payload)
+		a.mihomoTrafficAt = time.Now()
+	}
+	a.mihomoTrafficRefreshing = false
 }
 
 func (a *App) cachedMihomoTraffic() (map[string]any, bool) {
@@ -419,16 +514,32 @@ func (a *App) storeMihomoTraffic(payload map[string]any) {
 }
 
 func (a *App) fetchMihomoTrafficPayload() map[string]any {
+	payload, ok := a.fetchMihomoTrafficPayloadResult()
+	if !ok {
+		return zeroMihomoTrafficPayload()
+	}
+	return payload
+}
+
+func (a *App) fetchMihomoTrafficPayloadResult() (map[string]any, bool) {
 	if raw, ok := a.mihomoControllerMap("/traffic"); ok {
 		return map[string]any{
 			"up":       numericMapValue(raw, "up"),
 			"down":     numericMapValue(raw, "down"),
 			"upload":   numericMapValue(raw, "up"),
 			"download": numericMapValue(raw, "down"),
+			"source":   "traffic",
 			"raw":      raw,
-		}
+		}, true
 	}
-	return zeroMihomoTrafficPayload()
+	if raw, ok := a.mihomoControllerMap("/connections"); ok {
+		return a.deriveMihomoTrafficFromTotals(
+			numericMapValue(raw, "downloadTotal"),
+			numericMapValue(raw, "uploadTotal"),
+			time.Now(),
+		), true
+	}
+	return nil, false
 }
 
 func zeroMihomoTrafficPayload() map[string]any {
@@ -447,11 +558,12 @@ func (a *App) mihomoConnectionsSummary() map[string]any {
 	raw, ok := a.mihomoControllerMap("/connections")
 	if !ok {
 		return map[string]any{
-			"total": 0, "active_count": 0, "downloadTotal": 0, "uploadTotal": 0, "download_total": 0, "upload_total": 0,
+			"available": false, "total": 0, "active_count": 0, "downloadTotal": 0, "uploadTotal": 0, "download_total": 0, "upload_total": 0,
 		}
 	}
 	total := len(anySlice(raw["connections"]))
 	return map[string]any{
+		"available":      true,
 		"total":          total,
 		"active_count":   total,
 		"downloadTotal":  numericMapValue(raw, "downloadTotal"),
@@ -462,8 +574,8 @@ func (a *App) mihomoConnectionsSummary() map[string]any {
 }
 
 func (a *App) mihomoConnectionsPayload(r *http.Request) map[string]any {
-	raw, ok := a.mihomoControllerMap("/connections")
-	if !ok {
+	raw, available := a.mihomoControllerMap("/connections")
+	if !available {
 		raw = map[string]any{"connections": []any{}, "downloadTotal": 0, "uploadTotal": 0}
 	}
 	connections := normalizeMihomoConnectionList(anySlice(raw["connections"]))
@@ -487,6 +599,7 @@ func (a *App) mihomoConnectionsPayload(r *http.Request) map[string]any {
 	}
 	items := filtered[start:end]
 	return map[string]any{
+		"available":      available,
 		"connections":    items,
 		"items":          items,
 		"total":          total,

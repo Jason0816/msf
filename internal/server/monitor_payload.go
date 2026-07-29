@@ -143,9 +143,22 @@ func (a *App) monitorResourceSnapshot() map[string]any {
 	cpuPercent := sampleCPUPercent()
 	memPercent := percent(memUsed, memTotal)
 	diskPercent := numericAny(disk["percent"])
+	cpuModelName := cpuModel()
+	cpuCores := runtime.NumCPU()
+	hardware := map[string]any{
+		"cpu_model":    cpuModelName,
+		"cpu_cores":    cpuCores,
+		"cores":        cpuCores,
+		"memory_total": memTotal,
+		"disk_total":   diskTotal,
+	}
 	return map[string]any{
 		"cpu_percent":    cpuPercent,
 		"cpu":            cpuPercent,
+		"cpu_model":      cpuModelName,
+		"cpu_cores":      cpuCores,
+		"cores":          cpuCores,
+		"hardware":       hardware,
 		"memory_total":   memTotal,
 		"memory_free":    memAvailable,
 		"memory_used":    memUsed,
@@ -162,20 +175,54 @@ func (a *App) monitorResourceSnapshot() map[string]any {
 	}
 }
 
+const monitorNetworkMinSampleInterval = 750 * time.Millisecond
+
 func (a *App) monitorNetworkSnapshot(now time.Time) map[string]any {
 	interfaces := readNetworkCounters()
 	var rxTotal, txTotal uint64
 	for _, item := range interfaces {
-		if stringMapValue(item, "name") == "lo" {
+		if isLoopbackNetworkInterface(stringMapValue(item, "name")) {
 			continue
 		}
 		rxTotal += uint64FromAny(item["rx_bytes"])
 		txTotal += uint64FromAny(item["tx_bytes"])
 	}
 
-	var downloadSpeed, uploadSpeed float64
+	connectionCount, mihomoDownloadTotal, mihomoUploadTotal := a.monitorMihomoConnectionSummary()
+	payload := map[string]any{
+		"local_ips":             localIPs(),
+		"interfaces":            interfaces,
+		"rx_bytes":              rxTotal,
+		"tx_bytes":              txTotal,
+		"total_download":        rxTotal,
+		"total_upload":          txTotal,
+		"download_total":        rxTotal,
+		"upload_total":          txTotal,
+		"download_speed":        float64(0),
+		"upload_speed":          float64(0),
+		"down_speed":            float64(0),
+		"up_speed":              float64(0),
+		"downloadSpeed":         float64(0),
+		"uploadSpeed":           float64(0),
+		"connections":           connectionCount,
+		"connection_count":      connectionCount,
+		"mihomo_download_total": mihomoDownloadTotal,
+		"mihomo_upload_total":   mihomoUploadTotal,
+		"mihomo_downloadTotal":  mihomoDownloadTotal,
+		"mihomo_uploadTotal":    mihomoUploadTotal,
+	}
+
 	a.monitorMu.Lock()
 	last := a.monitorNetworkLast
+	if a.monitorNetworkCache != nil && !last.At.IsZero() && (!now.After(last.At) || now.Sub(last.At) < monitorNetworkMinSampleInterval) {
+		for _, key := range []string{"download_speed", "upload_speed", "down_speed", "up_speed", "downloadSpeed", "uploadSpeed"} {
+			payload[key] = a.monitorNetworkCache[key]
+		}
+		a.monitorNetworkCache = cloneAnyMap(payload)
+		a.monitorMu.Unlock()
+		return payload
+	}
+	var downloadSpeed, uploadSpeed float64
 	if !last.At.IsZero() && now.After(last.At) {
 		elapsed := now.Sub(last.At).Seconds()
 		if elapsed > 0 {
@@ -188,31 +235,19 @@ func (a *App) monitorNetworkSnapshot(now time.Time) map[string]any {
 		}
 	}
 	a.monitorNetworkLast = monitorNetworkSample{At: now, RXBytes: rxTotal, TXBytes: txTotal}
+	payload["download_speed"] = downloadSpeed
+	payload["upload_speed"] = uploadSpeed
+	payload["down_speed"] = downloadSpeed
+	payload["up_speed"] = uploadSpeed
+	payload["downloadSpeed"] = downloadSpeed
+	payload["uploadSpeed"] = uploadSpeed
+	a.monitorNetworkCache = cloneAnyMap(payload)
 	a.monitorMu.Unlock()
+	return payload
+}
 
-	connectionCount, mihomoDownloadTotal, mihomoUploadTotal := a.monitorMihomoConnectionSummary()
-	return map[string]any{
-		"local_ips":             localIPs(),
-		"interfaces":            interfaces,
-		"rx_bytes":              rxTotal,
-		"tx_bytes":              txTotal,
-		"total_download":        rxTotal,
-		"total_upload":          txTotal,
-		"download_total":        rxTotal,
-		"upload_total":          txTotal,
-		"download_speed":        downloadSpeed,
-		"upload_speed":          uploadSpeed,
-		"down_speed":            downloadSpeed,
-		"up_speed":              uploadSpeed,
-		"downloadSpeed":         downloadSpeed,
-		"uploadSpeed":           uploadSpeed,
-		"connections":           connectionCount,
-		"connection_count":      connectionCount,
-		"mihomo_download_total": mihomoDownloadTotal,
-		"mihomo_upload_total":   mihomoUploadTotal,
-		"mihomo_downloadTotal":  mihomoDownloadTotal,
-		"mihomo_uploadTotal":    mihomoUploadTotal,
-	}
+func isLoopbackNetworkInterface(name string) bool {
+	return name == "lo" || name == "lo0"
 }
 
 func (a *App) monitorMihomoConnectionSummary() (float64, float64, float64) {

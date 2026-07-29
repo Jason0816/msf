@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 var (
@@ -78,9 +79,14 @@ func normalizeMosDNSQueryArray(items []any) []map[string]any {
 	for i, item := range items {
 		switch v := item.(type) {
 		case map[string]any:
-			out = append(out, normalizeMosDNSQueryMap(v, i, ""))
+			entry := normalizeMosDNSQueryMap(v, i, "")
+			if stringMapValue(entry, "query_name") != "" {
+				out = append(out, entry)
+			}
 		case string:
-			out = append(out, parseMosDNSQueryLine(v, i))
+			if entry, ok := parseMosDNSQueryLine(v, i); ok {
+				out = append(out, entry)
+			}
 		}
 	}
 	return out
@@ -97,19 +103,25 @@ func parseMosDNSQueryEntries(lines []string) []map[string]any {
 			var obj map[string]any
 			if json.Unmarshal([]byte(line[start:]), &obj) == nil && len(obj) > 0 {
 				entry := normalizeMosDNSQueryMap(obj, i, line)
-				if entry["query_name"] != "" {
+				if stringMapValue(entry, "query_name") != "" {
 					entries = append(entries, entry)
-					continue
 				}
+				continue
 			}
 		}
-		entries = append(entries, parseMosDNSQueryLine(line, i))
+		if entry, ok := parseMosDNSQueryLine(line, i); ok {
+			entries = append(entries, entry)
+		}
 	}
 	return entries
 }
 
 func normalizeMosDNSQueryMap(obj map[string]any, index int, raw string) map[string]any {
-	queryName := firstString(obj, "query_name", "query", "domain", "name", "qname", "host")
+	explicitQueryName := firstString(obj, "query_name", "query", "domain", "qname")
+	queryName := explicitQueryName
+	if queryName == "" {
+		queryName = firstString(obj, "name", "host")
+	}
 	clientIP := firstString(obj, "client_ip", "client", "client_addr", "remote_addr", "src")
 	queryType := strings.ToUpper(firstString(obj, "query_type", "qtype", "type"))
 	domainSet := firstString(obj, "domain_set", "rule", "matched_rule", "tag", "plugin", "matcher")
@@ -122,8 +134,12 @@ func normalizeMosDNSQueryMap(obj map[string]any, index int, raw string) map[stri
 	if queryName == "" && raw != "" {
 		queryName = extractDomainLike(raw)
 	}
+	queryName = normalizeMosDNSQueryName(queryName)
 	if clientIP == "" && raw != "" {
 		clientIP = firstIPv4(raw)
+	}
+	if queryName == "" || (explicitQueryName == "" && queryType == "" && clientIP == "" && len(answers) == 0) {
+		return map[string]any{}
 	}
 	if queryType == "" {
 		queryType = "A"
@@ -142,8 +158,8 @@ func normalizeMosDNSQueryMap(obj map[string]any, index int, raw string) map[stri
 		"trace_id":      nonEmpty(firstString(obj, "trace_id", "id"), fmt.Sprintf("log-%d", index+1)),
 		"query_time":    queryTime,
 		"time":          queryTime,
-		"query_name":    trimQueryName(queryName, raw),
-		"domain":        trimQueryName(queryName, raw),
+		"query_name":    queryName,
+		"domain":        queryName,
 		"client_ip":     nonEmpty(clientIP, "127.0.0.1"),
 		"client":        nonEmpty(clientIP, "127.0.0.1"),
 		"query_type":    queryType,
@@ -158,7 +174,7 @@ func normalizeMosDNSQueryMap(obj map[string]any, index int, raw string) map[stri
 	}
 }
 
-func parseMosDNSQueryLine(line string, index int) map[string]any {
+func parseMosDNSQueryLine(line string, index int) (map[string]any, bool) {
 	values := map[string]string{}
 	for _, match := range keyValuePattern.FindAllStringSubmatch(line, -1) {
 		if len(match) >= 3 {
@@ -175,6 +191,7 @@ func parseMosDNSQueryLine(line string, index int) map[string]any {
 	if queryName == "" {
 		queryName = extractDomainLike(line)
 	}
+	queryName = normalizeMosDNSQueryName(queryName)
 	clientIP := values["client_ip"]
 	if clientIP == "" {
 		clientIP = values["client"]
@@ -216,6 +233,11 @@ func parseMosDNSQueryLine(line string, index int) map[string]any {
 		duration = firstDurationMS(line)
 	}
 	answers := parseAnswers(line)
+	explicitQueryName := values["query_name"] != "" || values["query"] != "" || values["domain"] != ""
+	queryEvidence := explicitQueryName || (queryName != "" && queryType != "" && (clientIP != "" || responseCode != "" || duration > 0 || len(answers) > 0))
+	if queryName == "" || !queryEvidence {
+		return nil, false
+	}
 	if queryType == "" {
 		queryType = "A"
 	}
@@ -230,8 +252,8 @@ func parseMosDNSQueryLine(line string, index int) map[string]any {
 		"trace_id":      fmt.Sprintf("log-%d", index+1),
 		"query_time":    queryTime,
 		"time":          queryTime,
-		"query_name":    trimQueryName(queryName, line),
-		"domain":        trimQueryName(queryName, line),
+		"query_name":    queryName,
+		"domain":        queryName,
 		"client_ip":     nonEmpty(clientIP, "127.0.0.1"),
 		"client":        nonEmpty(clientIP, "127.0.0.1"),
 		"query_type":    queryType,
@@ -243,7 +265,7 @@ func parseMosDNSQueryLine(line string, index int) map[string]any {
 		"duration_ms":   duration,
 		"answers":       answers,
 		"raw":           line,
-	}
+	}, true
 }
 
 func filterMosDNSQueryEntries(entries []map[string]any, r *http.Request) []map[string]any {
@@ -597,13 +619,23 @@ func firstIPv4(line string) string {
 	return ""
 }
 
-func trimQueryName(name, fallback string) string {
-	name = strings.Trim(strings.TrimSpace(name), ".")
-	if name == "" {
-		name = extractDomainLike(fallback)
+func normalizeMosDNSQueryName(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.Trim(name, `"'[](){},;`)
+	name = strings.TrimSuffix(name, ".")
+	if name == "" || len(name) > 253 || strings.Contains(name, "..") {
+		return ""
 	}
-	if len(name) > 180 {
-		return name[:180]
+	for _, label := range strings.Split(name, ".") {
+		if label == "" || len(label) > 63 {
+			return ""
+		}
+		for _, r := range label {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' {
+				continue
+			}
+			return ""
+		}
 	}
 	return name
 }

@@ -4,19 +4,19 @@
 
 初始化向导支持 nftables 与 TUN。选择 TUN 时，宿主机必须以 root 运行并提供可用的 `/dev/net/tun`。
 
-当前版本：`v0.3.9.5`
+当前版本：`v0.4.0`
 
 ## 下载
 
 | 架构 | 下载地址 |
 |---|---|
-| x86_64 / amd64 | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf-linux-amd64.tar.gz` |
-| ARM64 / aarch64 | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf-linux-arm64.tar.gz` |
+| x86_64 / amd64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-amd64.tar.gz` |
+| ARM64 / aarch64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-arm64.tar.gz` |
 
 Release 页面：
 
 ```text
-https://github.com/scoltzero/msf/releases/tag/v0.3.9.5
+https://github.com/scoltzero/msf/releases/tag/v0.4.0
 ```
 
 ## 安装
@@ -25,20 +25,20 @@ x86_64 / amd64：
 
 ```bash
 curl -L -o msf-linux-amd64.tar.gz \
-  https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf-linux-amd64.tar.gz
+  https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-amd64.tar.gz
 
 tar -xzf msf-linux-amd64.tar.gz -C /tmp
-sudo /tmp/msf-0.3.9.5-linux-amd64/install.sh
+sudo /tmp/msf-0.4.0-linux-amd64/install.sh
 ```
 
 ARM64 / aarch64：
 
 ```bash
 curl -L -o msf-linux-arm64.tar.gz \
-  https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf-linux-arm64.tar.gz
+  https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-arm64.tar.gz
 
 tar -xzf msf-linux-arm64.tar.gz -C /tmp
-sudo /tmp/msf-0.3.9.5-linux-arm64/install.sh
+sudo /tmp/msf-0.4.0-linux-arm64/install.sh
 ```
 
 安装脚本默认完成这些操作：

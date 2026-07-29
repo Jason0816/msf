@@ -6,6 +6,7 @@
 - [fnOS FPK](../install/fnos-fpk.md)
 - [Unraid PLG](../install/unraid-plg.md)
 - [Docker 实验部署](../docker.md)
+- [macOS 菜单栏版](../install/macos.md)
 
 ## 数据目录
 
@@ -16,6 +17,7 @@
 | Unraid PLG | `/mnt/user/appdata/msf` |
 | Docker Compose / `docker-run.sh` 宿主机 | 默认当前目录的 `./msf-data` |
 | Docker 容器内 | `/opt/msf` |
+| macOS root LaunchDaemon | `/Library/Application Support/MSF` |
 | 源码本地非 root 运行 | 通常是 `./data`，取决于 `-c` / `--config` |
 
 主要目录结构：
@@ -28,6 +30,8 @@
 - `logs`
 - `database`
 - `backups`
+
+macOS 在 TUN 接管期间额外保存 `configs/network/darwin-state.json`，其中包含原始网络服务 DNS 与 `net.inet.ip.forwarding`。完全停止或守护进程正常退出时按快照恢复，而不是写死某个系统默认值。
 
 ## 服务端口分配
 
@@ -52,6 +56,18 @@
 | mihomo/sing-box | `9090` | 外部控制器 / Web 界面（zashboard） |
 
 host 网络模式下没有端口映射隔离，因此 Docker host TUN 宿主机上也不能已有进程占用启用中的端口。Linux TUN 模式默认不启用 `7877` / `7896`。
+
+macOS 后台管理页仅监听 `127.0.0.1:7777`；MosDNS 的 `53` 端口仍监听 LAN。macOS 不生成或加载 nftables，透明接管只使用 Mihomo `utun`、Fake-IP 路由、本机 DNS 与 IPv4 转发。
+
+统一 Network Runtime API 为：
+
+- `GET /api/v1/network/runtime`
+- `POST /api/v1/network/runtime/enable`
+- `POST /api/v1/network/runtime/disable`
+- `POST /api/v1/network/runtime/restart`
+- `POST /api/v1/network/runtime/stop`
+
+其中 `disable` 表示 TUN/DNS 保活的直连状态，`stop` 才会拆除系统网络接管并停止组件。
 
 ## 初始化后的运行状态
 

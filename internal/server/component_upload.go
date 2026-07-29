@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"debug/elf"
+	"debug/macho"
 	"fmt"
 	"io"
 	"net/http"
@@ -166,23 +167,52 @@ func installZashboardArchive(src, uiDir string) error {
 }
 
 func validateUploadedLinuxBinary(path string) error {
-	if runtime.GOOS != "linux" {
+	switch runtime.GOOS {
+	case "linux":
+		f, err := elf.Open(path)
+		if err != nil {
+			return fmt.Errorf("uploaded binary is not a valid linux ELF file: %w", err)
+		}
+		defer f.Close()
+		switch runtime.GOARCH {
+		case "amd64":
+			if f.Machine != elf.EM_X86_64 {
+				return fmt.Errorf("uploaded binary architecture mismatch: got %s, want amd64", f.Machine.String())
+			}
+		case "arm64":
+			if f.Machine != elf.EM_AARCH64 {
+				return fmt.Errorf("uploaded binary architecture mismatch: got %s, want arm64", f.Machine.String())
+			}
+		}
+		return nil
+	case "darwin":
+		return validateUploadedMachOBinary(path, runtime.GOARCH)
+	default:
 		return nil
 	}
-	f, err := elf.Open(path)
+}
+
+func validateUploadedMachOBinary(path, goarch string) error {
+	want := macho.CpuArm64
+	if goarch == "amd64" {
+		want = macho.CpuAmd64
+	}
+	if fat, err := macho.OpenFat(path); err == nil {
+		defer fat.Close()
+		for _, arch := range fat.Arches {
+			if arch.Cpu == want {
+				return nil
+			}
+		}
+		return fmt.Errorf("uploaded universal Mach-O does not contain %s", goarch)
+	}
+	f, err := macho.Open(path)
 	if err != nil {
-		return fmt.Errorf("uploaded binary is not a valid linux ELF file: %w", err)
+		return fmt.Errorf("uploaded binary is not a valid macOS Mach-O file: %w", err)
 	}
 	defer f.Close()
-	switch runtime.GOARCH {
-	case "amd64":
-		if f.Machine != elf.EM_X86_64 {
-			return fmt.Errorf("uploaded binary architecture mismatch: got %s, want amd64", f.Machine.String())
-		}
-	case "arm64":
-		if f.Machine != elf.EM_AARCH64 {
-			return fmt.Errorf("uploaded binary architecture mismatch: got %s, want arm64", f.Machine.String())
-		}
+	if f.Cpu != want {
+		return fmt.Errorf("uploaded binary architecture mismatch: got %s, want %s", f.Cpu.String(), goarch)
 	}
 	return nil
 }
@@ -200,6 +230,23 @@ func findUploadedBinary(root, component string) string {
 		return nil
 	})
 	if best != "" {
+		return best
+	}
+	return findFirstNativeBinary(root)
+}
+
+func findFirstNativeBinary(root string) string {
+	if runtime.GOOS == "darwin" {
+		var best string
+		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || best != "" {
+				return nil
+			}
+			if err := validateUploadedMachOBinary(path, runtime.GOARCH); err == nil {
+				best = path
+			}
+			return nil
+		})
 		return best
 	}
 	return findFirstELF(root)

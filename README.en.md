@@ -10,7 +10,7 @@
 
 `msf` is an open-source reimplementation of the MSM-style management experience for the MosDNS + Mihomo workflow. It focuses on self-hosted DNS split routing, transparent proxy management, Mihomo management, and platform-native installs.
 
-Current release: `v0.3.9.5`
+Current release: `v0.4.0`
 
 > **Tip: Cloudflare Redirect is experimental.** The `msf cloudflare-redirect` CLI can rewrite user-selected Cloudflare-protected domains to locally scanned Cloudflare CDN IPv4/IPv6 addresses for direct clients only. Results depend on the msf host's ISP route, Cloudflare Anycast, IPv6 reachability, domain-list quality, and MosDNS config. See [Cloudflare Redirect docs](docs/plugins/cloudflare-redirect.md).
 
@@ -22,6 +22,7 @@ Current release: `v0.3.9.5`
 - Mihomo custom configs, CodeMirror YAML editing, component update checks, automatic downloads, update notices, and configurable upgrade behavior.
 - Local upload installation for MosDNS, Mihomo, and Zashboard when online downloads are difficult.
 - Linux tarball/systemd, fnOS FPK, and Unraid PLG support both nftables and TUN. Docker `host-tun` / `macvlan-tun` is supported and TUN-only.
+- macOS 15–26 has a Beta native Universal 2 menu bar app, a root LaunchDaemon, and a TUN-only runtime. It does not use macOS system-proxy mode.
 - Docker deployments must mount a host data directory to container `/opt/msf`; the default examples use `./msf-data:/opt/msf`.
 
 ## Architecture Diagram
@@ -38,6 +39,7 @@ Current release: `v0.3.9.5`
 | fnOS FPK | Supported | [fnOS FPK install](docs/install/fnos-fpk.md) | fnOS / Feiniu App Center or FPK package manager |
 | Unraid PLG | Stable | [Unraid PLG install](docs/install/unraid-plg.md) | Unraid plugin manager |
 | Docker TUN host/macvlan | Supported (TUN-only) | [Docker TUN deployment](docs/docker.en.md) | Docker / Compose / container manager |
+| macOS 15–26 menu bar app | Beta (TUN-only) | [macOS installation and usage](docs/install/macos.md) | In-app daemon installation, repair, and removal |
 
 `msf update` and `msf uninstall` are only for Linux tarball/systemd installs. fnOS FPK, Unraid PLG, and Docker installs must be updated or removed through their platform manager.
 
@@ -46,20 +48,22 @@ Current release: `v0.3.9.5`
 GitHub Release:
 
 ```text
-https://github.com/scoltzero/msf/releases/tag/v0.3.9.5
+https://github.com/scoltzero/msf/releases/tag/v0.4.0
 ```
 
 | Asset | URL |
 |---|---|
-| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf-linux-amd64.tar.gz` |
-| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf-linux-arm64.tar.gz` |
-| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf_0.3.9.5_x86.fpk` |
-| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf_0.3.9.5_arm.fpk` |
-| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf.plg` |
+| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-amd64.tar.gz` |
+| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-arm64.tar.gz` |
+| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_x86.fpk` |
+| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_arm.fpk` |
+| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf.plg` |
+| macOS Universal 2 DMG (Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal.dmg` |
+| macOS Universal 2 ZIP (Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal.zip` |
 
 ## Quick Start
 
-1. Pick the install guide for your platform: Linux, fnOS, Unraid, or Docker.
+1. Pick the install guide for your platform: Linux, fnOS, Unraid, Docker, or macOS.
 2. Open the WebUI after installation. The default URL is `http://<server-ip>:7777`.
 3. Complete the setup wizard. Setup writes system settings, generates MosDNS/Mihomo configs, and persists them in the database.
 4. Configure DHCP DNS and FakeIP static routes on your main router so LAN clients can use msf.

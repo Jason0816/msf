@@ -14,6 +14,9 @@ func validateSetupProxyMode(cfg SetupConfig) error {
 	if IsDockerRuntime() && !isTUNProxyMode(cfg.LinuxProxyMode) {
 		return fmt.Errorf("Docker runtime only supports linux_proxy_mode=tun")
 	}
+	if IsMacOSRuntime() && !isTUNProxyMode(cfg.LinuxProxyMode) {
+		return fmt.Errorf("macOS only supports linux_proxy_mode=tun")
+	}
 	if !isTUNProxyMode(cfg.LinuxProxyMode) && !isNFTProxyMode(cfg.LinuxProxyMode) {
 		return fmt.Errorf("unsupported linux_proxy_mode %q", cfg.LinuxProxyMode)
 	}

@@ -51,16 +51,24 @@ type App struct {
 
 	Services *ServiceManager
 
-	monitorMu          sync.Mutex
-	monitorNetworkLast monitorNetworkSample
-	appLogMu           sync.Mutex
-	mihomoTrafficMu    sync.Mutex
-	mihomoTrafficCache map[string]any
-	mihomoTrafficAt    time.Time
-	secretMu           sync.RWMutex
-	resetMu            sync.Mutex
-	resetGate          sync.RWMutex
-	resetInProgress    atomic.Bool
+	monitorMu               sync.Mutex
+	monitorNetworkLast      monitorNetworkSample
+	monitorNetworkCache     map[string]any
+	appLogMu                sync.Mutex
+	mihomoTrafficMu         sync.Mutex
+	mihomoTrafficCache      map[string]any
+	mihomoTrafficAt         time.Time
+	mihomoTrafficRefreshing bool
+	mihomoTrafficTotalsMu   sync.Mutex
+	mihomoTrafficTotalsLast mihomoTrafficTotalsSample
+	secretMu                sync.RWMutex
+	resetMu                 sync.Mutex
+	resetGate               sync.RWMutex
+	resetInProgress         atomic.Bool
+	networkRuntimeMu        sync.Mutex
+	networkStateMu          sync.RWMutex
+	networkTransition       string
+	networkLastError        string
 }
 
 type APIError struct {
@@ -323,6 +331,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/system/diagnostics/run", a.handleDiagnosticsRun)
 	mux.HandleFunc("GET /api/v1/system/diagnostics/download", a.handleDiagnosticsDownload)
 	mux.HandleFunc("GET /api/v1/network/info", a.handleNetworkInfo)
+	a.registerNetworkRuntimeRoutes(mux)
 	mux.HandleFunc("POST /api/v1/network/apply", a.handleNFTApply)
 	mux.HandleFunc("POST /api/v1/network/stop", a.handleNFTClear)
 	mux.HandleFunc("GET /api/v1/netlink/nftables", a.handleNFTInfo)

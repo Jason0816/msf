@@ -160,6 +160,9 @@ interface NetworkInterfaceInfo {
   ip?: string;
   primary_ip?: string;
   addresses?: string[];
+  is_usable?: boolean;
+  is_default?: boolean;
+  recommended?: boolean;
 }
 
 const tabs: Array<{ id: TabId; label: string; Icon: LucideIcon }> = [
@@ -476,7 +479,7 @@ function serializeSubscriptions(rows: SubscriptionRow[]) {
     .join("\n");
 }
 
-function setupToInitConfig(raw: any, forceTun = false): InitConfigState {
+function setupToInitConfig(raw: any, forceTun = false, forceAutoDNS = false): InitConfigState {
   const data = raw && typeof raw === "object" ? raw : {};
   const subscriptions = parseSubscriptionValue(data.subscription_urls || data.subscriptionURLs);
   const mihomoProxies = String(data.mihomo_proxies || data.mihomoProxies || "");
@@ -488,7 +491,7 @@ function setupToInitConfig(raw: any, forceTun = false): InitConfigState {
     proxyCore: String(data.proxy_core || data.proxyCore || "mihomo").toLowerCase() === "none" ? "无" : "Mihomo",
     mihomoType: String(data.mihomo_core_type || data.mihomoCoreType || "meta").toLowerCase() === "alpha" ? "Alpha" : "Meta",
     proxyMode: forceTun || String(data.linux_proxy_mode || "nft").toLowerCase() === "tun" ? "tun" : "nft",
-    autoDns: data.auto_set_dns ?? data.autoSetDNS ?? true,
+    autoDns: forceAutoDNS || (data.auto_set_dns ?? data.autoSetDNS ?? true),
     dnsEnable: String(data.dns_on || data.dnsOn || "127.0.0.1"),
     dnsDisable: String(data.dns_off || data.dnsOff || "223.5.5.5"),
     ipv6: Boolean(data.enable_ipv6 ?? data.enableIPv6),
@@ -798,11 +801,13 @@ function ProfileTab({ showToast }: { showToast: (message: string) => void }) {
 
 function InitConfigSummary({
   config,
+  macOSRuntime,
   visibleSecrets,
   onReveal,
   onEdit,
 }: {
   config: InitConfigState;
+  macOSRuntime: boolean;
   visibleSecrets: Record<string, boolean>;
   onReveal: (id: string) => void;
   onEdit: () => void;
@@ -816,9 +821,9 @@ function InitConfigSummary({
         <PlainInfo label="选定网卡" value={config.iface.replace(" (192.168.10.3)", "")} />
         <PlainInfo label="代理核心类型" value={`${config.proxyCore} (${config.mihomoType.toLowerCase()})`} />
         <PlainInfo label="透明代理模式" value={config.proxyMode === "tun" ? "TUN" : "nftables"} />
-        <PlainInfo label="自动设置 DNS" value={config.autoDns ? "已启用" : "已禁用"} />
-        <PlainInfo label="DNS 启用地址" value={config.dnsEnable} />
-        <PlainInfo label="DNS 禁用地址" value={config.dnsDisable} />
+        <PlainInfo label="自动设置 DNS" value={macOSRuntime ? "由 TUN 强制启用" : config.autoDns ? "已启用" : "已禁用"} />
+        <PlainInfo label="DNS 启用地址" value={macOSRuntime ? "127.0.0.1" : config.dnsEnable} />
+        <PlainInfo label="DNS 停用恢复" value={macOSRuntime ? "按启动前系统快照恢复" : config.dnsDisable} />
         <PlainInfo label="启用 IPv6" value={config.ipv6 ? "已启用" : "DNS自动设置"} />
         <PlainInfo label="代理服务器" value={config.githubProxyEnabled ? "已启用" : "已禁用"} />
         <PlainInfo label="GitHub 加速源" value={config.githubAcceleratorEnabled ? "已启用" : "已禁用"} />
@@ -855,6 +860,7 @@ function InitConfigEditor({
   onSave,
   networkInterfaces,
   dockerRuntime,
+  macOSRuntime,
 }: {
   draft: InitConfigState;
   setDraft: (updater: (current: InitConfigState) => InitConfigState) => void;
@@ -862,7 +868,9 @@ function InitConfigEditor({
   onSave: () => void;
   networkInterfaces: NetworkInterfaceInfo[];
   dockerRuntime: boolean;
+  macOSRuntime: boolean;
 }) {
+  const tunOnlyRuntime = dockerRuntime || macOSRuntime;
   const updateSub = (id: string, patch: Partial<SubscriptionRow>) => {
     setDraft((current) => ({
       ...current,
@@ -905,8 +913,8 @@ function InitConfigEditor({
         >
           <option>请选择网卡接口</option>
           {networkInterfaces.map((iface) => (
-            <option key={iface.name} value={iface.name}>
-              {iface.name}{iface.primary_ip || iface.ip ? ` (${iface.primary_ip || iface.ip})` : ""}
+            <option key={iface.name} value={iface.name} disabled={macOSRuntime && iface.is_usable === false}>
+              {iface.name}{iface.primary_ip || iface.ip ? ` (${iface.primary_ip || iface.ip})` : "（无可用 IP）"}{iface.recommended ? " · 默认出口" : ""}
             </option>
           ))}
         </select>
@@ -915,15 +923,19 @@ function InitConfigEditor({
       <SectionBox>
         <h3 className="text-lg font-semibold text-foreground">透明代理模式</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          {dockerRuntime ? "Docker 仅支持 TUN，需提供 /dev/net/tun、CAP_NET_ADMIN 与 CAP_NET_RAW。" : "generated 配置会随模式切换原子重建；自定义配置冲突时后端会拒绝切换。"}
+          {macOSRuntime
+            ? "macOS 仅支持 TUN；由 LaunchDaemon 管理 utun、本机 DNS 与 LAN IPv4 转发。"
+            : dockerRuntime
+              ? "Docker 仅支持 TUN，需提供 /dev/net/tun、CAP_NET_ADMIN 与 CAP_NET_RAW。"
+              : "generated 配置会随模式切换原子重建；自定义配置冲突时后端会拒绝切换。"}
         </p>
         <select
-          value={dockerRuntime ? "tun" : draft.proxyMode}
-          disabled={dockerRuntime}
+          value={tunOnlyRuntime ? "tun" : draft.proxyMode}
+          disabled={tunOnlyRuntime}
           onChange={(event) => setDraft((current) => ({ ...current, proxyMode: event.target.value as InitConfigState["proxyMode"] }))}
           className={`${inputClass} mt-4 h-12 text-base`}
         >
-          {!dockerRuntime && <option value="nft">nftables（TProxy + Redirect）</option>}
+          {!tunOnlyRuntime && <option value="nft">nftables（TProxy + Redirect）</option>}
           <option value="tun">TUN</option>
         </select>
       </SectionBox>
@@ -964,30 +976,38 @@ function InitConfigEditor({
         <label className="flex items-center gap-3 text-lg font-semibold text-foreground">
           <input
             type="checkbox"
-            checked={draft.autoDns}
+            checked={macOSRuntime ? true : draft.autoDns}
+            disabled={macOSRuntime}
             onChange={(event) => setDraft((current) => ({ ...current, autoDns: event.target.checked }))}
-            className="h-5 w-5 accent-primary"
+            className="h-5 w-5 accent-primary disabled:cursor-not-allowed disabled:opacity-70"
           />
-          自动设置 DNS
+          {macOSRuntime ? "macOS DNS 自动接管" : "自动设置 DNS"}
         </label>
+        {macOSRuntime ? (
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            TUN 启动时固定使用本机 MosDNS（127.0.0.1）；完全停止时自动恢复启动前捕获的各网络服务 DNS 快照。
+          </p>
+        ) : null}
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="DNS 启用地址">
             <input
-              value={draft.dnsEnable}
+              value={macOSRuntime ? "127.0.0.1" : draft.dnsEnable}
+              disabled={macOSRuntime}
               onChange={(event) => setDraft((current) => ({ ...current, dnsEnable: event.target.value }))}
               placeholder="例如: 127.0.0.1"
               className={`${inputClass} h-12 text-base`}
             />
-            <p className="mt-1 text-xs text-muted-foreground">例如: 127.0.0.1</p>
+            <p className="mt-1 text-xs text-muted-foreground">{macOSRuntime ? "macOS TUN 固定值" : "例如: 127.0.0.1"}</p>
           </Field>
-          <Field label="DNS 禁用地址">
+          <Field label={macOSRuntime ? "DNS 停用恢复" : "DNS 禁用地址"}>
             <input
-              value={draft.dnsDisable}
+              value={macOSRuntime ? "按启动前系统快照恢复" : draft.dnsDisable}
+              disabled={macOSRuntime}
               onChange={(event) => setDraft((current) => ({ ...current, dnsDisable: event.target.value }))}
               placeholder="例如: 8.8.8.8"
               className={`${inputClass} h-12 text-base`}
             />
-            <p className="mt-1 text-xs text-muted-foreground">例如: 127.0.0.1</p>
+            <p className="mt-1 text-xs text-muted-foreground">{macOSRuntime ? "不会写死公共 DNS" : "例如: 8.8.8.8"}</p>
           </Field>
         </div>
       </SectionBox>
@@ -1239,6 +1259,7 @@ function SystemTab({ showToast }: { showToast: (message: string) => void }) {
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterfaceInfo[]>([]);
   const [saving, setSaving] = useState(false);
   const [dockerRuntime, setDockerRuntime] = useState(false);
+  const [macOSRuntime, setMacOSRuntime] = useState(false);
 
   useEffect(() => {
     Promise.allSettled([
@@ -1248,7 +1269,9 @@ function SystemTab({ showToast }: { showToast: (message: string) => void }) {
       api("/api/v1/setup/privilege"),
     ]).then(([settingsResult, configResult, interfacesResult, privilegeResult]) => {
       const docker = privilegeResult.status === "fulfilled" && Boolean((privilegeResult.value as any)?.runtime?.docker);
+      const macos = privilegeResult.status === "fulfilled" && Boolean((privilegeResult.value as any)?.runtime?.macos);
       setDockerRuntime(docker);
+      setMacOSRuntime(macos);
       if (settingsResult.status === "fulfilled") {
         const data = apiData<Record<string, string>>(settingsResult.value, {});
         const hours = Number(data.token_retention_hours || data.jwt_expire_hours || data.jwt_expiry_hours || data.token_ttl_hours || 24);
@@ -1258,7 +1281,7 @@ function SystemTab({ showToast }: { showToast: (message: string) => void }) {
         setNetworkInterfaces(apiList<NetworkInterfaceInfo>(interfacesResult.value, ["data", "interfaces", "items"]));
       }
       if (configResult.status === "fulfilled") {
-        const config = setupToInitConfig(apiData<any>(configResult.value, configResult.value), docker);
+        const config = setupToInitConfig(apiData<any>(configResult.value, configResult.value), docker || macos, macos);
         setInitConfig(config);
         setDraftConfig(config);
       } else {
@@ -1285,7 +1308,9 @@ function SystemTab({ showToast }: { showToast: (message: string) => void }) {
   const saveInitConfig = async () => {
     setSaving(true);
     try {
-      const nextConfig = dockerRuntime ? { ...draftConfig, proxyMode: "tun" as const } : draftConfig;
+      const nextConfig = dockerRuntime || macOSRuntime
+        ? { ...draftConfig, proxyMode: "tun" as const, ...(macOSRuntime ? { autoDns: true, dnsEnable: "127.0.0.1" } : {}) }
+        : draftConfig;
       await api("/api/v1/setup/config", {
         method: "PUT",
         body: JSON.stringify(initConfigToSetupPayload(nextConfig)),
@@ -1333,6 +1358,7 @@ function SystemTab({ showToast }: { showToast: (message: string) => void }) {
             setDraft={setDraftConfig}
             networkInterfaces={networkInterfaces}
             dockerRuntime={dockerRuntime}
+            macOSRuntime={macOSRuntime}
             onCancel={() => {
               setDraftConfig(initConfig);
               setEditingInit(false);
@@ -1342,6 +1368,7 @@ function SystemTab({ showToast }: { showToast: (message: string) => void }) {
         ) : (
           <InitConfigSummary
             config={initConfig}
+            macOSRuntime={macOSRuntime}
             visibleSecrets={visibleSecrets}
             onReveal={(id) => setVisibleSecrets((current) => ({ ...current, [id]: !current[id] }))}
             onEdit={() => {

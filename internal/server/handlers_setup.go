@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -68,6 +69,16 @@ func (a *App) handleSetupSystemInfo(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleSetupNetworkInterfaces(w http.ResponseWriter, r *http.Request) {
 	ifaces, _ := net.Interfaces()
+	defaultInterface := defaultSetupInterface()
+	var darwinServiceDevices map[string]bool
+	if IsMacOSRuntime() {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		services, err := listDarwinNetworkServices(ctx)
+		cancel()
+		if err == nil {
+			darwinServiceDevices = enabledDarwinNetworkServiceDevices(services)
+		}
+	}
 	var out []map[string]any
 	for _, iface := range ifaces {
 		addrs, _ := iface.Addrs()
@@ -76,6 +87,10 @@ func (a *App) handleSetupNetworkInterfaces(w http.ResponseWriter, r *http.Reques
 			ips = append(ips, addr.String())
 		}
 		ip := primaryInterfaceIP(ips)
+		usable := iface.Flags&net.FlagUp != 0 && iface.Flags&net.FlagLoopback == 0 && ip != ""
+		if usable && IsMacOSRuntime() {
+			usable = darwinSetupInterfaceAllowed(iface.Name, darwinServiceDevices)
+		}
 		out = append(out, map[string]any{
 			"name":        iface.Name,
 			"index":       iface.Index,
@@ -86,6 +101,9 @@ func (a *App) handleSetupNetworkInterfaces(w http.ResponseWriter, r *http.Reques
 			"addresses":   ips,
 			"ip":          ip,
 			"primary_ip":  ip,
+			"is_usable":   usable,
+			"is_default":  iface.Name == defaultInterface,
+			"recommended": usable && iface.Name == defaultInterface,
 			"speed":       interfaceSpeed(iface.Name),
 		})
 	}
@@ -93,6 +111,10 @@ func (a *App) handleSetupNetworkInterfaces(w http.ResponseWriter, r *http.Reques
 }
 
 func (a *App) handleSetupPrivilege(w http.ResponseWriter, r *http.Request) {
+	message := "MosDNS 53 port and TUN/nftables require root on Linux"
+	if IsMacOSRuntime() {
+		message = "MosDNS 53 port, utun, DNS and forwarding changes require a root LaunchDaemon on macOS"
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"is_root": os.Geteuid() == 0,
@@ -100,8 +122,9 @@ func (a *App) handleSetupPrivilege(w http.ResponseWriter, r *http.Request) {
 		"runtime": map[string]any{
 			"docker":              IsDockerRuntime(),
 			"docker_network_mode": DockerNetworkMode(),
+			"macos":               IsMacOSRuntime(),
 		},
-		"message": "MosDNS 53 port and TUN/nftables require root on Linux",
+		"message": message,
 	})
 }
 
@@ -148,6 +171,7 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 		preserveMissingGitHubDownloadFields(&cfg, meta, existing)
 	}
 	cfg.defaults()
+	normalizeSetupInterfaceForRuntime(&cfg)
 	if err := validateSetupProxyMode(cfg); err != nil {
 		writeError(w, http.StatusBadRequest, "unsupported_proxy_mode", err.Error())
 		return
@@ -306,6 +330,7 @@ func (a *App) handleSetupInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg.defaults()
+	normalizeSetupInterfaceForRuntime(&cfg)
 	if err := validateSetupProxyMode(cfg); err != nil {
 		writeError(w, http.StatusBadRequest, "unsupported_proxy_mode", err.Error())
 		return
@@ -548,9 +573,26 @@ func setupBool(raw map[string]any, fallback bool, keys ...string) bool {
 }
 
 func defaultSetupInterface() string {
+	if IsMacOSRuntime() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		services, servicesErr := listDarwinNetworkServices(ctx)
+		defaultRoute, _ := darwinDefaultRouteInterface(ctx)
+		if servicesErr == nil {
+			if name := chooseDarwinSetupInterface(defaultRoute, services, setupInterfaceHasUsableIP); name != "" {
+				return name
+			}
+		}
+		if name := strings.TrimSpace(defaultRoute); name != "" && !isDarwinVirtualSetupInterface(name) && setupInterfaceHasUsableIP(name) {
+			return name
+		}
+	}
 	ifaces, _ := net.Interfaces()
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if IsMacOSRuntime() && isDarwinVirtualSetupInterface(iface.Name) {
 			continue
 		}
 		addrs, _ := iface.Addrs()
@@ -563,6 +605,93 @@ func defaultSetupInterface() string {
 		}
 	}
 	return ""
+}
+
+func normalizeSetupInterfaceForRuntime(cfg *SetupConfig) {
+	if cfg == nil || !IsMacOSRuntime() {
+		return
+	}
+	selected := strings.TrimSpace(cfg.SelectedInterface)
+	if selected != "" && setupInterfaceUsableForRuntime(selected) {
+		cfg.SelectedInterface = selected
+		return
+	}
+	if fallback := defaultSetupInterface(); fallback != "" {
+		cfg.SelectedInterface = fallback
+	}
+}
+
+func setupInterfaceHasUsableIP(name string) bool {
+	iface, err := net.InterfaceByName(strings.TrimSpace(name))
+	if err != nil || iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+		return false
+	}
+	return primaryIPForInterface(iface.Name) != ""
+}
+
+func setupInterfaceUsableForRuntime(name string) bool {
+	name = strings.TrimSpace(name)
+	if !setupInterfaceHasUsableIP(name) {
+		return false
+	}
+	if !IsMacOSRuntime() {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	services, err := listDarwinNetworkServices(ctx)
+	if err == nil {
+		return enabledDarwinNetworkServiceDevices(services)[name]
+	}
+	return !isDarwinVirtualSetupInterface(name)
+}
+
+func chooseDarwinSetupInterface(defaultRoute string, services []darwinNetworkService, usable func(string) bool) string {
+	if usable == nil {
+		return ""
+	}
+	devices := enabledDarwinNetworkServiceDevices(services)
+	defaultRoute = strings.TrimSpace(defaultRoute)
+	if devices[defaultRoute] && usable(defaultRoute) {
+		return defaultRoute
+	}
+	for _, service := range services {
+		device := strings.TrimSpace(service.Device)
+		if service.Disabled || device == "" || !devices[device] || !usable(device) {
+			continue
+		}
+		return device
+	}
+	return ""
+}
+
+func enabledDarwinNetworkServiceDevices(services []darwinNetworkService) map[string]bool {
+	devices := make(map[string]bool, len(services))
+	for _, service := range services {
+		device := strings.TrimSpace(service.Device)
+		if !service.Disabled && device != "" {
+			devices[device] = true
+		}
+	}
+	return devices
+}
+
+func darwinSetupInterfaceAllowed(name string, serviceDevices map[string]bool) bool {
+	name = strings.TrimSpace(name)
+	if len(serviceDevices) > 0 {
+		return serviceDevices[name]
+	}
+	return !isDarwinVirtualSetupInterface(name)
+}
+
+func isDarwinVirtualSetupInterface(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	for _, prefix := range []string{"lo", "gif", "stf", "utun", "anpi", "awdl", "llw", "ap", "p2p", "ipsec", "tap", "tun", "vmenet", "vmnet"} {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) handleSetupActivate(w http.ResponseWriter, r *http.Request) {
@@ -796,7 +925,28 @@ func hostname() string {
 	return h
 }
 
+var (
+	cpuModelOnce  sync.Once
+	cpuModelValue string
+)
+
 func cpuModel() string {
+	cpuModelOnce.Do(func() {
+		cpuModelValue = detectCPUModel()
+	})
+	return firstNonEmpty(cpuModelValue, runtime.GOARCH)
+}
+
+func detectCPUModel() string {
+	if runtime.GOOS == "darwin" {
+		for _, key := range []string{"machdep.cpu.brand_string", "hw.model"} {
+			out, err := commandOutput(time.Second, "/usr/sbin/sysctl", "-n", key)
+			if err == nil && strings.TrimSpace(string(out)) != "" {
+				return strings.TrimSpace(string(out))
+			}
+		}
+		return runtime.GOARCH
+	}
 	if runtime.GOOS != "linux" {
 		return runtime.GOARCH
 	}

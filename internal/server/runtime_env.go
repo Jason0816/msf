@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -31,6 +33,18 @@ func IsDockerRuntime() bool {
 		}
 	}
 	return false
+}
+
+func IsMacOSRuntime() bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("MSF_RUNTIME"))) {
+	case "macos", "darwin", "macos-daemon":
+		return true
+	default:
+		return false
+	}
 }
 
 func DockerCleanupNetworkOnExit() bool {
@@ -74,13 +88,23 @@ func FnOSUpdateDisabledReason() string {
 }
 
 func (a *App) ShutdownRuntime(ctx context.Context) error {
-	err := a.Services.StopAll(ctx)
+	a.networkRuntimeMu.Lock()
+	defer a.networkRuntimeMu.Unlock()
+	var errs []error
+	cfg, _ := a.latestSetupConfig()
+	cfg.defaults()
+	if err := restorePlatformNetwork(ctx, a, cfg); err != nil {
+		errs = append(errs, err)
+	}
+	if err := a.Services.StopAll(ctx); err != nil {
+		errs = append(errs, err)
+	}
 	if IsDockerRuntime() && DockerCleanupNetworkOnExit() && a.shouldCleanupDockerNetwork() {
-		if _, clearErr := a.clearNFT(ctx); clearErr != nil && err == nil {
-			err = clearErr
+		if _, clearErr := a.clearNFT(ctx); clearErr != nil {
+			errs = append(errs, clearErr)
 		}
 	}
-	return err
+	return errors.Join(errs...)
 }
 
 func (a *App) shouldCleanupDockerNetwork() bool {

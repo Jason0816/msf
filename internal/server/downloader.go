@@ -60,6 +60,16 @@ func (a *App) componentDownloadOptions() (string, bool) {
 func componentDownloadURLFor(component, goos, goarch, mihomoCoreType string, amd64v3 bool) string {
 	switch component {
 	case "mihomo":
+		if goos == "darwin" {
+			switch goarch {
+			case "arm64":
+				return "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo-darwin-arm64.gz"
+			case "amd64":
+				return "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo-darwin-amd64-compatible.gz"
+			default:
+				return ""
+			}
+		}
 		if goos != "linux" {
 			return ""
 		}
@@ -69,6 +79,14 @@ func componentDownloadURLFor(component, goos, goarch, mihomoCoreType string, amd
 		}
 		return fmt.Sprintf("https://github.com/baozaodetudou/mssb/releases/download/mihomo/mihomo-%s-linux-%s.tar.gz", normalizeMihomoCoreType(mihomoCoreType), arch)
 	case "mosdns":
+		if goos == "darwin" {
+			switch goarch {
+			case "amd64", "arm64":
+				return fmt.Sprintf("https://github.com/baozaodetudou/mssb/releases/download/mosdns/mosdns-darwin-%s.zip", goarch)
+			default:
+				return ""
+			}
+		}
 		if goos != "linux" {
 			return ""
 		}
@@ -123,8 +141,8 @@ func mosDNSAssetArch(goarch string, amd64v3 bool) string {
 
 func (a *App) installComponent(component string, emit func(DownloadEvent)) error {
 	component = normalizeComponent(component)
-	if runtime.GOOS != "linux" && component != "zashboard" && component != "ui" {
-		emit(DownloadEvent{Status: "skipped", Progress: 100, Message: "binary download is linux-only; place binary manually on this platform"})
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && component != "zashboard" && component != "ui" {
+		emit(DownloadEvent{Status: "skipped", Progress: 100, Message: "binary download is unsupported on this platform; place binary manually"})
 		return nil
 	}
 	target := a.componentTarget(component)
@@ -175,6 +193,11 @@ func (a *App) installComponent(component string, emit func(DownloadEvent)) error
 	defer os.RemoveAll(extractDir)
 	if strings.HasSuffix(url, ".zip") {
 		if err := extractZipPreserve(tmp, extractDir); err != nil {
+			_ = os.Remove(tmp)
+			return err
+		}
+	} else if strings.HasSuffix(url, ".gz") && !strings.HasSuffix(url, ".tar.gz") {
+		if err := extractGzipBinary(tmp, filepath.Join(extractDir, component)); err != nil {
 			_ = os.Remove(tmp)
 			return err
 		}
@@ -248,6 +271,34 @@ func (a *App) componentTarget(component string) string {
 	default:
 		return ""
 	}
+}
+
+func extractGzipBinary(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	reader, err := gzip.NewReader(in)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, reader); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	return os.Chmod(dst, 0755)
 }
 
 func (a *App) downloadFile(rawURL, dest string, emit func(DownloadEvent)) error {

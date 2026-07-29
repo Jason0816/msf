@@ -4,20 +4,20 @@
 
 fnOS 版本支持 nftables 与 TUN；选择 TUN 前请确认系统提供 `/dev/net/tun`，应用会以 root 运行并在初始化时执行能力预检。
 
-当前版本：`v0.3.9.5`
+当前版本：`v0.4.0`
 
 ## 下载
 
 Release 页面：
 
 ```text
-https://github.com/scoltzero/msf/releases/tag/v0.3.9.5
+https://github.com/scoltzero/msf/releases/tag/v0.4.0
 ```
 
 | 架构 | FPK 资产 |
 |---|---|
-| x86 / amd64 | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf_0.3.9.5_x86.fpk` |
-| ARM / arm64 | `https://github.com/scoltzero/msf/releases/download/v0.3.9.5/msf_0.3.9.5_arm.fpk` |
+| x86 / amd64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_x86.fpk` |
+| ARM / arm64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_arm.fpk` |
 
 请按 fnOS 设备 CPU 架构选择对应安装包。发布时也会提供对应 `.sha256` 校验文件。
 

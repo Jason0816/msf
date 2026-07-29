@@ -86,8 +86,12 @@ func TestDockerCompatibilityMigrationForcesDatabaseTargetToTun(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("MSF_RUNTIME", "docker")
-	if err := app.migrateSetupProxyModeForRuntime(&cfg); err != nil {
+	migrated, err := app.migrateSetupProxyModeForRuntime(&cfg)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !migrated {
+		t.Fatal("Docker nft configuration should be reported as migrated")
 	}
 	if cfg.LinuxProxyMode != "tun" {
 		t.Fatalf("effective Docker mode=%q, want tun", cfg.LinuxProxyMode)

@@ -91,7 +91,7 @@ var (
 	setupGeteuid         = os.Geteuid
 	setupProbePort       = probeSetupPort
 	setupShouldProbePort = func() bool {
-		return runtime.GOOS == "linux" && setupGeteuid() == 0
+		return (runtime.GOOS == "linux" || IsMacOSRuntime()) && setupGeteuid() == 0
 	}
 	setupTunPreflight        = detectSetupTUN
 	setupTUNDeviceStat       = os.Stat
@@ -137,9 +137,9 @@ func (a *App) buildSetupPreflight(ctx context.Context, targetTimezone string, au
 		result.Blocking = true
 		result.Errors = append(result.Errors, result.Timezone.Message)
 	}
-	if runtime.GOOS == "linux" && setupGeteuid() != 0 {
+	if (runtime.GOOS == "linux" || IsMacOSRuntime()) && setupGeteuid() != 0 {
 		result.Blocking = true
-		result.Errors = append(result.Errors, "MosDNS 53 端口和 TUN/nftables 需要 root 权限")
+		result.Errors = append(result.Errors, "MosDNS 53 端口和 TUN 需要 root 权限")
 	}
 
 	listeners := collectSetupPortListeners(ctx, setupAllCheckedPorts(proxyMode))
@@ -169,6 +169,18 @@ func detectSetupTUN(proxyMode string) setupTUNStatus {
 	status := setupTUNStatus{Required: isTUNProxyMode(proxyMode), Available: true, Device: "/dev/net/tun", NetAdmin: true, NetRaw: true}
 	if !status.Required {
 		status.Message = "TUN device is not required for nftables mode"
+		return status
+	}
+	if IsMacOSRuntime() {
+		status.Device = "utun"
+		status.NetAdmin = setupGeteuid() == 0
+		status.NetRaw = setupGeteuid() == 0
+		if setupGeteuid() != 0 {
+			status.Available = false
+			status.Message = "macOS TUN 模式需要 root LaunchDaemon"
+			return status
+		}
+		status.Message = "macOS utun and root privileges are available"
 		return status
 	}
 	if runtime.GOOS != "linux" {

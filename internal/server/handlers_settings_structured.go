@@ -215,6 +215,11 @@ func applySetupStringDefaults(cfg *SetupConfig) {
 	if cfg.ProxyCore == "" || cfg.ProxyCore == "singbox" {
 		cfg.ProxyCore = "mihomo"
 	}
+	if IsMacOSRuntime() {
+		cfg.LinuxProxyMode = "tun"
+		cfg.AutoSetDNS = true
+		normalizeSetupInterfaceForRuntime(cfg)
+	}
 }
 
 func (a *App) applyStructuredAppearance(raw map[string]any) error {
