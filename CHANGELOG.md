@@ -1,5 +1,19 @@
 # 更新日志
 
+## Unreleased
+
+### 中文
+
+#### 修复
+
+- 修复 macOS `MSF.app` 发布包缺少应用图标的问题；加入完整的 `AppIcon` 资源集，并在 Release 验证中强制检查 `AppIcon.icns`、Asset Catalog 和 `CFBundleIconName`，避免无图标构建再次进入发布资产。
+
+### English
+
+#### Fixed
+
+- Fixed the missing application icon in macOS `MSF.app` release bundles. Added the complete `AppIcon` asset set and release checks for `AppIcon.icns`, the compiled asset catalog, and `CFBundleIconName` so iconless builds cannot be packaged again.
+
 ## v0.4.0 - 2026-07-29
 
 ### 中文

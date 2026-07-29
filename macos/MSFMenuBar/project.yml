@@ -30,6 +30,8 @@ targets:
     platform: macOS
     sources:
       - Sources/MSFMenuBarApp
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
     dependencies:
       - target: MSFMenuBarCore
     settings:
@@ -40,6 +42,7 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: MSF
+        INFOPLIST_KEY_CFBundleIconName: AppIcon
         INFOPLIST_KEY_LSUIElement: YES
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_USER_SCRIPT_SANDBOXING: NO

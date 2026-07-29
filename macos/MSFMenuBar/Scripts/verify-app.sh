@@ -10,6 +10,8 @@ helper="$app/Contents/Library/HelperTools/$helper_name"
 service_plist="$app/Contents/Library/LaunchDaemons/$helper_name.plist"
 legacy_plist="$app/Contents/Resources/$helper_name.legacy.plist"
 installer="$app/Contents/Resources/msf-daemon-installer.sh"
+app_icon="$app/Contents/Resources/AppIcon.icns"
+asset_catalog="$app/Contents/Resources/Assets.car"
 expected_version="${MSF_EXPECTED_VERSION:-}"
 expected_commit="${MSF_EXPECTED_COMMIT:-}"
 expected_tag="${MSF_EXPECTED_TAG:-}"
@@ -27,6 +29,8 @@ fail() {
 [[ -f "$service_plist" ]] || fail "SMAppService plist missing: $service_plist"
 [[ -f "$legacy_plist" ]] || fail "legacy LaunchDaemon plist missing: $legacy_plist"
 [[ -x "$installer" ]] || fail "legacy installer missing or not executable: $installer"
+[[ -s "$app_icon" ]] || fail "application icon missing or empty: $app_icon"
+[[ -s "$asset_catalog" ]] || fail "compiled asset catalog missing or empty: $asset_catalog"
 
 for binary in "$main_binary" "$helper"; do
   archs="$(/usr/bin/lipo -archs "$binary")"
@@ -41,8 +45,14 @@ done
   || fail "minimum macOS version must remain 15.0"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" == "io.github.scoltzero.msf.menubar" ]] \
   || fail "unexpected app bundle identifier"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$app/Contents/Info.plist")" == "AppIcon" ]] \
+  || fail "CFBundleIconName must reference AppIcon"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :BundleProgram' "$service_plist")" == "Contents/Library/HelperTools/$helper_name" ]] \
   || fail "SMAppService BundleProgram does not point at the embedded daemon"
+
+icon_width="$(/usr/bin/sips -g pixelWidth "$app_icon" 2>/dev/null | /usr/bin/awk '/pixelWidth/ { print $2 }')"
+[[ "$icon_width" == <-> ]] || fail "cannot read AppIcon.icns dimensions"
+(( icon_width >= 256 )) || fail "AppIcon.icns is too small: ${icon_width}px"
 
 bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
 bundle_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")"
@@ -102,5 +112,6 @@ fi
 echo "verified:$configuration:$app"
 echo "bundle-version:$bundle_version"
 echo "bundle-build:$bundle_build"
+echo "app-icon:$app_icon"
 echo "main-archs:$(/usr/bin/lipo -archs "$main_binary")"
 echo "daemon-archs:$(/usr/bin/lipo -archs "$helper")"
