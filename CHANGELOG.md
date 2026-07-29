@@ -7,12 +7,14 @@
 #### 修复
 
 - 修复 macOS `MSF.app` 发布包缺少应用图标的问题；加入完整的 `AppIcon` 资源集，并在 Release 验证中强制检查 `AppIcon.icns`、Asset Catalog 和 `CFBundleIconName`，避免无图标构建再次进入发布资产。
+- 将 macOS AppIcon 调整为规范的圆角方形图标，使用透明外角、统一安全边距和适合 macOS 桌面的浅色背景，同时保持原 MSF Logo、字形和品牌配色。
 
 ### English
 
 #### Fixed
 
 - Fixed the missing application icon in macOS `MSF.app` release bundles. Added the complete `AppIcon` asset set and release checks for `AppIcon.icns`, the compiled asset catalog, and `CFBundleIconName` so iconless builds cannot be packaged again.
+- Refined the macOS AppIcon into a standard rounded-square icon with transparent outer corners, consistent safe-area spacing, and a macOS-appropriate light background while preserving the original MSF logo, lettering, and brand colors.
 
 ## v0.4.0 - 2026-07-29
 
