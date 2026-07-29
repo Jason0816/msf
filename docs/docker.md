@@ -4,12 +4,12 @@
 
 Docker `host-tun` 与 `macvlan-tun` 已正式收口为 TUN-only。初始化界面不会提供 nftables，后端也会拒绝 Docker 环境的 nftables 请求。
 
-当前版本：`v0.3.9.5`
+当前版本：`v0.4.0`
 
 当前 Docker 镜像：
 
 ```text
-ghcr.io/scoltzero/msf:v0.3.9.5
+ghcr.io/scoltzero/msf:v0.4.0
 ```
 
 发布流程同时推送版本化 tag 与 `latest`；生产部署仍建议固定使用明确的版本 tag。
@@ -67,7 +67,7 @@ host TUN 使用宿主机 IP 对外提供 WebUI、DNS 和代理服务。
 ```yaml
 services:
   msf:
-    image: ghcr.io/scoltzero/msf:v0.3.9.5
+    image: ghcr.io/scoltzero/msf:v0.4.0
     container_name: msf
     network_mode: host
     cap_add:
@@ -95,7 +95,7 @@ docker compose up -d
 
 默认 compose 文件使用：
 
-- 镜像：`ghcr.io/scoltzero/msf:v0.3.9.5`
+- 镜像：`ghcr.io/scoltzero/msf:v0.4.0`
 - 网络：`host`
 - 数据目录：`./msf-data:/opt/msf`
 - WebUI：`http://<宿主机IP>:7777`
@@ -126,7 +126,7 @@ docker run -d \
   -e MSF_DOCKER_NETWORK_MODE=host-tun \
   -e MSF_DATA_DIR=/opt/msf \
   -v "$PWD/msf-data:/opt/msf" \
-  ghcr.io/scoltzero/msf:v0.3.9.5
+  ghcr.io/scoltzero/msf:v0.4.0
 ```
 
 ## 快速启动：macvlan TUN
@@ -140,7 +140,7 @@ macvlan TUN 给容器分配独立 LAN IPv4。路由器侧 DHCP DNS 和 FakeIP �
 ```yaml
 services:
   msf:
-    image: ${MSF_IMAGE:-ghcr.io/scoltzero/msf:v0.3.9.5}
+    image: ${MSF_IMAGE:-ghcr.io/scoltzero/msf:v0.4.0}
     container_name: ${MSF_CONTAINER_NAME:-msf}
     cap_add:
       - NET_ADMIN
@@ -181,7 +181,7 @@ cp docker.env.example .env
 也可以直接复制下面这个 macvlan compose `.env` 示例保存为 `.env` 后修改：
 
 ```text
-MSF_IMAGE=ghcr.io/scoltzero/msf:v0.3.9.5
+MSF_IMAGE=ghcr.io/scoltzero/msf:v0.4.0
 MSF_CONTAINER_NAME=msf
 MSF_DOCKER_DATA_DIR=./msf-data
 MSF_DOCKER_NETWORK_NAME=msf-macvlan
@@ -218,7 +218,7 @@ MSF_DOCKER_IPV4_ADDRESS=192.168.1.10 \
 首版按 Unraid Dockerman 手工配置支持，不提供 Community Applications 容器模板。
 
 1. 在 Unraid Docker 设置中启用自定义网络，并选择 `macvlan` 或你当前系统推荐的自定义网络实现。
-2. 新建容器，镜像填写 `ghcr.io/scoltzero/msf:v0.3.9.5`。
+2. 新建容器，镜像填写 `ghcr.io/scoltzero/msf:v0.4.0`。
 3. Network Type 选择自定义 LAN 网络，例如 `br0`。
 4. Fixed IP address 填写一个未被 DHCP 分配的静态 IPv4，例如 `192.168.1.10`。
 5. Extra Parameters 或高级参数添加：
@@ -388,7 +388,7 @@ fi
 
 | 变量 | 默认值 | 用途 |
 |---|---|---|
-| `MSF_IMAGE` | `ghcr.io/scoltzero/msf:v0.3.9.5` | 容器镜像 |
+| `MSF_IMAGE` | `ghcr.io/scoltzero/msf:v0.4.0` | 容器镜像 |
 | `MSF_CONTAINER_NAME` | `msf` | 容器名称 |
 | `MSF_DOCKER_DATA_DIR` | `$PWD/msf-data` | 宿主机数据目录 |
 | `MSF_DOCKER_NETWORK_MODE` | `host-tun` | `host-tun` 或 `macvlan-tun` |
@@ -503,7 +503,7 @@ docker compose up -d
 普通 Docker：
 
 ```bash
-docker pull ghcr.io/scoltzero/msf:v0.3.9.5
+docker pull ghcr.io/scoltzero/msf:v0.4.0
 docker stop msf
 docker rm msf
 ./docker-run.sh
