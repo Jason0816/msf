@@ -893,6 +893,18 @@ func (a *App) componentUpdateState(component string) map[string]any {
 }
 
 func (a *App) componentRemoteInfo(component string) (githubRelease, error) {
+	if runtime.GOOS == "darwin" {
+		switch normalizeComponent(component) {
+		case "mosdns":
+			return a.fetchReleaseByTag("baozaodetudou", "mssb", "mosdns")
+		case "mihomo":
+			return a.fetchLatestRelease("MetaCubeX", "mihomo")
+		case "zashboard":
+			return a.fetchLatestRelease("Zephyruso", "zashboard")
+		default:
+			return githubRelease{}, fmt.Errorf("unknown component %s", component)
+		}
+	}
 	switch normalizeComponent(component) {
 	case "mosdns":
 		return a.fetchReleaseByTag("baozaodetudou", "mssb", "mosdns")
@@ -1488,6 +1500,28 @@ func (a *App) componentReleaseAssetURL(release githubRelease, component string) 
 }
 
 func (a *App) componentReleaseAsset(release githubRelease, component string) (githubAsset, bool) {
+	if runtime.GOOS == "darwin" {
+		component = normalizeComponent(component)
+		want := ""
+		switch component {
+		case "mosdns":
+			want = "mosdns-darwin-" + runtime.GOARCH + ".zip"
+		case "mihomo":
+			tag := strings.TrimSpace(release.TagName)
+			if runtime.GOARCH == "arm64" {
+				want = "mihomo-darwin-arm64-" + tag + ".gz"
+			} else if runtime.GOARCH == "amd64" {
+				want = "mihomo-darwin-amd64-compatible-" + tag + ".gz"
+			}
+		}
+		if want != "" {
+			for _, asset := range release.Assets {
+				if strings.EqualFold(asset.Name, want) {
+					return asset, true
+				}
+			}
+		}
+	}
 	want := downloadAssetName(a.componentDownloadURL(component))
 	if want == "" {
 		return githubAsset{}, false

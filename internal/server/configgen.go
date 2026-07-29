@@ -70,7 +70,7 @@ func (c *SetupConfig) defaults() {
 		c.FakeIPRangeV6 = "f2b0::/18"
 	}
 	if c.LinuxProxyMode == "" {
-		if IsDockerRuntime() {
+		if IsDockerRuntime() || IsMacOSRuntime() {
 			c.LinuxProxyMode = "tun"
 		} else {
 			c.LinuxProxyMode = "nft"
@@ -83,6 +83,11 @@ func (c *SetupConfig) defaults() {
 		c.ProxyCore = "mihomo"
 	}
 	c.MosDNSEnabled = true
+	if IsMacOSRuntime() {
+		// The macOS daemon owns DNS while TUN is active and restores the
+		// captured system configuration on a full stop.
+		c.AutoSetDNS = true
+	}
 }
 
 func isTUNProxyMode(mode string) bool {
@@ -99,13 +104,17 @@ func isNFTProxyMode(mode string) bool {
 }
 
 func (a *App) ensureDefaultConfigs() error {
+	selectedInterface := defaultSetupInterface()
+	if selectedInterface == "" {
+		selectedInterface = "eth0"
+	}
 	cfg := SetupConfig{
 		Timezone:          "Asia/Shanghai",
 		WebPort:           "7777",
-		SelectedInterface: "eth0",
+		SelectedInterface: selectedInterface,
 		MihomoCoreType:    "meta",
 		AutoSetDNS:        true,
-		EnableIPv6:        true,
+		EnableIPv6:        !IsMacOSRuntime(),
 		ProxyCore:         "mihomo",
 		MosDNSEnabled:     true,
 	}
@@ -147,6 +156,7 @@ func (a *App) ensureDefaultConfigs() error {
 
 func (a *App) writeGeneratedConfigs(cfg SetupConfig) error {
 	cfg.defaults()
+	normalizeSetupInterfaceForRuntime(&cfg)
 	if err := a.ensureMSSBTemplateDefaults(true); err != nil {
 		return err
 	}
@@ -526,8 +536,11 @@ func renderMihomoTunYAML(cfg SetupConfig) string {
 	b.WriteString(`tun:
   enable: true
   stack: system
-  device: mihomo
-  auto-route: true
+`)
+	if !IsMacOSRuntime() {
+		b.WriteString("  device: mihomo\n")
+	}
+	b.WriteString(`  auto-route: true
   auto-detect-interface: true
   strict-route: false
   auto-redirect: false

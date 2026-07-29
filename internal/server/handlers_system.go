@@ -41,12 +41,21 @@ func (a *App) handleMonitorNetwork(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleMonitorHistory(w http.ResponseWriter, r *http.Request) {
 	mem := readMemInfo()
 	now := time.Now()
+	memUsed := uint64(0)
+	if mem["MemTotal"] >= mem["MemAvailable"] {
+		memUsed = mem["MemTotal"] - mem["MemAvailable"]
+	}
+	network := a.monitorNetworkSnapshot(now)
 	point := map[string]any{
-		"time":           now.Format(time.RFC3339),
-		"timestamp":      now.Unix(),
-		"cpu_percent":    sampleCPUPercent(),
-		"memory_percent": percent(mem["MemTotal"]-mem["MemAvailable"], mem["MemTotal"]),
-		"network":        readNetworkCounters(),
+		"time":             now.Format(time.RFC3339),
+		"timestamp":        now.Unix(),
+		"cpu_percent":      sampleCPUPercent(),
+		"memory_percent":   percent(memUsed, mem["MemTotal"]),
+		"network":          network,
+		"download_speed":   network["download_speed"],
+		"upload_speed":     network["upload_speed"],
+		"connections":      network["connections"],
+		"connection_count": network["connection_count"],
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": []any{point}})
 }
@@ -786,6 +795,9 @@ func (a *App) handleLicenseNoop(w http.ResponseWriter, r *http.Request) {
 }
 
 func readMemInfo() map[string]uint64 {
+	if runtime.GOOS == "darwin" {
+		return readDarwinMemInfo()
+	}
 	out := map[string]uint64{"MemTotal": 0, "MemAvailable": 0}
 	b, err := os.ReadFile("/proc/meminfo")
 	if err != nil {

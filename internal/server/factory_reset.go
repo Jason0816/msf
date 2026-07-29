@@ -638,9 +638,14 @@ func (a *App) finishFactoryResetFiles(state factoryResetState) error {
 func (a *App) clearFactoryResetCaches() {
 	a.monitorMu.Lock()
 	a.monitorNetworkLast = monitorNetworkSample{}
+	a.monitorNetworkCache = nil
 	a.monitorMu.Unlock()
 	a.mihomoTrafficMu.Lock()
 	a.mihomoTrafficCache = nil
 	a.mihomoTrafficAt = time.Time{}
+	a.mihomoTrafficRefreshing = false
 	a.mihomoTrafficMu.Unlock()
+	a.mihomoTrafficTotalsMu.Lock()
+	a.mihomoTrafficTotalsLast = mihomoTrafficTotalsSample{}
+	a.mihomoTrafficTotalsMu.Unlock()
 }

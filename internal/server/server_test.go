@@ -221,6 +221,36 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 			wantSubstring: "mosdns-linux-arm64.zip",
 		},
 		{
+			name:          "mihomo darwin arm64",
+			component:     "mihomo",
+			goos:          "darwin",
+			goarch:        "arm64",
+			mihomoCore:    "meta",
+			wantSubstring: "mihomo-darwin-arm64.gz",
+		},
+		{
+			name:          "mihomo darwin amd64 compatible",
+			component:     "mihomo",
+			goos:          "darwin",
+			goarch:        "amd64",
+			mihomoCore:    "meta",
+			wantSubstring: "mihomo-darwin-amd64-compatible.gz",
+		},
+		{
+			name:          "mosdns darwin arm64",
+			component:     "mosdns",
+			goos:          "darwin",
+			goarch:        "arm64",
+			wantSubstring: "baozaodetudou/mssb/releases/download/mosdns/mosdns-darwin-arm64.zip",
+		},
+		{
+			name:          "mosdns darwin amd64",
+			component:     "mosdns",
+			goos:          "darwin",
+			goarch:        "amd64",
+			wantSubstring: "baozaodetudou/mssb/releases/download/mosdns/mosdns-darwin-amd64.zip",
+		},
+		{
 			name:          "zashboard is architecture independent",
 			component:     "zashboard",
 			goos:          "linux",
@@ -1290,6 +1320,9 @@ func TestMosDNSMSFCompatRuleAndSystemEndpoints(t *testing.T) {
 func TestMosDNSClientScanMSFCompatShape(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")
+	api := httptest.NewServer(http.NotFoundHandler())
+	defer api.Close()
+	app.setSetting("mosdns_api_endpoint", api.URL)
 	now := time.Now()
 	if err := os.MkdirAll(filepath.Join(app.DataDir, "logs"), 0755); err != nil {
 		t.Fatal(err)

@@ -356,6 +356,7 @@ func viewerAllows(method, path string) bool {
 		strings.HasPrefix(path, "/api/v1/history") ||
 		strings.HasPrefix(path, "/api/v1/mosdns") ||
 		strings.HasPrefix(path, "/api/v1/mihomo") ||
+		strings.HasPrefix(path, "/api/v1/network/runtime") ||
 		strings.HasPrefix(path, "/api/v1/network/info") ||
 		strings.HasPrefix(path, "/api/v1/netlink/nftables/status") ||
 		strings.HasPrefix(path, "/api/v1/system/diagnostics") ||
@@ -411,6 +412,7 @@ func readScopeAllows(method, path string) bool {
 		return true
 	}
 	if path == "/api/v1/version" ||
+		strings.HasPrefix(path, "/api/v1/network/runtime") ||
 		strings.HasPrefix(path, "/api/v1/monitor") ||
 		strings.HasPrefix(path, "/api/v1/services") ||
 		strings.HasPrefix(path, "/api/v1/logs") ||

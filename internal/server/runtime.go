@@ -22,9 +22,14 @@ func (a *App) SetConfiguredRuntimeDesired(cfg SetupConfig) {
 	a.Services.setDesired("mihomo", strings.EqualFold(cfg.ProxyCore, "mihomo"))
 	a.Services.setDesired("mosdns", cfg.MosDNSEnabled)
 	a.setSetting(nftDesiredKey, boolSetting(shouldRestoreNFT(cfg)))
+	if a.setting(networkRuntimeDesiredKey, "") == "" {
+		a.persistNetworkRuntimeDesired(runtimeStateEnabled)
+	}
 }
 
 func (a *App) RestoreConfiguredRuntime(ctx context.Context) RuntimeRestoreReport {
+	a.networkRuntimeMu.Lock()
+	defer a.networkRuntimeMu.Unlock()
 	if a.resetInProgress.Load() {
 		return RuntimeRestoreReport{Errors: []string{"system factory reset is in progress"}}
 	}
@@ -42,10 +47,16 @@ func (a *App) RestoreConfiguredRuntime(ctx context.Context) RuntimeRestoreReport
 		report.Errors = append(report.Errors, "initialized setup config is missing")
 		return report
 	}
-	cfg.defaults()
-	if err := a.migrateSetupProxyModeForRuntime(&cfg); err != nil {
+	migrated, err := a.migrateSetupProxyModeForRuntime(&cfg)
+	if err != nil {
 		report.Errors = append(report.Errors, err.Error())
 		return report
+	}
+	if migrated && a.mihomoConfigMode() != "custom" {
+		if err := a.writeGeneratedConfigs(cfg); err != nil {
+			report.Errors = append(report.Errors, "failed to regenerate migrated runtime config: "+err.Error())
+			return report
+		}
 	}
 	if err := validateSetupProxyMode(cfg); err != nil {
 		report.Errors = append(report.Errors, err.Error())
@@ -77,37 +88,67 @@ func (a *App) RestoreConfiguredRuntime(ctx context.Context) RuntimeRestoreReport
 		report.Errors = append(report.Errors, err.Error())
 		return report
 	}
+	desired := a.networkRuntimeDesired()
+	if desired == runtimeStateStopped {
+		if err := restorePlatformNetwork(ctx, a, cfg); err != nil {
+			report.Errors = append(report.Errors, "failed to restore platform network: "+err.Error())
+		}
+		report.Services = a.Services.List()
+		return report
+	}
 	report.Errors = append(report.Errors, a.Services.StartEnabled(ctx)...)
 	report.Services = a.Services.List()
-	if a.setting(nftDesiredKey, "") == "true" {
-		output, err := a.applyNFT(ctx)
-		status := a.nftStatus()
-		if output != "" {
-			status["output"] = output
+	if err := applyPlatformNetwork(ctx, a, cfg); err != nil {
+		msg := "failed to restore platform network: " + err.Error()
+		report.Errors = append(report.Errors, msg)
+		log.Print(msg)
+	} else {
+		mode := "rule"
+		if desired == runtimeStateDirect {
+			mode = "direct"
 		}
-		report.NFT = status
-		if err != nil {
-			msg := "failed to restore nftables: " + err.Error()
-			report.Errors = append(report.Errors, msg)
-			log.Print(msg)
+		if err := a.setMihomoRuntimeMode(mode); err != nil {
+			report.Errors = append(report.Errors, err.Error())
 		}
+	}
+	if runtime.GOOS == "linux" {
+		report.NFT = a.nftStatus()
 	}
 	return report
 }
 
-func (a *App) migrateSetupProxyModeForRuntime(cfg *SetupConfig) error {
+func (a *App) migrateSetupProxyModeForRuntime(cfg *SetupConfig) (bool, error) {
 	if cfg == nil {
-		return nil
+		return false, nil
 	}
+	storedMode := strings.TrimSpace(cfg.LinuxProxyMode)
+	storedAutoSetDNS := cfg.AutoSetDNS
+	storedInterface := strings.TrimSpace(cfg.SelectedInterface)
 	cfg.defaults()
-	if !IsDockerRuntime() || isTUNProxyMode(cfg.LinuxProxyMode) {
-		return nil
+	isDocker := IsDockerRuntime()
+	isMacOS := IsMacOSRuntime()
+	if !isDocker && !isMacOS {
+		return false, nil
 	}
 	cfg.LinuxProxyMode = "tun"
-	if _, err := a.DB.Exec(`update system_setups set linux_proxy_mode='tun',updated_at=? where id=(select id from system_setups order by id desc limit 1)`, nowString()); err != nil {
-		return fmt.Errorf("failed to migrate Docker proxy mode to TUN: %w", err)
+	if isMacOS {
+		cfg.AutoSetDNS = true
+		normalizeSetupInterfaceForRuntime(cfg)
 	}
-	return nil
+	modeChanged := !isTUNProxyMode(storedMode)
+	dnsChanged := isMacOS && !storedAutoSetDNS
+	interfaceChanged := isMacOS && strings.TrimSpace(cfg.SelectedInterface) != storedInterface
+	if !modeChanged && !dnsChanged && !interfaceChanged {
+		return false, nil
+	}
+	if _, err := a.DB.Exec(`update system_setups set linux_proxy_mode='tun',auto_set_dns=?,selected_interface=?,updated_at=? where id=(select id from system_setups order by id desc limit 1)`, cfg.AutoSetDNS, cfg.SelectedInterface, nowString()); err != nil {
+		platform := "Docker"
+		if isMacOS {
+			platform = "macOS"
+		}
+		return false, fmt.Errorf("failed to migrate %s network settings to TUN: %w", platform, err)
+	}
+	return true, nil
 }
 
 func (a *App) backfillConfiguredRuntimeDesired() {
@@ -135,7 +176,7 @@ func (a *App) latestSetupConfig() (SetupConfig, bool) {
 }
 
 func shouldRestoreNFT(cfg SetupConfig) bool {
-	return !IsDockerRuntime() && isNFTProxyMode(cfg.LinuxProxyMode)
+	return !IsDockerRuntime() && !IsMacOSRuntime() && isNFTProxyMode(cfg.LinuxProxyMode)
 }
 
 func (a *App) currentLinuxProxyMode() string {
