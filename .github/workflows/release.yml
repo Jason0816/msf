@@ -8,9 +8,18 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release:
+  source:
     runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+      version: ${{ steps.source.outputs.version }}
+      tag: ${{ steps.source.outputs.tag }}
+      build_time: ${{ steps.source.outputs.build_time }}
     steps:
       - name: Checkout exact tag
         uses: actions/checkout@v4
@@ -36,21 +45,33 @@ jobs:
             exit 1
           }
           version="${GITHUB_REF_NAME#v}"
+          build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           {
             echo "commit=$commit"
             echo "version=$version"
+            echo "tag=${GITHUB_REF_NAME}"
+            echo "build_time=$build_time"
           } >> "$GITHUB_OUTPUT"
+
+  linux-assets:
+    needs: source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24.x"
+          go-version-file: go.mod
           cache: true
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -65,8 +86,12 @@ jobs:
           go test ./...
           npm --prefix web run check
 
-      - name: Build and verify all release assets
-        run: make release-assets VERSION=${{ steps.source.outputs.version }} RELEASE_TAG=${GITHUB_REF_NAME}
+      - name: Build and verify Linux, Unraid, and fnOS assets
+        run: |
+          make release-assets \
+            VERSION=${{ needs.source.outputs.version }} \
+            RELEASE_TAG=${{ needs.source.outputs.tag }} \
+            BUILD_TIME=${{ needs.source.outputs.build_time }}
 
       - name: Prepare TUN smoke-test host
         shell: bash
@@ -83,7 +108,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${{ steps.source.outputs.version }}"
+          version="${{ needs.source.outputs.version }}"
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           mkdir -p "$tmp/unraid" "$tmp/fnos-x86" "$tmp/fnos-arm" "$tmp/fnos-x86-app" "$tmp/fnos-arm-app"
@@ -103,15 +128,159 @@ jobs:
             sudo -E unshare --net -- scripts/smoke-factory-reset.sh "$binary"
           done
 
+      - name: Upload Linux, Unraid, and fnOS assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-assets
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/msf-linux-amd64.tar.gz
+            dist/msf-linux-amd64.tar.gz.sha256
+            dist/msm-free-linux-amd64.tar.gz
+            dist/msm-free-linux-amd64.tar.gz.sha256
+            dist/msf-linux-arm64.tar.gz
+            dist/msf-linux-arm64.tar.gz.sha256
+            dist/msm-free-linux-arm64.tar.gz
+            dist/msm-free-linux-arm64.tar.gz.sha256
+            dist/unraid/msf-${{ needs.source.outputs.version }}-x86_64-1.txz
+            dist/unraid/msf-${{ needs.source.outputs.version }}-x86_64-1.txz.sha256
+            dist/unraid/msf.plg
+            dist/unraid/msf.plg.sha256
+            dist/msf_${{ needs.source.outputs.version }}_x86.fpk
+            dist/msf_${{ needs.source.outputs.version }}_x86.fpk.sha256
+            dist/msf_${{ needs.source.outputs.version }}_arm.fpk
+            dist/msf_${{ needs.source.outputs.version }}_arm.fpk.sha256
+
+  macos-assets:
+    needs: source
+    runs-on: macos-15
+    env:
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+      APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+    steps:
+      - name: Checkout exact tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test macOS source
+        run: |
+          go test ./...
+          npm --prefix web ci
+          npm --prefix web run check
+          make macos-app-test XCODE_DEVELOPER_DIR="$(xcode-select -p)"
+
+      - name: Import Developer ID and configure notarization
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in MACOS_CERTIFICATE_P12 MACOS_CERTIFICATE_PASSWORD APPLE_TEAM_ID APPLE_API_KEY_ID APPLE_API_ISSUER_ID APPLE_API_PRIVATE_KEY; do
+            test -n "${!name}" || { echo "Missing required secret: $name" >&2; exit 1; }
+          done
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          keychain_path="$RUNNER_TEMP/msf-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          notary_profile="msf-release"
+          printf '%s' "$MACOS_CERTIFICATE_P12" | /usr/bin/base64 -D > "$certificate_path"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" > "$api_key_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          security default-keychain -d user -s "$keychain_path"
+          identity="$(security find-identity -v -p codesigning "$keychain_path" | awk '/Developer ID Application/ {print $2; exit}')"
+          test -n "$identity" || { echo "Developer ID Application identity not found" >&2; exit 1; }
+          xcrun notarytool store-credentials "$notary_profile" \
+            --key "$api_key_path" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID"
+          {
+            echo "identity=$identity"
+            echo "notary_profile=$notary_profile"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build, sign, notarize, and package macOS assets
+        run: |
+          make macos-release-assets \
+            VERSION=${{ needs.source.outputs.version }} \
+            RELEASE_TAG=${{ needs.source.outputs.tag }} \
+            BUILD_TIME=${{ needs.source.outputs.build_time }} \
+            MACOS_BUILD_NUMBER=${GITHUB_RUN_NUMBER} \
+            MACOS_DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            MACOS_SIGNING_IDENTITY="${{ steps.signing.outputs.identity }}" \
+            MACOS_NOTARY_PROFILE="${{ steps.signing.outputs.notary_profile }}" \
+            XCODE_DEVELOPER_DIR="$(xcode-select -p)"
+
+      - name: Upload signed and notarized macOS assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-assets
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/macos/MSF-${{ needs.source.outputs.version }}-macos-universal.dmg
+            dist/macos/MSF-${{ needs.source.outputs.version }}-macos-universal.dmg.sha256
+            dist/macos/MSF-${{ needs.source.outputs.version }}-macos-universal.zip
+            dist/macos/MSF-${{ needs.source.outputs.version }}-macos-universal.zip.sha256
+
+  publish:
+    needs:
+      - source
+      - linux-assets
+      - macos-assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Linux, Unraid, and fnOS assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-linux-assets
+          path: dist
+
+      - name: Download macOS assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-macos-assets
+          path: dist/macos
+
       - name: Publish immutable GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          version="${{ steps.source.outputs.version }}"
+          version="${{ needs.source.outputs.version }}"
           notes_file="dist/release-notes.md"
-          awk -v tag="${GITHUB_REF_NAME}" '
+          awk -v tag="${{ needs.source.outputs.tag }}" '
             index($0, "## " tag " - ") == 1 { capture=1 }
             capture && printed && /^## v/ { exit }
             capture { print; printed=1 }
@@ -134,5 +303,31 @@ jobs:
             "dist/msf_${version}_x86.fpk.sha256"
             "dist/msf_${version}_arm.fpk"
             "dist/msf_${version}_arm.fpk.sha256"
+            "dist/macos/MSF-${version}-macos-universal.dmg"
+            "dist/macos/MSF-${version}-macos-universal.dmg.sha256"
+            "dist/macos/MSF-${version}-macos-universal.zip"
+            "dist/macos/MSF-${version}-macos-universal.zip.sha256"
           )
-          gh release create "${GITHUB_REF_NAME}" --verify-tag --title "${GITHUB_REF_NAME}" --notes-file "$notes_file" "${assets[@]}"
+          for asset in "${assets[@]}"; do
+            test -f "$asset" || { echo "Missing release asset: $asset" >&2; exit 1; }
+          done
+          sha256sum -c \
+            dist/msf-linux-amd64.tar.gz.sha256 \
+            dist/msm-free-linux-amd64.tar.gz.sha256 \
+            dist/msf-linux-arm64.tar.gz.sha256 \
+            dist/msm-free-linux-arm64.tar.gz.sha256 \
+            "dist/unraid/msf-${version}-x86_64-1.txz.sha256" \
+            dist/unraid/msf.plg.sha256 \
+            "dist/msf_${version}_x86.fpk.sha256" \
+            "dist/msf_${version}_arm.fpk.sha256"
+          (
+            cd dist/macos
+            sha256sum -c \
+              "MSF-${version}-macos-universal.dmg.sha256" \
+              "MSF-${version}-macos-universal.zip.sha256"
+          )
+          gh release create "${{ needs.source.outputs.tag }}" \
+            --verify-tag \
+            --title "${{ needs.source.outputs.tag }}" \
+            --notes-file "$notes_file" \
+            "${assets[@]}"

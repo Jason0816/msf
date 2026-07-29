@@ -1,4 +1,4 @@
-.PHONY: dev build frontend import-web package release-package release-assets checksums verify-release-source verify-release-assets unraid fnos test audit-compliance clean
+.PHONY: dev build frontend import-web package release-package release-assets checksums verify-release-source verify-release-assets unraid fnos test audit-compliance macos-app-project macos-app-test macos-app-build macos-app-build-debug macos-app-build-release macos-app-build-signed macos-app-verify macos-release-assets macos-app-open clean
 
 APP_NAME := msf
 DIST := dist
@@ -11,6 +11,14 @@ GOOS ?= linux
 GOARCH ?= amd64
 BIN := $(DIST)/$(APP_NAME)-$(GOOS)-$(GOARCH)
 PACKAGE_DIR := $(DIST)/$(APP_NAME)-$(VERSION)-$(GOOS)-$(GOARCH)
+MACOS_APP_DIR := macos/MSFMenuBar
+XCODE_DEVELOPER_DIR ?= /Applications/Xcode.app/Contents/Developer
+MACOS_CONFIGURATION ?= Debug
+MACOS_BUILD_NUMBER ?= 1
+MACOS_DEVELOPMENT_TEAM ?=
+MACOS_SIGNING_IDENTITY ?=
+MACOS_NOTARY_PROFILE ?=
+MACOS_RELEASE_DIR ?= $(DIST)/macos
 
 GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || printf unknown)
 SOURCE_COMMIT ?= $(GIT_COMMIT)
@@ -116,6 +124,76 @@ test:
 
 audit-compliance:
 	scripts/audit-compliance.sh
+
+macos-app-project:
+	cd $(MACOS_APP_DIR) && xcodegen generate
+
+macos-app-test:
+	cd $(MACOS_APP_DIR) && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) xcrun swift test
+
+macos-app-build: macos-app-build-debug
+
+macos-app-build-debug: frontend macos-app-project
+	cd $(MACOS_APP_DIR) && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) xcodebuild \
+		-project MSFMenuBar.xcodeproj \
+		-scheme MSFMenuBar \
+		-configuration Debug \
+		-derivedDataPath DerivedData \
+		ONLY_ACTIVE_ARCH=NO \
+		CODE_SIGNING_ALLOWED=NO \
+		build
+
+macos-app-build-release: frontend macos-app-project
+	cd $(MACOS_APP_DIR) && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) xcodebuild \
+		-project MSFMenuBar.xcodeproj \
+		-scheme MSFMenuBar \
+		-configuration Release \
+		-derivedDataPath DerivedData \
+		ONLY_ACTIVE_ARCH=NO \
+		CODE_SIGNING_ALLOWED=NO \
+		build
+
+macos-app-build-signed: frontend macos-app-project
+	@test "$(VERSION)" != "0.1.0-dev" || { echo "VERSION must be set for a signed macOS build" >&2; exit 1; }
+	@test -n "$(MACOS_DEVELOPMENT_TEAM)" || { echo "MACOS_DEVELOPMENT_TEAM is required" >&2; exit 1; }
+	@test -n "$(MACOS_SIGNING_IDENTITY)" || { echo "MACOS_SIGNING_IDENTITY is required" >&2; exit 1; }
+	cd $(MACOS_APP_DIR) && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) xcodebuild \
+		-project MSFMenuBar.xcodeproj \
+		-scheme MSFMenuBar \
+		-configuration Release \
+		-derivedDataPath DerivedData \
+		ONLY_ACTIVE_ARCH=NO \
+		ARCHS="arm64 x86_64" \
+		MARKETING_VERSION="$(VERSION)" \
+		CURRENT_PROJECT_VERSION="$(MACOS_BUILD_NUMBER)" \
+		MSF_VERSION="$(VERSION)" \
+		MSF_BUILD_COMMIT="$(GIT_COMMIT)" \
+		MSF_BUILD_TAG="$(BUILD_TAG)" \
+		MSF_BUILD_TAG_COMMIT="$(TAG_COMMIT)" \
+		MSF_BUILD_SOURCE_COMMIT="$(SOURCE_COMMIT)" \
+		MSF_BUILD_DIRTY="$(BUILD_DIRTY)" \
+		MSF_BUILD_TIME="$(BUILD_TIME)" \
+		CODE_SIGNING_ALLOWED=YES \
+		CODE_SIGNING_REQUIRED=YES \
+		CODE_SIGN_STYLE=Manual \
+		CODE_SIGN_IDENTITY="$(MACOS_SIGNING_IDENTITY)" \
+		DEVELOPMENT_TEAM="$(MACOS_DEVELOPMENT_TEAM)" \
+		CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+		OTHER_CODE_SIGN_FLAGS="--timestamp" \
+		build
+
+macos-app-verify:
+	cd $(MACOS_APP_DIR) && DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) Scripts/verify-app.sh $(MACOS_CONFIGURATION)
+
+macos-release-assets: verify-release-source macos-app-build-signed
+	@test -n "$(MACOS_NOTARY_PROFILE)" || { echo "MACOS_NOTARY_PROFILE is required" >&2; exit 1; }
+	cd $(MACOS_APP_DIR) && \
+		MACOS_SIGNING_IDENTITY="$(MACOS_SIGNING_IDENTITY)" \
+		MACOS_NOTARY_PROFILE="$(MACOS_NOTARY_PROFILE)" \
+		Scripts/package-release.sh "$(VERSION)" "$(RELEASE_TAG)" "$(GIT_COMMIT)" "$(abspath $(MACOS_RELEASE_DIR))"
+
+macos-app-open: macos-app-build-debug
+	open $(MACOS_APP_DIR)/DerivedData/Build/Products/Debug/MSF.app
 
 clean:
 	rm -rf $(DIST)

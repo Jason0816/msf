@@ -11,6 +11,12 @@ msf_html_export.tar.gz
 msm_html_export.tar.gz
 *.tsbuildinfo
 
+# macOS menu bar app generated files
+macos/MSFMenuBar/.build/
+macos/MSFMenuBar/.swiftpm/
+macos/MSFMenuBar/DerivedData/
+macos/MSFMenuBar/MSFMenuBar.xcodeproj/
+
 # Local tooling artifacts (not part of the project)
 .codex/
 graphify-out/
