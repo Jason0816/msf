@@ -38,7 +38,7 @@ Current release: `v0.4.0`
 | Linux tarball/systemd | Stable | [Linux install](docs/install/linux.md) | `msf update` / `msf uninstall` |
 | fnOS FPK | Supported | [fnOS FPK install](docs/install/fnos-fpk.md) | fnOS / Feiniu App Center or FPK package manager |
 | Unraid PLG | Stable | [Unraid PLG install](docs/install/unraid-plg.md) | Unraid plugin manager |
-| Docker TUN host/macvlan | Supported (TUN-only) | [Docker TUN deployment](docs/docker.en.md) | Docker / Compose / container manager |
+| Docker TUN host/macvlan | Supported (TUN-only) | [Docker TUN deployment](docs/docker.en.md) | Docker / Compose / Unraid Community Apps |
 | macOS 15–26 menu bar app | Unsigned Beta (TUN-only) | [macOS installation and usage](docs/install/macos.md) | In-app administrator-authorized daemon installation, repair, and removal |
 
 `msf update` and `msf uninstall` are only for Linux tarball/systemd installs. fnOS FPK, Unraid PLG, and Docker installs must be updated or removed through their platform manager.

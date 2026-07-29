@@ -38,7 +38,7 @@
 | Linux tarball/systemd | 稳定支持 | [Linux 安装](docs/install/linux.md) | `msf update` / `msf uninstall` |
 | fnOS FPK | 支持 | [fnOS FPK 安装](docs/install/fnos-fpk.md) | fnOS / 飞牛应用中心或 FPK 包管理器 |
 | Unraid PLG | 稳定支持 | [Unraid PLG 安装](docs/install/unraid-plg.md) | Unraid 插件管理页面 |
-| Docker TUN host/macvlan | 支持（仅 TUN） | [Docker TUN 部署](docs/docker.md) | Docker / Compose / 容器管理器 |
+| Docker TUN host/macvlan | 支持（仅 TUN） | [Docker TUN 部署](docs/docker.md) | Docker / Compose / Unraid Community Apps |
 | macOS 15–26 菜单栏 App | 未签名 Beta（仅 TUN） | [macOS 安装与使用](docs/install/macos.md) | App 内管理员授权安装、修复和卸载后台 |
 
 `msf update` 和 `msf uninstall` 只面向 Linux tarball/systemd 安装。fnOS FPK、Unraid PLG、Docker 请通过各自平台管理器更新或卸载，避免绕过包状态。

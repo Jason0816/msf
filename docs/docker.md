@@ -213,12 +213,12 @@ MSF_DOCKER_IPV4_ADDRESS=192.168.1.10 \
 
 脚本会在 `msf-macvlan` 网络不存在时创建它。可用 `MSF_DOCKER_NETWORK_NAME` 覆盖网络名。
 
-## Unraid Dockerman IPv4 macvlan
+## Unraid Community Applications / Dockerman IPv4 macvlan
 
-首版按 Unraid Dockerman 手工配置支持，不提供 Community Applications 容器模板。
+仓库提供 Community Applications Docker 模板 `packaging/unraid/ca/msf-docker.xml`。从 CA 安装 **MSF Docker** 时，模板会预填以下参数；也可以继续在 Unraid Dockerman 中手工创建容器。
 
 1. 在 Unraid Docker 设置中启用自定义网络，并选择 `macvlan` 或你当前系统推荐的自定义网络实现。
-2. 新建容器，镜像填写 `ghcr.io/scoltzero/msf:v0.4.0`。
+2. 从 CA 安装 **MSF Docker**，或新建容器并填写镜像 `ghcr.io/scoltzero/msf:latest`。
 3. Network Type 选择自定义 LAN 网络，例如 `br0`。
 4. Fixed IP address 填写一个未被 DHCP 分配的静态 IPv4，例如 `192.168.1.10`。
 5. Extra Parameters 或高级参数添加：
