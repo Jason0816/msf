@@ -275,7 +275,7 @@ export default function MihomoRulesPage() {
     <AppShell>
       <div className="space-y-4 animate-fade-in">
         <div className="relative rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-purple-500 via-pink-500 to-amber-400" />
+          <div className="h-px w-full bg-primary/35" />
           <div className="p-4 space-y-3">
             <div className="flex items-center gap-2">
               <h1 className="text-lg md:text-xl font-bold text-foreground">规则</h1>

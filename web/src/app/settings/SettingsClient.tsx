@@ -33,11 +33,15 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ToastStack, useToaster } from "@/components/Toaster";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { api, apiData, apiList, clearSession } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type TabId = "profile" | "system" | "appearance" | "update" | "reset";
 type ThemeMode = "light" | "dark" | "system";
+type GlassSceneMode = "dynamic" | "static" | "neutral";
+type GlassQuality = "full" | "balanced" | "reduced";
 type NodeEditMode = "share" | "yaml";
 
 interface SubscriptionRow {
@@ -543,9 +547,10 @@ function Card({
   iconClassName?: string;
 }) {
   return (
-    <section
+    <GlassSurface
+      material="thick"
       className={cn(
-        "rounded-[12px] border bg-card text-card-foreground !border-border/20 !shadow-none transition-shadow duration-300 hover:!shadow-sm",
+        "text-card-foreground",
         className
       )}
     >
@@ -558,7 +563,7 @@ function Card({
         </div>
       </div>
       <div className="p-6 pt-3">{children}</div>
-    </section>
+    </GlassSurface>
   );
 }
 
@@ -572,7 +577,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+  "gary-field w-full px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground";
 
 function Toggle({ checked, onChange, disabled = false }: { checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
   return (
@@ -583,7 +588,7 @@ function Toggle({ checked, onChange, disabled = false }: { checked: boolean; onC
       aria-pressed={checked}
       className={cn(
         "inline-flex h-6 w-11 shrink-0 items-center rounded-full border p-0.5 transition-colors",
-        checked ? "border-primary bg-primary" : "border-border bg-muted",
+        checked ? "border-primary bg-primary/80" : "border-border bg-muted/70",
         disabled && "cursor-not-allowed opacity-50"
       )}
     >
@@ -648,7 +653,7 @@ function PrimaryButton({ children, className, ...props }: React.ButtonHTMLAttrib
     <button
       {...props}
       className={cn(
-        "inline-flex h-9 items-center justify-center gap-2 rounded-[10px] bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50",
+        "gary-glass-button inline-flex h-9 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-medium text-foreground disabled:pointer-events-none disabled:opacity-50",
         className
       )}
     >
@@ -662,7 +667,7 @@ function OutlineButton({ children, className, ...props }: React.ButtonHTMLAttrib
     <button
       {...props}
       className={cn(
-        "inline-flex h-8 items-center justify-center gap-2 rounded-[10px] border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted",
+        "gary-glass-button inline-flex h-8 items-center justify-center gap-2 rounded-[10px] px-3 text-xs font-medium text-foreground",
         className
       )}
     >
@@ -850,7 +855,7 @@ function InitConfigSummary({
 }
 
 function SectionBox({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("rounded-xl border border-border/60 bg-background/40 p-4 md:p-5", className)}>{children}</div>;
+  return <SolidPlate className={cn("p-4 md:p-5", className)}>{children}</SolidPlate>;
 }
 
 function InitConfigEditor({
@@ -1385,6 +1390,8 @@ function SystemTab({ showToast }: { showToast: (message: string) => void }) {
 function AppearanceTab({ showToast }: { showToast: (message: string) => void }) {
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [language, setLanguage] = useState("简体中文");
+  const [scene, setScene] = useState<GlassSceneMode>("dynamic");
+  const [quality, setQuality] = useState<GlassQuality>("full");
 
   const applyThemeMode = (mode: ThemeMode) => {
     setTheme(mode);
@@ -1401,6 +1408,14 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
         const nextTheme = (data.theme === "light" || data.theme === "dark" || data.theme === "system" ? data.theme : "system") as ThemeMode;
         applyThemeMode(nextTheme);
         setLanguage(data.language === "en-US" || data.language === "en" ? "English" : "简体中文");
+        const storedScene = data.scene || localStorage.getItem("msf-glass-scene");
+        const nextScene: GlassSceneMode = storedScene === "static" || storedScene === "neutral" ? storedScene : "dynamic";
+        const storedQuality = data.quality || localStorage.getItem("msf-glass-quality");
+        const nextQuality: GlassQuality = storedQuality === "balanced" || storedQuality === "reduced" ? storedQuality : "full";
+        setScene(nextScene);
+        setQuality(nextQuality);
+        document.documentElement.dataset.garyScene = nextScene;
+        document.documentElement.dataset.garyQuality = nextQuality;
       })
       .catch((error) => showToast(errorMessage(error)));
   }, [showToast]);
@@ -1422,6 +1437,20 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
     void saveAppearance({ theme: mode });
   };
 
+  const setSceneMode = (mode: GlassSceneMode) => {
+    setScene(mode);
+    document.documentElement.dataset.garyScene = mode;
+    localStorage.setItem("msf-glass-scene", mode);
+    void saveAppearance({ scene: mode });
+  };
+
+  const setQualityMode = (mode: GlassQuality) => {
+    setQuality(mode);
+    document.documentElement.dataset.garyQuality = mode;
+    localStorage.setItem("msf-glass-quality", mode);
+    void saveAppearance({ quality: mode });
+  };
+
   return (
     <div className="space-y-4">
       <Card title="主题模式" Icon={Palette}>
@@ -1440,6 +1469,53 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
             </button>
           ))}
         </div>
+      </Card>
+
+      <Card title="场景背景" Icon={Monitor}>
+        <div className="grid gap-3 md:grid-cols-3">
+          {([
+            ["dynamic", "动态场景", "Graphite Silk / Pearl Aura 的低频环境流动"],
+            ["static", "静态场景", "保留完整借景和玻璃层次，关闭背景运动"],
+            ["neutral", "纯净中性", "纯石墨灰或珍珠灰，用于排障和专注阅读"],
+          ] as const).map(([id, label, description]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSceneMode(id)}
+              className={cn(
+                "min-h-24 rounded-2xl border p-4 text-left transition-colors",
+                scene === id ? "border-primary/60 bg-primary/10" : "border-border/60 bg-transparent hover:bg-muted/30"
+              )}
+            >
+              <span className="block text-sm font-semibold text-foreground">{label}</span>
+              <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{description}</span>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="视觉质量" Icon={Eye}>
+        <div className="grid gap-3 md:grid-cols-3">
+          {([
+            ["full", "完整质感", "动态场景与 28px Thick 玻璃，默认推荐"],
+            ["balanced", "平衡", "静态场景并减少模糊成本，保持玻璃边缘"],
+            ["reduced", "减少效果", "关闭 backdrop blur，改用高 K 值稳定表面"],
+          ] as const).map(([id, label, description]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setQualityMode(id)}
+              className={cn(
+                "min-h-24 rounded-2xl border p-4 text-left transition-colors",
+                quality === id ? "border-primary/60 bg-primary/10" : "border-border/60 bg-transparent hover:bg-muted/30"
+              )}
+            >
+              <span className="block text-sm font-semibold text-foreground">{label}</span>
+              <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{description}</span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">设置会一次性应用并保存，不使用会导致白屏的实时物理参数滑条。</p>
       </Card>
 
       <Card title="语言 / Language" Icon={Languages}>
@@ -2513,7 +2589,7 @@ export function SettingsClient({ initialTab }: { initialTab: TabId }) {
           <p className="text-sm leading-4 text-muted-foreground">个人设置与系统配置</p>
         </div>
 
-        <div className="mt-4 inline-flex w-full items-center gap-1 overflow-x-auto rounded-lg bg-muted p-1 scrollbar-hide" role="tablist">
+        <GlassSurface material="regular" flat className="gary-segmented mt-4 inline-flex w-full items-center gap-1 overflow-x-auto scrollbar-hide" role="tablist">
           {tabs.map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -2521,7 +2597,7 @@ export function SettingsClient({ initialTab }: { initialTab: TabId }) {
               className={cn(
                 "inline-flex h-11 min-w-[67px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 md:h-7 md:min-w-[92px] md:flex-none md:px-3",
                 activeTab === id
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "gary-segmented__item--active text-foreground"
                   : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
               )}
               role="tab"
@@ -2531,7 +2607,7 @@ export function SettingsClient({ initialTab }: { initialTab: TabId }) {
               {label}
             </button>
           ))}
-        </div>
+        </GlassSurface>
 
         <div role="tabpanel" className="mt-2 animate-slide-up">
           {activeTab === "profile" && <ProfileTab showToast={showToast} />}
