@@ -59,6 +59,8 @@ interface InitConfigState {
   dnsEnable: string;
   dnsDisable: string;
   ipv6: boolean;
+  fakeIPRangeV4: string;
+  fakeIPRangeV6: string;
   subscriptions: SubscriptionRow[];
   nodeMode: NodeEditMode;
   shareNodes: string[];
@@ -409,6 +411,8 @@ const defaultInitConfig: InitConfigState = {
   dnsEnable: "127.0.0.1",
   dnsDisable: "223.5.5.5",
   ipv6: false,
+  fakeIPRangeV4: "28.0.0.0/8",
+  fakeIPRangeV6: "f2b0::/18",
   subscriptions: [],
   nodeMode: "share",
   shareNodes: [],
@@ -499,6 +503,8 @@ function setupToInitConfig(raw: any, forceTun = false, forceAutoDNS = false): In
     dnsEnable: String(data.dns_on || data.dnsOn || "127.0.0.1"),
     dnsDisable: String(data.dns_off || data.dnsOff || "223.5.5.5"),
     ipv6: Boolean(data.enable_ipv6 ?? data.enableIPv6),
+    fakeIPRangeV4: String(data.fake_ip_range_v4 || data.fakeIPRangeV4 || "28.0.0.0/8"),
+    fakeIPRangeV6: String(data.fake_ip_range_v6 || data.fakeIPRangeV6 || "f2b0::/18"),
     subscriptions,
     nodeMode: mihomoProxies.trim().startsWith("proxies:") ? "yaml" : "share",
     shareNodes,
@@ -522,6 +528,8 @@ function initConfigToSetupPayload(config: InitConfigState) {
     dns_on: config.dnsEnable,
     dns_off: config.dnsDisable,
     enable_ipv6: config.ipv6,
+    fake_ip_range_v4: config.fakeIPRangeV4.trim(),
+    fake_ip_range_v6: config.fakeIPRangeV6.trim(),
     subscription_urls: serializeSubscriptions(config.subscriptions),
     mihomo_proxies: config.nodeMode === "yaml" ? config.yamlNodes : config.shareNodes.filter(Boolean).join("\n"),
     github_proxy_enabled: config.githubProxyEnabled,
@@ -1030,6 +1038,25 @@ function InitConfigEditor({
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           开启后代理核心将支持 IPv6 流量处理，关闭则仅处理 IPv4 流量。如果您的网络不支持 IPv6，请务必关闭此选项
         </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field label="IPv4 FakeIP 网段">
+            <input
+              value={draft.fakeIPRangeV4}
+              onChange={(event) => setDraft((current) => ({ ...current, fakeIPRangeV4: event.target.value }))}
+              placeholder="28.0.0.0/8"
+              className={`${inputClass} h-12 text-base`}
+            />
+          </Field>
+          <Field label="IPv6 FakeIP 网段">
+            <input
+              value={draft.fakeIPRangeV6}
+              onChange={(event) => setDraft((current) => ({ ...current, fakeIPRangeV6: event.target.value }))}
+              placeholder="f2b0::/18"
+              className={`${inputClass} h-12 text-base`}
+            />
+            {!draft.ipv6 ? <p className="mt-1 text-xs text-amber-600">已保存但未激活；重新开启 IPv6 时会继续使用此网段。</p> : null}
+          </Field>
+        </div>
       </SectionBox>
 
       <SectionBox>

@@ -379,10 +379,11 @@ export default function MosdnsSystemPage() {
 
   const loadSystem = useCallback(async () => {
     try {
-      const [featurePayload, switchPayload, upstreamPayload, logCapacityPayload, cachePayload, routingPayload, cacheDetailPayload] = await Promise.all([
+      const [featurePayload, switchPayload, upstreamPayload, overridePayload, logCapacityPayload, cachePayload, routingPayload, cacheDetailPayload] = await Promise.all([
         api("/api/v1/mosdns/system/feature-switches"),
         api("/api/v1/mosdns/system/switches"),
         api("/api/v1/mosdns/system/upstream-overrides"),
+        api("/api/v1/mosdns/system/overrides"),
         api("/api/v1/mosdns/system/log-capacity"),
         api("/api/v1/mosdns/system/cache"),
         api("/api/v1/mosdns/system/routing"),
@@ -390,10 +391,11 @@ export default function MosdnsSystemPage() {
       ]);
       const switches = switchMap(featurePayload, switchPayload);
       const nextGroups = normalizeUpstreamGroups(upstreamPayload);
+      const overrides = apiData<RawRecord>(overridePayload, overridePayload as RawRecord) || {};
       setGroups(nextGroups);
       setGlobalSettings({
         socks5: extractSocks5(nextGroups),
-        ecsIp: "-",
+        ecsIp: String(overrides.ecs || "2408:8214:213::1"),
         logCapacity: Number(apiData<RawRecord>(logCapacityPayload, logCapacityPayload as RawRecord)?.capacity || 0),
       });
       setFilterSettings({
@@ -571,14 +573,18 @@ export default function MosdnsSystemPage() {
     }
   };
 
-  const toggleResolution = async (key: keyof ResolutionSettings) => {
-    const next = !resolutionSettings[key];
-    setResolutionSettings((prev) => ({ ...prev, [key]: next }));
+  const changeResolutionPriority = async (priority: "auto" | "ipv4" | "ipv6") => {
+    const previous = resolutionSettings;
+    const next = { ipv4First: priority === "ipv4", ipv6First: priority === "ipv6" };
+    setResolutionSettings(next);
     try {
-      await postSwitch(SWITCH[key], next);
+      await Promise.all([
+        postSwitch(SWITCH.ipv4First, next.ipv4First),
+        postSwitch(SWITCH.ipv6First, next.ipv6First),
+      ]);
       showToast("解析策略已保存");
     } catch (error) {
-      setResolutionSettings((prev) => ({ ...prev, [key]: !next }));
+      setResolutionSettings(previous);
       showToast(error instanceof Error ? error.message : "解析策略保存失败");
     }
   };
@@ -646,6 +652,7 @@ export default function MosdnsSystemPage() {
       await Promise.all([
         api("/api/v1/mosdns/system/log-capacity", { method: "POST", body: JSON.stringify({ capacity: globalSettings.logCapacity }) }),
         api("/api/v1/mosdns/system/upstream-overrides", { method: "POST", body: JSON.stringify(groupsToPayload(groups, globalSettings.socks5)) }),
+        api("/api/v1/mosdns/system/overrides", { method: "POST", body: JSON.stringify({ socks5: globalSettings.socks5, ecs: globalSettings.ecsIp }) }),
         api("/api/v1/mosdns/system/routing/scheduler", {
           method: "POST",
           body: JSON.stringify({
@@ -703,8 +710,7 @@ export default function MosdnsSystemPage() {
             runMode={runMode}
             onChangeRunMode={(mode) => void changeRunMode(mode)}
             resolutionSettings={resolutionSettings}
-            onToggleIpv4First={() => void toggleResolution("ipv4First")}
-            onToggleIpv6First={() => void toggleResolution("ipv6First")}
+            onChangePriority={(priority) => void changeResolutionPriority(priority)}
           />
         </div>
 

@@ -29,12 +29,15 @@ func (a *App) handleSettingsStructuredPut(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusForbidden, "forbidden", "admin required")
 		return
 	}
+	a.configApplyMu.Lock()
+	defer a.configApplyMu.Unlock()
 	var req map[string]any
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	cfg, initialized, _ := a.latestSetupConfigForSettings()
+	cfg, initialized, setupExists := a.latestSetupConfigForSettings()
+	previous := cfg
 	if cfg.Username == "" {
 		if u := currentUser(r); u != nil {
 			cfg.Username = u.Username
@@ -78,21 +81,79 @@ func (a *App) handleSettingsStructuredPut(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if setupChanged {
-		if err := a.insertSetupSnapshot(cfg, initialized); err != nil {
+		if err := normalizeFakeIPPrefixes(&cfg); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_fake_ip_range", err.Error())
+			return
+		}
+		if err := validateSetupProxyMode(cfg); err != nil {
+			writeError(w, http.StatusBadRequest, "unsupported_proxy_mode", err.Error())
+			return
+		}
+		if setupExists && fakeIPPrefixChanged(previous, cfg) {
+			if err := a.clearFakeIPCaches(); err != nil {
+				writeError(w, http.StatusConflict, "fake_ip_cache_flush_failed", err.Error())
+				return
+			}
+		}
+		if err := a.writeGeneratedConfigs(cfg); err != nil {
+			writeError(w, http.StatusInternalServerError, "config_error", err.Error())
+			return
+		}
+		if err := a.ensureProxyModeConsistency(cfg, false); err != nil {
+			if setupExists {
+				_ = a.writeGeneratedConfigs(previous)
+			}
+			writeError(w, http.StatusConflict, "proxy_mode_mismatch", err.Error())
+			return
+		}
+		setupID, err := a.insertSetupSnapshot(cfg, initialized)
+		if err != nil {
+			if setupExists {
+				_ = a.writeGeneratedConfigs(previous)
+			}
 			writeError(w, http.StatusInternalServerError, "db_error", err.Error())
 			return
 		}
-		if providerSyncRequired {
+		if providerSyncRequired && a.mihomoConfigMode() == "custom" {
 			if err := a.syncMihomoProxyProvidersFromSetupConfig(cfg, currentUsername(r)); err != nil {
+				_, _ = a.DB.Exec(`delete from system_setups where id=?`, setupID)
+				if setupExists {
+					_ = a.writeGeneratedConfigs(previous)
+				}
 				writeError(w, http.StatusInternalServerError, "config_error", err.Error())
 				return
+			}
+		}
+		if initialized {
+			a.SetConfiguredRuntimeDesired(cfg)
+			if err := setupApplyProxyNetworkState(a, r.Context(), cfg); err != nil {
+				_, _ = a.DB.Exec(`delete from system_setups where id=?`, setupID)
+				a.SetConfiguredRuntimeDesired(previous)
+				_ = a.writeGeneratedConfigs(previous)
+				_ = setupApplyProxyNetworkState(a, r.Context(), previous)
+				writeError(w, http.StatusInternalServerError, "network_apply_failed", err.Error())
+				return
+			}
+			if restartRequired || regenerateRequired {
+				for _, name := range managedServiceNames() {
+					if a.Services.Status(name).Running {
+						if _, err := a.Services.Restart(r.Context(), name); err != nil {
+							_, _ = a.DB.Exec(`delete from system_setups where id=?`, setupID)
+							a.SetConfiguredRuntimeDesired(previous)
+							_ = a.writeGeneratedConfigs(previous)
+							_ = setupApplyProxyNetworkState(a, r.Context(), previous)
+							writeError(w, http.StatusInternalServerError, "service_restart_failed", err.Error())
+							return
+						}
+					}
+				}
 			}
 		}
 	}
 	data := a.structuredSettingsPayload()
 	data["restart_required"] = restartRequired
 	data["regenerate_required"] = regenerateRequired
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": restartRequired, "regenerate_required": regenerateRequired, "data": data})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "saved": setupChanged, "generated": setupChanged, "network_applied": initialized && setupChanged, "restart_required": restartRequired, "regenerate_required": regenerateRequired, "data": data})
 }
 
 func (a *App) structuredSettingsPayload() map[string]any {
@@ -171,13 +232,16 @@ func (a *App) latestSetupConfigForSettingsRaw() (SetupConfig, bool, bool) {
 	return cfg, initialized, true
 }
 
-func (a *App) insertSetupSnapshot(cfg SetupConfig, initialized bool) error {
+func (a *App) insertSetupSnapshot(cfg SetupConfig, initialized bool) (int64, error) {
 	applySetupStringDefaults(&cfg)
 	now := time.Now()
-	_, err := a.DB.Exec(`insert into system_setups(created_at,updated_at,username,email,timezone,web_port,amd64v3_enabled,selected_interface,mihomo_core_type,auto_set_dns,dns_on,dns_off,enable_ipv6,fake_ip_range_v4,fake_ip_range_v6,linux_proxy_mode,nft_proxy_policy,proxy_core,mos_dns_enabled,subscription_urls,mihomo_proxies,github_proxy_enabled,github_https_proxy,github_http_proxy,github_socks5_proxy,github_accelerator_enabled,github_accelerator_url,is_initialized)
+	res, err := a.DB.Exec(`insert into system_setups(created_at,updated_at,username,email,timezone,web_port,amd64v3_enabled,selected_interface,mihomo_core_type,auto_set_dns,dns_on,dns_off,enable_ipv6,fake_ip_range_v4,fake_ip_range_v6,linux_proxy_mode,nft_proxy_policy,proxy_core,mos_dns_enabled,subscription_urls,mihomo_proxies,github_proxy_enabled,github_https_proxy,github_http_proxy,github_socks5_proxy,github_accelerator_enabled,github_accelerator_url,is_initialized)
 		values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		now, now, cfg.Username, cfg.Email, cfg.Timezone, cfg.WebPort, cfg.AMD64v3Enabled, cfg.SelectedInterface, cfg.MihomoCoreType, cfg.AutoSetDNS, cfg.DNSOn, cfg.DNSOff, cfg.EnableIPv6, cfg.FakeIPRangeV4, cfg.FakeIPRangeV6, cfg.LinuxProxyMode, cfg.NFTProxyPolicy, cfg.ProxyCore, cfg.MosDNSEnabled, cfg.SubscriptionURLs, cfg.MihomoProxies, cfg.GitHubProxyEnabled, cfg.GitHubHTTPSProxy, cfg.GitHubHTTPProxy, cfg.GitHubSocks5Proxy, cfg.GitHubAcceleratorEnabled, cfg.GitHubAcceleratorURL, initialized)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
 }
 
 func applySetupStringDefaults(cfg *SetupConfig) {
@@ -339,17 +403,17 @@ func (a *App) applyStructuredSetupSection(cfg *SetupConfig, section string, raw 
 			changed = true
 			regenerateRequired = true
 		case "fake_ip_range_v4", "fakeIPRangeV4":
-			prefix := strings.TrimSpace(fmtAny(value))
-			if err := validateCIDR(prefix); err != nil {
-				return false, false, false, fmt.Errorf("invalid fake_ip_range_v4")
+			prefix, err := normalizeFakeIPPrefix(fmtAny(value), false)
+			if err != nil {
+				return false, false, false, fmt.Errorf("invalid fake_ip_range_v4: %w", err)
 			}
 			cfg.FakeIPRangeV4 = prefix
 			changed = true
 			regenerateRequired = true
 		case "fake_ip_range_v6", "fakeIPRangeV6":
-			prefix := strings.TrimSpace(fmtAny(value))
-			if err := validateCIDR(prefix); err != nil {
-				return false, false, false, fmt.Errorf("invalid fake_ip_range_v6")
+			prefix, err := normalizeFakeIPPrefix(fmtAny(value), true)
+			if err != nil {
+				return false, false, false, fmt.Errorf("invalid fake_ip_range_v6: %w", err)
 			}
 			cfg.FakeIPRangeV6 = prefix
 			changed = true

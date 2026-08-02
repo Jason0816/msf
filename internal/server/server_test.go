@@ -2191,6 +2191,7 @@ func TestMihomoSetupAndPanelProviderFieldsStayInSync(t *testing.T) {
 		"selected_interface": "eth0",
 		"subscription_urls":  "airport|https://example.com/sub.yaml",
 		"mihomo_proxies":     "vless://00000000-0000-4000-8000-000000000000@example.com:443?encryption=none#manual-node",
+		"enable_ipv6":        false,
 		"proxy_core":         "mihomo",
 		"mos_dns_enabled":    true,
 	})
@@ -2921,6 +2922,7 @@ func strconvID(v any) string {
 
 func testMihomoConfigYAML(group string) string {
 	return `mode: rule
+ipv6: false
 port: 7890
 socks-port: 7891
 redir-port: 7877
@@ -2935,6 +2937,8 @@ profile:
   store-selected: true
 dns:
   enable: true
+  ipv6: false
+  fake-ip-range6: f2b0::/18
   listen: 0.0.0.0:6666
 proxy-groups:
   - name: ` + group + `

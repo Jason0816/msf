@@ -64,10 +64,10 @@ func (c *SetupConfig) defaults() {
 		c.DNSOff = "223.5.5.5"
 	}
 	if c.FakeIPRangeV4 == "" {
-		c.FakeIPRangeV4 = "28.0.0.0/8"
+		c.FakeIPRangeV4 = defaultFakeIPv4Prefix
 	}
 	if c.FakeIPRangeV6 == "" {
-		c.FakeIPRangeV6 = "f2b0::/18"
+		c.FakeIPRangeV6 = defaultFakeIPv6Prefix
 	}
 	if c.LinuxProxyMode == "" {
 		if IsDockerRuntime() || IsMacOSRuntime() {
@@ -128,6 +128,13 @@ func (a *App) ensureDefaultConfigs() error {
 		"configs/network/network.yaml": a.renderNetworkYAML(cfg),
 		"configs/singbox/config.json":  renderDisabledSingBoxJSON(),
 	}
+	mosDNSFiles, err := a.renderMosDNSManagedFiles(cfg)
+	if err != nil {
+		return err
+	}
+	for rel, content := range mosDNSFiles {
+		files[rel] = content
+	}
 	if shouldRestoreNFT(cfg) {
 		files["configs/network/network.nft"] = a.renderNFT(cfg)
 	}
@@ -168,6 +175,13 @@ func (a *App) writeGeneratedConfigs(cfg SetupConfig) error {
 		"configs/mosdns/config.yaml":   a.renderMosDNSYAML(cfg),
 		"configs/network/network.yaml": a.renderNetworkYAML(cfg),
 		"configs/singbox/config.json":  renderDisabledSingBoxJSON(),
+	}
+	mosDNSFiles, err := a.renderMosDNSManagedFiles(cfg)
+	if err != nil {
+		return err
+	}
+	for rel, content := range mosDNSFiles {
+		files[rel] = content
 	}
 	if shouldRestoreNFT(cfg) {
 		files["configs/network/network.nft"] = a.renderNFT(cfg)
@@ -236,7 +250,10 @@ func validateGeneratedConfigPayloads(cfg SetupConfig, files map[string]string) e
 		return err
 	}
 	_, nftExists := files["configs/network/network.nft"]
-	return validateProxyModeDocuments(cfg, mihomo, network, nftExists)
+	if err := validateProxyModeDocuments(cfg, mihomo, network, nftExists); err != nil {
+		return err
+	}
+	return validateIPv6Documents(cfg, mihomo, network)
 }
 
 func (a *App) replaceGeneratedConfigFiles(files map[string]string, remove []string) error {
@@ -450,6 +467,7 @@ func renderMihomoTemplate(template string, cfg SetupConfig) string {
 	content = strings.ReplaceAll(content, "ipv6: true", "ipv6: "+ipv6)
 	content = strings.Replace(content, "external-ui: /mssb/mihomo/ui", "external-ui: ui", 1)
 	content = strings.Replace(content, "fake-ip-range: 28.0.0.1/8", "fake-ip-range: "+normalizeMihomoFakeIPv4Range(cfg.FakeIPRangeV4), 1)
+	content = strings.Replace(content, "fake-ip-range6: f2b0::/18", "fake-ip-range6: "+fakeIPv6RouteCIDR(cfg.FakeIPRangeV6), 1)
 	content = applyMihomoProxyMode(content, cfg)
 	return replaceMihomoProxyProviders(content, renderProxyProvidersYAML(parseSubscriptionProviders(cfg.SubscriptionURLs), hasMihomoManualProxies(cfg.MihomoProxies)))
 }
@@ -498,6 +516,7 @@ dns:
   ipv6: %s
   enhanced-mode: fake-ip
   fake-ip-range: %s
+  fake-ip-range6: %s
   fake-ip-filter:
     - "*"
     - +.lan
@@ -518,7 +537,7 @@ rules:
   - IP-CIDR,8.8.8.8/32,节点选择
   - IP-CIDR,1.1.1.1/32,节点选择
   - MATCH,节点选择
-%s`, selectedInterface(cfg.SelectedInterface), ipv6, transparentYAML, tunYAML, ipv6, normalizeMihomoFakeIPv4Range(cfg.FakeIPRangeV4), renderMihomoProxyServerNameserverYAML(cfg), providerYAML)
+%s`, selectedInterface(cfg.SelectedInterface), ipv6, transparentYAML, tunYAML, ipv6, normalizeMihomoFakeIPv4Range(cfg.FakeIPRangeV4), fakeIPv6RouteCIDR(cfg.FakeIPRangeV6), renderMihomoProxyServerNameserverYAML(cfg), providerYAML)
 }
 
 func renderMihomoTransparentProxyYAML(cfg SetupConfig) string {
@@ -816,6 +835,9 @@ func (a *App) renderMosDNSYAML(cfg SetupConfig) string {
 		content = strings.ReplaceAll(content, "28.0.0.0/8", fakeIPv4RouteCIDR(cfg.FakeIPRangeV4))
 		content = strings.ReplaceAll(content, "2001:2::/64", fakeIPv6RouteCIDR(cfg.FakeIPRangeV6))
 		content = strings.ReplaceAll(content, "f2b0::/18", fakeIPv6RouteCIDR(cfg.FakeIPRangeV6))
+		if !cfg.EnableIPv6 {
+			content = addMosDNSRealAAAABypass(content)
+		}
 		return content
 	}
 	return fmt.Sprintf(`log:
@@ -876,6 +898,21 @@ plugins:
 `, filepath.ToSlash(filepath.Join(a.DataDir, "logs/mosdns.log")))
 }
 
+func addMosDNSRealAAAABypass(content string) string {
+	const block = `      - matches:                            #阻止AAAA类型的dns查询
+        - "qtype 28"
+        - switch6 'A'
+        exec: reject 0`
+	const bypass = `
+      - matches:                            #IPv6 数据面关闭时显式返回真实 AAAA
+        - "qtype 28"
+        - switch6 'B'
+        exec:
+          - $sequence_google
+          - exit`
+	return strings.ReplaceAll(content, block, block+bypass)
+}
+
 func mssbMainSplitServerYAML() string {
 	return `
   - tag: forward_all_in
@@ -911,7 +948,10 @@ func (a *App) renderNetworkYAML(cfg SetupConfig) string {
 		"system_dns_off":  cfg.DNSOff,
 		"auto_system_dns": cfg.AutoSetDNS,
 		"fake_ipv4":       []string{fakeIPv4RouteCIDR(cfg.FakeIPRangeV4)},
-		"fake_ipv6":       []string{fakeIPv6RouteCIDR(cfg.FakeIPRangeV6)},
+		"ipv6":            map[string]any{"enable": cfg.EnableIPv6},
+	}
+	if cfg.EnableIPv6 {
+		v["fake_ipv6"] = []string{fakeIPv6RouteCIDR(cfg.FakeIPRangeV6)}
 	}
 	if !isTUNProxyMode(cfg.LinuxProxyMode) {
 		v["mode"] = "tproxy"
@@ -927,7 +967,7 @@ func (a *App) renderNetworkYAML(cfg SetupConfig) string {
 
 func (a *App) renderNFT(cfg SetupConfig) string {
 	ifaceSet := nftInterfaceSet(cfg.SelectedInterface)
-	return fmt.Sprintf(`#!/usr/sbin/nft -f
+	content := fmt.Sprintf(`#!/usr/sbin/nft -f
 table inet msf {
   set local_ipv4 {
     type ipv4_addr
@@ -1031,6 +1071,41 @@ table inet msf {
   }
 }
 `, fakeIPv4RouteCIDR(cfg.FakeIPRangeV4), fakeIPv6RouteCIDR(cfg.FakeIPRangeV6), ifaceSet, ifaceSet)
+	if cfg.EnableIPv6 {
+		return content
+	}
+	for _, setName := range []string{"local_ipv6", "china_dns_ipv6", "dns_ipv6", "fake_ipv6"} {
+		content = removeNFTSetBlock(content, setName)
+	}
+	lines := strings.SplitAfter(content, "\n")
+	filtered := lines[:0]
+	for _, line := range lines {
+		if strings.Contains(line, "ip6 ") || strings.Contains(line, "@local_ipv6") || strings.Contains(line, "@china_dns_ipv6") || strings.Contains(line, "@dns_ipv6") || strings.Contains(line, "@fake_ipv6") {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	return strings.Join(filtered, "")
+}
+
+func removeNFTSetBlock(content, name string) string {
+	lines := strings.SplitAfter(content, "\n")
+	out := make([]string, 0, len(lines))
+	skipping := false
+	for _, line := range lines {
+		if !skipping && strings.TrimSpace(line) == "set "+name+" {" {
+			skipping = true
+			continue
+		}
+		if skipping {
+			if strings.TrimSpace(line) == "}" {
+				skipping = false
+			}
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "")
 }
 
 func (a *App) ensureMosDNSRuleFiles() error {
@@ -1099,7 +1174,7 @@ func fakeIPv4RouteCIDR(v string) string {
 func fakeIPv6RouteCIDR(v string) string {
 	v = strings.TrimSpace(v)
 	if v == "" {
-		v = "f2b0::/18"
+		v = defaultFakeIPv6Prefix
 	}
 	if p, err := netip.ParsePrefix(v); err == nil {
 		return p.Masked().String()
@@ -1107,7 +1182,7 @@ func fakeIPv6RouteCIDR(v string) string {
 	if addr, err := netip.ParseAddr(v); err == nil && addr.Is6() {
 		return netip.PrefixFrom(addr, 64).Masked().String()
 	}
-	return "f2b0::/18"
+	return defaultFakeIPv6Prefix
 }
 
 func nftInterfaceSet(iface string) string {

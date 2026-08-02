@@ -1192,8 +1192,7 @@ func (a *App) handleMosDNSSystemFeatureSwitchesPut(w http.ResponseWriter, r *htt
 		return
 	}
 	if req.Key != "" {
-		now := time.Now()
-		_, _ = a.DB.Exec(`insert into mosdns_switch_states(switch_key,enabled,created_at,updated_at) values(?,?,?,?) on conflict(switch_key) do update set enabled=excluded.enabled,updated_at=excluded.updated_at`, req.Key, req.Enable, now, now)
+		a.setMosDNSSwitchState(req.Key, req.Enable)
 		_ = a.rewriteMosDNSSwitchFile()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": a.mosDNSSwitchMap()})
@@ -1234,14 +1233,30 @@ func (a *App) handleMosDNSOverrides(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleMosDNSOverridesPut(w http.ResponseWriter, r *http.Request) {
+	a.configApplyMu.Lock()
+	defer a.configApplyMu.Unlock()
 	var req any
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	old := a.jsonSettingWithFileFallback("mosdns_overrides", "configs/mosdns/config_overrides.json", map[string]any{})
 	a.storeJSONSetting("mosdns_overrides", req)
-	_ = a.writeJSONFile("configs/mosdns/config_overrides.json", req)
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": req, "restart_required": true})
+	if err := a.writeJSONFile("configs/mosdns/config_overrides.json", req); err != nil {
+		a.storeJSONSetting("mosdns_overrides", old)
+		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
+		return
+	}
+	if cfg, ok := a.latestSetupConfig(); ok {
+		if err := a.writeGeneratedConfigs(cfg); err != nil {
+			a.storeJSONSetting("mosdns_overrides", old)
+			_ = a.writeJSONFile("configs/mosdns/config_overrides.json", old)
+			_ = a.writeGeneratedConfigs(cfg)
+			writeError(w, http.StatusBadRequest, "invalid_mosdns_overrides", err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": req, "saved": true, "generated": true, "restart_required": true})
 }
 
 func (a *App) handleMosDNSRoutingStart(w http.ResponseWriter, r *http.Request) {
@@ -1294,11 +1309,22 @@ func (a *App) handleMosDNSSwitchesPutCompat(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if req.Key != "" {
-		now := time.Now()
-		_, _ = a.DB.Exec(`insert into mosdns_switch_states(switch_key,enabled,created_at,updated_at) values(?,?,?,?) on conflict(switch_key) do update set enabled=excluded.enabled,updated_at=excluded.updated_at`, req.Key, req.Value || req.Enable, now, now)
+		a.setMosDNSSwitchState(req.Key, req.Value || req.Enable)
 	}
 	_ = a.rewriteMosDNSSwitchFile()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": a.mosDNSSwitchMap()})
+}
+
+func (a *App) setMosDNSSwitchState(key string, enabled bool) {
+	now := time.Now()
+	_, _ = a.DB.Exec(`insert into mosdns_switch_states(switch_key,enabled,created_at,updated_at) values(?,?,?,?) on conflict(switch_key) do update set enabled=excluded.enabled,updated_at=excluded.updated_at`, key, enabled, now, now)
+	if enabled && (key == "switch8" || key == "switch10") {
+		other := "switch8"
+		if key == "switch8" {
+			other = "switch10"
+		}
+		_, _ = a.DB.Exec(`insert into mosdns_switch_states(switch_key,enabled,created_at,updated_at) values(?,?,?,?) on conflict(switch_key) do update set enabled=excluded.enabled,updated_at=excluded.updated_at`, other, false, now, now)
+	}
 }
 
 func (a *App) handleMosDNSUpstreamOverrides(w http.ResponseWriter, r *http.Request) {
@@ -1306,14 +1332,30 @@ func (a *App) handleMosDNSUpstreamOverrides(w http.ResponseWriter, r *http.Reque
 }
 
 func (a *App) handleMosDNSUpstreamOverridesPut(w http.ResponseWriter, r *http.Request) {
+	a.configApplyMu.Lock()
+	defer a.configApplyMu.Unlock()
 	var req any
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	old := a.jsonSettingWithFileFallback("mosdns_upstream_overrides", "configs/mosdns/upstream_overrides.json", map[string]any{})
 	a.storeJSONSetting("mosdns_upstream_overrides", req)
-	_ = a.writeJSONFile("configs/mosdns/upstream_overrides.json", req)
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": req, "restart_required": true})
+	if err := a.writeJSONFile("configs/mosdns/upstream_overrides.json", req); err != nil {
+		a.storeJSONSetting("mosdns_upstream_overrides", old)
+		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
+		return
+	}
+	if cfg, ok := a.latestSetupConfig(); ok {
+		if err := a.writeGeneratedConfigs(cfg); err != nil {
+			a.storeJSONSetting("mosdns_upstream_overrides", old)
+			_ = a.writeJSONFile("configs/mosdns/upstream_overrides.json", old)
+			_ = a.writeGeneratedConfigs(cfg)
+			writeError(w, http.StatusBadRequest, "invalid_mosdns_upstreams", err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": req, "saved": true, "generated": true, "restart_required": true})
 }
 
 func (a *App) handleMosDNSRuleCategories(w http.ResponseWriter, r *http.Request) {

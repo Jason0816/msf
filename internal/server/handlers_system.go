@@ -467,7 +467,12 @@ func (a *App) applyNFT(ctx context.Context) (string, error) {
 	ignoreNetworkCommandError(ctx, &output, 8*time.Second, "nft", "delete", "table", "inet", "msf")
 	cmds := [][]string{{"nft", "-f", nftPath}}
 	runNetworkCommandsIgnoringErrors(ctx, &output, 8*time.Second, policyRouteRuleDeleteCommands())
-	cmds = append(cmds, policyRouteInstallCommands()...)
+	enableIPv6 := false
+	if cfg, ok := a.latestSetupConfig(); ok {
+		cfg.defaults()
+		enableIPv6 = cfg.EnableIPv6
+	}
+	cmds = append(cmds, policyRouteInstallCommands(enableIPv6)...)
 	for _, args := range cmds {
 		if err := runNetworkCommand(ctx, &output, 8*time.Second, args...); err != nil {
 			return output.String(), err
@@ -488,13 +493,18 @@ func policyRouteRuleDeleteCommands() [][]string {
 	return cmds
 }
 
-func policyRouteInstallCommands() [][]string {
-	return [][]string{
+func policyRouteInstallCommands(enableIPv6 bool) [][]string {
+	cmds := [][]string{
 		{"ip", "rule", "add", "fwmark", "1", "table", "100"},
 		{"ip", "route", "replace", "local", "0.0.0.0/0", "dev", "lo", "table", "100"},
-		{"ip", "-6", "rule", "add", "fwmark", "1", "table", "100"},
-		{"ip", "-6", "route", "replace", "local", "::/0", "dev", "lo", "table", "100"},
 	}
+	if enableIPv6 {
+		cmds = append(cmds,
+			[]string{"ip", "-6", "rule", "add", "fwmark", "1", "table", "100"},
+			[]string{"ip", "-6", "route", "replace", "local", "::/0", "dev", "lo", "table", "100"},
+		)
+	}
+	return cmds
 }
 
 func policyRouteClearCommands() [][]string {

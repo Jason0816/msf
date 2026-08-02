@@ -160,6 +160,8 @@ func (a *App) handleSetupGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
+	a.configApplyMu.Lock()
+	defer a.configApplyMu.Unlock()
 	var cfg SetupConfig
 	meta, err := decodeSetupConfigRequestWithMeta(r, &cfg)
 	if err != nil {
@@ -168,9 +170,13 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	existing, _, hasExisting := a.latestSetupConfigForSettings()
 	if hasExisting {
-		preserveMissingGitHubDownloadFields(&cfg, meta, existing)
+		preserveMissingSetupFields(&cfg, meta, existing)
 	}
 	cfg.defaults()
+	if err := normalizeFakeIPPrefixes(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_fake_ip_range", err.Error())
+		return
+	}
 	normalizeSetupInterfaceForRuntime(&cfg)
 	if err := validateSetupProxyMode(cfg); err != nil {
 		writeError(w, http.StatusBadRequest, "unsupported_proxy_mode", err.Error())
@@ -178,6 +184,18 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if hasExisting {
 		existing.defaults()
+		ipv6TargetChanged := existing.EnableIPv6 != cfg.EnableIPv6 || fakeIPv6RouteCIDR(existing.FakeIPRangeV6) != fakeIPv6RouteCIDR(cfg.FakeIPRangeV6)
+		if a.mihomoConfigMode() == "custom" && ipv6TargetChanged {
+			content, readErr := os.ReadFile(filepath.Join(a.DataDir, mihomoActiveConfigRelPath))
+			conflictErr := readErr
+			if conflictErr == nil {
+				conflictErr = a.validateMihomoContentForTargetIPv6(cfg, content)
+			}
+			if conflictErr != nil {
+				writeError(w, http.StatusConflict, "custom_config_ipv6_conflict", "manually align ipv6, dns.ipv6, dns.fake-ip-range6 and TUN routes in the active custom Mihomo config before retrying: "+conflictErr.Error())
+				return
+			}
+		}
 		if a.mihomoConfigMode() == "custom" && !strings.EqualFold(existing.LinuxProxyMode, cfg.LinuxProxyMode) {
 			content, readErr := os.ReadFile(filepath.Join(a.DataDir, mihomoActiveConfigRelPath))
 			conflictErr := readErr
@@ -203,6 +221,12 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 	if err := applyHostTimezone(r.Context(), cfg.Timezone); err != nil {
 		writeError(w, http.StatusConflict, "timezone_error", err.Error())
 		return
+	}
+	if hasExisting && fakeIPPrefixChanged(existing, cfg) {
+		if err := a.clearFakeIPCaches(); err != nil {
+			writeError(w, http.StatusConflict, "fake_ip_cache_flush_failed", err.Error())
+			return
+		}
 	}
 	if err := a.writeGeneratedConfigs(cfg); err != nil {
 		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
@@ -278,6 +302,7 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 type setupConfigRequestMeta struct {
+	Raw                      map[string]any
 	GitHubProxyEnabled       bool
 	GitHubHTTPSProxy         bool
 	GitHubHTTPProxy          bool
@@ -289,7 +314,55 @@ type setupConfigRequestMeta struct {
 	LinuxProxyMode           bool
 }
 
-func preserveMissingGitHubDownloadFields(cfg *SetupConfig, meta setupConfigRequestMeta, existing SetupConfig) {
+func preserveMissingSetupFields(cfg *SetupConfig, meta setupConfigRequestMeta, existing SetupConfig) {
+	if !setupHasValue(meta.Raw, "username") {
+		cfg.Username = existing.Username
+	}
+	if !setupHasValue(meta.Raw, "email") {
+		cfg.Email = existing.Email
+	}
+	if !setupHasValue(meta.Raw, "timezone") {
+		cfg.Timezone = existing.Timezone
+	}
+	if !setupHasValue(meta.Raw, "web_port", "webPort") {
+		cfg.WebPort = existing.WebPort
+	}
+	if !setupHasValue(meta.Raw, "amd64v3_enabled", "amd64v3Enabled", "amd64v3") {
+		cfg.AMD64v3Enabled = existing.AMD64v3Enabled
+	}
+	if !setupHasValue(meta.Raw, "selected_interface", "selectedInterface") {
+		cfg.SelectedInterface = existing.SelectedInterface
+	}
+	if !setupHasValue(meta.Raw, "mihomo_core_type", "mihomoCoreType") {
+		cfg.MihomoCoreType = existing.MihomoCoreType
+	}
+	if !setupHasValue(meta.Raw, "auto_set_dns", "autoSetDNS") {
+		cfg.AutoSetDNS = existing.AutoSetDNS
+	}
+	if !setupHasValue(meta.Raw, "dns_on", "dnsOn") {
+		cfg.DNSOn = existing.DNSOn
+	}
+	if !setupHasValue(meta.Raw, "dns_off", "dnsOff") {
+		cfg.DNSOff = existing.DNSOff
+	}
+	if !setupHasValue(meta.Raw, "enable_ipv6", "enableIPv6") {
+		cfg.EnableIPv6 = existing.EnableIPv6
+	}
+	if !setupHasValue(meta.Raw, "fake_ip_range_v4", "fakeIPRangeV4") {
+		cfg.FakeIPRangeV4 = existing.FakeIPRangeV4
+	}
+	if !setupHasValue(meta.Raw, "fake_ip_range_v6", "fakeIPRangeV6") {
+		cfg.FakeIPRangeV6 = existing.FakeIPRangeV6
+	}
+	if !setupHasValue(meta.Raw, "nft_proxy_policy", "nftProxyPolicy") {
+		cfg.NFTProxyPolicy = existing.NFTProxyPolicy
+	}
+	if !setupHasValue(meta.Raw, "proxy_core", "proxyCore") {
+		cfg.ProxyCore = existing.ProxyCore
+	}
+	if !setupHasValue(meta.Raw, "mos_dns_enabled", "mosdnsEnabled", "mosDNSEnabled") {
+		cfg.MosDNSEnabled = existing.MosDNSEnabled
+	}
 	if !meta.GitHubProxyEnabled {
 		cfg.GitHubProxyEnabled = existing.GitHubProxyEnabled
 	}
@@ -320,6 +393,8 @@ func preserveMissingGitHubDownloadFields(cfg *SetupConfig, meta setupConfigReque
 }
 
 func (a *App) handleSetupInitialize(w http.ResponseWriter, r *http.Request) {
+	a.configApplyMu.Lock()
+	defer a.configApplyMu.Unlock()
 	if a.IsInitialized() {
 		writeError(w, http.StatusConflict, "already_initialized", "system is already initialized")
 		return
@@ -330,6 +405,10 @@ func (a *App) handleSetupInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg.defaults()
+	if err := normalizeFakeIPPrefixes(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_fake_ip_range", err.Error())
+		return
+	}
 	normalizeSetupInterfaceForRuntime(&cfg)
 	if err := validateSetupProxyMode(cfg); err != nil {
 		writeError(w, http.StatusBadRequest, "unsupported_proxy_mode", err.Error())
@@ -427,6 +506,7 @@ func decodeSetupConfigRequestWithMeta(r *http.Request, cfg *SetupConfig) (setupC
 		return setupConfigRequestMeta{}, err
 	}
 	meta := setupConfigRequestMeta{
+		Raw:                      raw,
 		GitHubProxyEnabled:       setupHasValue(raw, "github_proxy_enabled", "githubProxyEnabled"),
 		GitHubHTTPSProxy:         setupHasValue(raw, "github_https_proxy", "githubHTTPSProxy"),
 		GitHubHTTPProxy:          setupHasValue(raw, "github_http_proxy", "githubHTTPProxy"),

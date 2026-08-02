@@ -3,44 +3,20 @@
 import type { RunMode, ResolutionSettings } from "@/lib/mosdns-system-data";
 import { cn } from "@/lib/utils";
 
-/* ─── Switch toggle with visible border ─── */
-function SwitchToggle({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      onClick={onToggle}
-      className={cn(
-        "peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-        checked ? "bg-emerald-500" : "bg-muted"
-      )}
-    >
-      <span
-        className={cn(
-          "pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform",
-          checked ? "translate-x-4" : "translate-x-0.5"
-        )}
-      />
-    </button>
-  );
-}
-
 interface ResolutionPolicySectionProps {
   runMode: RunMode;
   onChangeRunMode: (mode: RunMode) => void;
   resolutionSettings: ResolutionSettings;
-  onToggleIpv4First: () => void;
-  onToggleIpv6First: () => void;
+  onChangePriority: (priority: "auto" | "ipv4" | "ipv6") => void;
 }
 
 export function ResolutionPolicySection({
   runMode,
   onChangeRunMode,
   resolutionSettings,
-  onToggleIpv4First,
-  onToggleIpv6First,
+  onChangePriority,
 }: ResolutionPolicySectionProps) {
+  const priority = resolutionSettings.ipv4First ? "ipv4" : resolutionSettings.ipv6First ? "ipv6" : "auto";
   return (
     <div className="rounded-[12px] border bg-card text-card-foreground !border-border/20 !shadow-none transition-shadow duration-300 hover:!shadow-sm border-blue-200/40 shadow-sm">
       <div className="flex flex-col space-y-1.5 p-6 pb-3">
@@ -99,35 +75,30 @@ export function ResolutionPolicySection({
             <span className="text-sm font-medium text-foreground whitespace-nowrap">协议优先级</span>
           </div>
           <div className="flex-1 space-y-2">
-            <div className="flex items-center justify-between p-3 rounded-lg border border-foreground bg-muted/30">
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-foreground">IPV4 优先</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                    <path d="M12 17h.01" />
-                  </svg>
-                </div>
-                <p className="text-xs text-muted-foreground">Prefer IPV4（不建议开启）</p>
-              </div>
-              <SwitchToggle checked={resolutionSettings.ipv4First} onToggle={onToggleIpv4First} />
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="协议优先级">
+              {([
+                ["auto", "自动"],
+                ["ipv4", "IPv4 优先"],
+                ["ipv6", "IPv6 优先"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={priority === value}
+                  onClick={() => onChangePriority(value)}
+                  className={cn(
+                    "rounded-lg border px-3 py-3 text-sm transition-colors",
+                    priority === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/30 text-foreground hover:bg-muted"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg border border-foreground bg-muted/30">
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-foreground">IPV6 优先</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                    <path d="M12 17h.01" />
-                  </svg>
-                </div>
-                <p className="text-xs text-muted-foreground">Prefer IPV6（不建议开启）</p>
-              </div>
-              <SwitchToggle checked={resolutionSettings.ipv6First} onToggle={onToggleIpv6First} />
-            </div>
-            <p className="text-xs text-muted-foreground mt-2 p-2 rounded bg-muted/50 border border-foreground">当前使用默认优先级（不设置偏好）</p>
+            <p className="text-xs text-muted-foreground mt-2 p-2 rounded bg-muted/50 border border-foreground">
+              该选项只控制 DNS 结果排序，不会开启或关闭 IPv6 数据面。
+            </p>
           </div>
         </div>
       </div>

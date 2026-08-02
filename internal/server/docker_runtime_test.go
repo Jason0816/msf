@@ -606,7 +606,7 @@ func TestPolicyRouteCommandsAreIdempotent(t *testing.T) {
 	if len(deletes) != 32 {
 		t.Fatalf("policyRouteRuleDeleteCommands len=%d, want 32", len(deletes))
 	}
-	install := strings.Join(flattenCommandArgs(policyRouteInstallCommands()), "\n")
+	install := strings.Join(flattenCommandArgs(policyRouteInstallCommands(true)), "\n")
 	for _, want := range []string{
 		"ip rule add fwmark 1 table 100",
 		"ip route replace local 0.0.0.0/0 dev lo table 100",
@@ -616,6 +616,10 @@ func TestPolicyRouteCommandsAreIdempotent(t *testing.T) {
 		if !strings.Contains(install, want) {
 			t.Fatalf("install commands missing %q:\n%s", want, install)
 		}
+	}
+	disabledInstall := strings.Join(flattenCommandArgs(policyRouteInstallCommands(false)), "\n")
+	if strings.Contains(disabledInstall, "ip -6") {
+		t.Fatalf("IPv6-disabled install commands must not contain IPv6 policy routes:\n%s", disabledInstall)
 	}
 	clear := strings.Join(flattenCommandArgs(policyRouteClearCommands()), "\n")
 	for _, want := range []string{

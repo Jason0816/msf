@@ -74,7 +74,9 @@ func (a *App) RestoreConfiguredRuntime(ctx context.Context) RuntimeRestoreReport
 			return report
 		}
 	}
-	if err := a.ensureProxyModeConsistency(cfg, a.mihomoConfigMode() != "custom"); err != nil {
+	// Custom Mihomo content is protected by target validation; repairGenerated
+	// may still refresh MSF-managed network and nftables artifacts around it.
+	if err := a.ensureProxyModeConsistency(cfg, true); err != nil {
 		report.Errors = append(report.Errors, err.Error())
 		return report
 	}

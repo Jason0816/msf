@@ -210,7 +210,8 @@ func (a *App) syncLatestSetupProviderFieldsFromMihomoContent(content string) err
 	}
 	cfg.SubscriptionURLs = subscriptions
 	cfg.MihomoProxies = manual
-	return a.insertSetupSnapshot(cfg, initialized)
+	_, err := a.insertSetupSnapshot(cfg, initialized)
+	return err
 }
 
 func setupPatchTouchesMihomoProviders(raw map[string]any) bool {

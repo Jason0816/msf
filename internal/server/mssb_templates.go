@@ -64,8 +64,6 @@ func isMSSBStructuralTemplate(rel string) bool {
 		return true
 	case strings.HasPrefix(rel, "mosdns/srs/") && strings.HasSuffix(rel, ".json"):
 		return true
-	case strings.HasSuffix(rel, "_settings.json"), strings.HasSuffix(rel, "_overrides.json"):
-		return true
 	case rel == "mihomo/config.yaml", rel == "mihomo/phone_config.yaml":
 		return true
 	default:

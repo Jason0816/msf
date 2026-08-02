@@ -65,6 +65,7 @@ type App struct {
 	resetMu                 sync.Mutex
 	resetGate               sync.RWMutex
 	resetInProgress         atomic.Bool
+	configApplyMu           sync.Mutex
 	networkRuntimeMu        sync.Mutex
 	networkStateMu          sync.RWMutex
 	networkTransition       string
