@@ -1,0 +1,42 @@
+{
+  "html": "logo_motion_mizar/logo_motion.html",
+  "times_ms": [
+    0,
+    180,
+    360,
+    620,
+    900,
+    1180,
+    1450,
+    1800
+  ],
+  "frames": [
+    "logo_motion_mizar/outputs/motion_frames/frame_000000ms.png",
+    "logo_motion_mizar/outputs/motion_frames/frame_000180ms.png",
+    "logo_motion_mizar/outputs/motion_frames/frame_000360ms.png",
+    "logo_motion_mizar/outputs/motion_frames/frame_000620ms.png",
+    "logo_motion_mizar/outputs/motion_frames/frame_000900ms.png",
+    "logo_motion_mizar/outputs/motion_frames/frame_001180ms.png",
+    "logo_motion_mizar/outputs/motion_frames/frame_001450ms.png",
+    "logo_motion_mizar/outputs/motion_frames/frame_001800ms.png"
+  ],
+  "strip": "logo_motion_mizar/outputs/motion_strip.png",
+  "same_pipeline_final_frame_contract": {
+    "animated_final": "logo_motion_mizar/outputs/motion_frames/frame_001800ms.png",
+    "static_final": "logo_motion_mizar/outputs/motion_frames/frame_static_same_pipeline.png",
+    "exact": true,
+    "mean_abs_diff": 0.0,
+    "max_abs_diff": 0,
+    "pixels_changed": 0,
+    "pct_pixels_off_by_25plus": 0.0
+  },
+  "cross_pipeline_final_frame_contract": {
+    "animated_final": "logo_motion_mizar/outputs/motion_frames/frame_001800ms.png",
+    "reference_static": "logo_motion_mizar/outputs/final_render.png",
+    "exact": false,
+    "mean_abs_diff": 0.118947,
+    "max_abs_diff": 101,
+    "pixels_changed": 300304,
+    "pct_pixels_off_by_25plus": 0.157348
+  }
+}

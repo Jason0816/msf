@@ -108,8 +108,8 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
           </button>
 
           <div className="flex items-center gap-2">
-            <div className="gary-solid-plate flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] md:h-10 md:w-10">
-              <Image alt="MSF" src="/logo/logo-square.png" width={32} height={32} className="h-7 w-7 object-contain md:h-8 md:w-8" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center md:h-10 md:w-10">
+              <Image alt="MSF" src="/logo/logo-square.svg" width={36} height={36} className="h-8 w-8 object-contain md:h-9 md:w-9" />
             </div>
             <span className="text-base font-semibold tracking-[-0.02em] text-foreground md:text-lg">
               MSF

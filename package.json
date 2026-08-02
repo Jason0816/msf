@@ -1,5 +1,10 @@
 {
+  "name": "msf",
+  "private": true,
   "dependencies": {
     "playwright": "^1.60.0"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.3"
   }
 }

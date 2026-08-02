@@ -8,8 +8,6 @@ gsap.registerPlugin(useGSAP);
 
 const FLOW_DELAYS = [0, 0.8, 1.6, 2.4, 3.2];
 const SIDE_FLOW_DELAYS = [0.4, 1.2, 2, 2.8, 3.6];
-const LOGIN_LOGO_MOTION_ASSET_BASE = "/logo-motion/assets";
-const LOGIN_LOGO_MOTION_FIT = "matrix(1.60068 0 0 1.60068 -307.55 -310.75)";
 
 type LoginLogoShowcaseProps = {
   compact?: boolean;
@@ -18,70 +16,19 @@ type LoginLogoShowcaseProps = {
 
 type LoginMotionLogoProps = {
   compact: boolean;
-  maskId: string;
 };
 
-function LoginMotionLogo({ compact, maskId }: LoginMotionLogoProps) {
+function LoginMotionLogo({ compact }: LoginMotionLogoProps) {
   return (
-    <svg
-      viewBox="0 0 1024 1024"
-      role="img"
-      aria-label="MSF"
+    <img
+      src="/logo-motion/msf-mizar-orbit-weave.svg"
+      alt="MSF"
+      draggable={false}
       className={cn(
-        "login-motion-logo relative z-10 overflow-visible drop-shadow-2xl",
+        "login-motion-logo relative z-10 select-none object-contain drop-shadow-2xl",
         compact ? "h-[4.4rem] w-[4.4rem]" : "h-[6.6rem] w-[6.6rem]",
       )}
-    >
-      <defs>
-        <mask id={maskId} maskUnits="userSpaceOnUse" x="285" y="175" width="460" height="430">
-          <rect x="285" y="175" width="460" height="430" fill="black" />
-          <path
-            className="login-motion-draw-stroke"
-            pathLength="1"
-            d="M 365 552 C 365 486 365 360 365 278 C 365 238 416 229 437 266 L 508 414 C 530 458 552 458 575 414 L 636 286 C 660 238 700 241 700 284 C 700 356 700 480 700 552"
-            fill="none"
-            stroke="white"
-            strokeWidth="165"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeDasharray="1 1"
-            strokeDashoffset="0"
-          />
-          <rect className="login-motion-final-fill" x="285" y="175" width="460" height="430" fill="white" opacity="1" />
-        </mask>
-      </defs>
-
-      <g fill="none" transform={LOGIN_LOGO_MOTION_FIT}>
-        <image
-          className="login-motion-branch-left"
-          x="213"
-          y="504"
-          width="303"
-          height="319"
-          href={`${LOGIN_LOGO_MOTION_ASSET_BASE}/msm_branch_left_original.png`}
-          preserveAspectRatio="none"
-        />
-        <image
-          className="login-motion-branch-right"
-          x="508"
-          y="504"
-          width="303"
-          height="313"
-          href={`${LOGIN_LOGO_MOTION_ASSET_BASE}/msm_branch_right_original.png`}
-          preserveAspectRatio="none"
-        />
-        <image
-          className="login-motion-m-original"
-          x="313"
-          y="205"
-          width="399"
-          height="361"
-          href={`${LOGIN_LOGO_MOTION_ASSET_BASE}/msm_m_original.png`}
-          preserveAspectRatio="none"
-          mask={`url(#${maskId})`}
-        />
-      </g>
-    </svg>
+    />
   );
 }
 
@@ -93,7 +40,6 @@ export function LoginLogoShowcase({ compact = false, className }: LoginLogoShowc
   const gradientInId = `login-logo-gradient-in-${id}`;
   const gradientLeftId = `login-logo-gradient-left-${id}`;
   const gradientRightId = `login-logo-gradient-right-${id}`;
-  const motionMaskId = `login-logo-motion-mask-${id}`;
 
   useGSAP(
     () => {
@@ -287,10 +233,10 @@ export function LoginLogoShowcase({ compact = false, className }: LoginLogoShowc
           <div className={cn("login-source-glow rounded-full bg-primary/30 blur-md", compact ? "h-4 w-4" : "h-5 w-5")} />
         </div>
         <div aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2">
-          <div className={cn("login-source-glow rounded-full bg-green-400/30 blur-md", compact ? "h-4 w-4" : "h-5 w-5")} />
+          <div className={cn("login-source-glow rounded-full bg-blue-500/30 blur-md", compact ? "h-4 w-4" : "h-5 w-5")} />
         </div>
         <div aria-hidden="true" className="absolute right-0 top-1/2 -translate-y-1/2">
-          <div className={cn("login-source-glow rounded-full bg-blue-400/30 blur-md", compact ? "h-4 w-4" : "h-5 w-5")} />
+          <div className={cn("login-source-glow rounded-full bg-cyan-400/30 blur-md", compact ? "h-4 w-4" : "h-5 w-5")} />
         </div>
 
         {!compact && (
@@ -300,11 +246,11 @@ export function LoginLogoShowcase({ compact = false, className }: LoginLogoShowc
                 <linearGradient id={gradientInId} x1="50%" y1="0%" x2="50%" y2="100%">
                   <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0" />
                   <stop offset="50%" stopColor="#0ea5e9" stopOpacity="0.85" />
-                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.6" />
+                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.6" />
                 </linearGradient>
                 <linearGradient id={gradientLeftId} x1="100%" y1="50%" x2="0%" y2="50%">
                   <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.7" />
-                  <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                  <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
                 </linearGradient>
                 <linearGradient id={gradientRightId} x1="0%" y1="50%" x2="100%" y2="50%">
                   <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.7" />
@@ -320,14 +266,14 @@ export function LoginLogoShowcase({ compact = false, className }: LoginLogoShowc
               <span
                 key={`in-${delay}`}
                 data-delay={delay}
-                className="login-flow-dot login-flow-dot-in absolute left-1/2 top-0 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-primary to-purple-500 shadow-lg shadow-primary/40"
+                className="login-flow-dot login-flow-dot-in absolute left-1/2 top-0 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-blue-600 to-cyan-400 shadow-lg shadow-primary/40"
               />
             ))}
             {SIDE_FLOW_DELAYS.map((delay) => (
               <span
                 key={`left-${delay}`}
                 data-delay={delay}
-                className="login-flow-dot login-flow-dot-left absolute left-0 top-1/2 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-green-400 to-emerald-500 shadow-lg shadow-green-400/30"
+                className="login-flow-dot login-flow-dot-left absolute left-0 top-1/2 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-blue-700 to-blue-400 shadow-lg shadow-blue-500/30"
               />
             ))}
             {SIDE_FLOW_DELAYS.map((delay) => (
@@ -357,7 +303,7 @@ export function LoginLogoShowcase({ compact = false, className }: LoginLogoShowc
         <div
           aria-hidden="true"
           className={cn(
-            "login-orbit-ring login-orbit-ring-3 absolute rounded-full border-2 border-purple-400/15",
+            "login-orbit-ring login-orbit-ring-3 absolute rounded-full border-2 border-cyan-400/15",
             compact ? "hidden" : "-inset-8 hidden lg:block",
           )}
         />
@@ -369,8 +315,8 @@ export function LoginLogoShowcase({ compact = false, className }: LoginLogoShowc
             compact ? "h-[6.75rem] w-[6.75rem]" : "h-[10.25rem] w-[10.25rem]",
           )}
         >
-          <div ref={tileRef} aria-hidden="true" className="login-logo-tile absolute inset-0 rounded-3xl bg-gradient-to-br from-primary/20 via-transparent to-blue-400/20" />
-          <LoginMotionLogo compact={compact} maskId={motionMaskId} />
+          <div ref={tileRef} aria-hidden="true" className="login-logo-tile absolute inset-0 rounded-3xl bg-gradient-to-br from-blue-600/20 via-transparent to-cyan-400/20" />
+          <LoginMotionLogo compact={compact} />
         </div>
 
         <span aria-hidden="true" className={cn("login-ping absolute left-1/2 top-1/2 rounded-full bg-primary/40", compact ? "h-3 w-3" : "h-4 w-4")} />

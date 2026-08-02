@@ -1,0 +1,35 @@
+{
+  "html": "logo_motion_mizar/logo_motion.html",
+  "probe": [
+    {
+      "t_ms": 360.0,
+      "#layer-upper-blue:transform": "matrix(0.999392, -0.0348597, 0.0348597, 0.999392, -34.9543, 20.9657)",
+      "#layer-center-cyan:transform": "matrix(0.999404, 0.0345141, -0.0345141, 0.999404, 35.5581, 20.6685)",
+      "#connection-glint:opacity": "0"
+    },
+    {
+      "t_ms": 700.0,
+      "#layer-upper-blue:transform": "matrix(1, -0.000140926, 0.000140926, 1, -0.00671384, 0.362934)",
+      "#layer-center-cyan:transform": "matrix(0.999993, 0.00386647, -0.00386647, 0.999993, 3.95555, 2.57444)",
+      "#connection-glint:opacity": "0"
+    },
+    {
+      "t_ms": 1000.0,
+      "#layer-upper-blue:transform": "matrix(0.999993, 0.0036493, -0.0036493, 0.999993, 3.80834, -1.88697)",
+      "#layer-center-cyan:transform": "matrix(0.999995, -0.00329489, 0.00329489, 0.999995, -3.43754, -1.67659)",
+      "#connection-glint:opacity": "0"
+    },
+    {
+      "t_ms": 1180.0,
+      "#layer-upper-blue:transform": "matrix(0.999999, 0.00160776, -0.00160776, 0.999999, 1.67487, -0.837436)",
+      "#layer-center-cyan:transform": "matrix(0.999993, -0.00383338, 0.00383338, 0.999993, -3.99346, -1.99624)",
+      "#connection-glint:opacity": "0.91977"
+    },
+    {
+      "t_ms": 1400.0,
+      "#layer-upper-blue:transform": "matrix(1, 6.29688e-06, -6.29688e-06, 1, 0.00655972, -0.00327986)",
+      "#layer-center-cyan:transform": "matrix(1, -5.62282e-05, 5.62282e-05, 1, -0.0585753, -0.0292876)",
+      "#connection-glint:opacity": "0.225925"
+    }
+  ]
+}

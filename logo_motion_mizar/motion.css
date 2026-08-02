@@ -1,0 +1,290 @@
+:root {
+  --p2m-duration: 1800ms;
+  --p2m-ease-precise: cubic-bezier(0.22, 0.78, 0.22, 1);
+  --p2m-ease-settle: cubic-bezier(0.18, 0.88, 0.28, 1);
+}
+
+#logo-geometry,
+#layer-ribbon-base,
+#layer-outer-cyan,
+#layer-outer-light,
+#layer-bottom-fold,
+#layer-lower-blue,
+#layer-center-cyan,
+#layer-right-fold,
+#layer-contact-shadow,
+#layer-upper-blue,
+#connection-glint {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity, filter;
+}
+
+#logo-geometry {
+  animation: p2m-mark-settle var(--p2m-duration) linear both;
+}
+
+#layer-ribbon-base {
+  animation: p2m-blue-foundation var(--p2m-duration) linear both;
+}
+
+#layer-upper-blue {
+  animation: p2m-blue-upper var(--p2m-duration) linear both;
+}
+
+#layer-lower-blue {
+  animation: p2m-blue-lower var(--p2m-duration) linear both;
+}
+
+#layer-bottom-fold {
+  animation: p2m-bottom-fold var(--p2m-duration) linear both;
+}
+
+#layer-outer-cyan,
+#layer-outer-light {
+  animation: p2m-cyan-outer var(--p2m-duration) linear both;
+}
+
+#layer-center-cyan {
+  animation: p2m-cyan-center var(--p2m-duration) linear both;
+}
+
+#layer-right-fold {
+  animation: p2m-right-fold var(--p2m-duration) linear both;
+}
+
+#layer-contact-shadow {
+  animation: p2m-contact-shadow var(--p2m-duration) linear both;
+}
+
+#connection-glint {
+  transform-origin: 641px 512px;
+  animation: p2m-connection-glint var(--p2m-duration) linear both;
+}
+
+/* Root staging: quiet compression, then a restrained 1.1% settle. */
+@keyframes p2m-mark-settle {
+  0% {
+    opacity: 1;
+    transform: scale(0.986);
+    animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); /* precise */
+  }
+  20% {
+    opacity: 1;
+    transform: scale(0.982);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  67% {
+    opacity: 1;
+    transform: scale(1.011);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  84%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Blue engine: a short down-left anticipation before it locks into the join. */
+@keyframes p2m-blue-foundation {
+  0% {
+    opacity: 0;
+    transform: translate(-34px, 22px) rotate(-2deg);
+    animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); /* anticipation */
+  }
+  20% {
+    opacity: 0.78;
+    transform: translate(-39px, 25px) rotate(-2.2deg);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  60% {
+    opacity: 1;
+    transform: translate(5px, -3px) rotate(0.28deg);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  78%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes p2m-blue-upper {
+  0%,
+  7% {
+    opacity: 0;
+    transform: translate(-31px, 18px) rotate(-1.8deg);
+    animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); /* anticipation */
+  }
+  22% {
+    opacity: 0.24;
+    transform: translate(-35px, 21px) rotate(-2deg);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  63% {
+    opacity: 1;
+    transform: translate(4px, -2px) rotate(0.22deg);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  80%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes p2m-blue-lower {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translate(-28px, 27px) rotate(-1.5deg);
+    animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); /* anticipation */
+  }
+  25% {
+    opacity: 0.18;
+    transform: translate(-32px, 30px) rotate(-1.7deg);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  65% {
+    opacity: 1;
+    transform: translate(3px, -2px) rotate(0.18deg);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  82%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes p2m-bottom-fold {
+  0%,
+  36% {
+    opacity: 0;
+    transform: translate(-10px, 9px);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  66% {
+    opacity: 0.92;
+    transform: translate(2px, -1px);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  84%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Cyan engine mirrors the blue engine, offset by roughly 70 ms. */
+@keyframes p2m-cyan-outer {
+  0%,
+  4% {
+    opacity: 0;
+    transform: translate(35px, 22px) rotate(2deg);
+    animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); /* anticipation */
+  }
+  24% {
+    opacity: 0.76;
+    transform: translate(40px, 25px) rotate(2.2deg);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  64% {
+    opacity: 1;
+    transform: translate(-5px, -3px) rotate(-0.28deg);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  81%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes p2m-cyan-center {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translate(32px, 18px) rotate(1.8deg);
+    animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); /* anticipation */
+  }
+  27% {
+    opacity: 0.22;
+    transform: translate(36px, 21px) rotate(2deg);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  67% {
+    opacity: 1;
+    transform: translate(-4px, -2px) rotate(-0.22deg);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  83%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes p2m-right-fold {
+  0%,
+  39% {
+    opacity: 0;
+    transform: translate(11px, 8px);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  69% {
+    opacity: 0.92;
+    transform: translate(-2px, -1px);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  86%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes p2m-contact-shadow {
+  0%,
+  43% {
+    opacity: 0;
+    transform: translate(-5px, 3px);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  70% {
+    opacity: 0.8;
+    transform: translate(1px, -1px);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  88%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Secondary action: a non-persistent connection spark at the exact ribbon join. */
+@keyframes p2m-connection-glint {
+  0%,
+  56% {
+    opacity: 0;
+    transform: scale(0.25);
+    animation-timing-function: cubic-bezier(0.22, 0.78, 0.22, 1); /* precise */
+  }
+  66% {
+    opacity: 0.92;
+    transform: scale(0.72);
+    animation-timing-function: cubic-bezier(0.18, 0.88, 0.28, 1); /* settle */
+  }
+  73% {
+    opacity: 0.5;
+    transform: scale(1.14);
+    animation-timing-function: cubic-bezier(0.36, 0, 0.64, 1); /* fade */
+  }
+  82%,
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
