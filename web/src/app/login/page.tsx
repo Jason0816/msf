@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Lock, LogIn, Network, Server, Shield, User } from "lucide-react";
 import { LoginLogoShowcase } from "@/components/login/LoginLogoShowcase";
+import { GlassFilterDefs } from "@/components/liquid-glass/GlassFilterDefs";
+import { SceneBackdrop } from "@/components/liquid-glass/SceneBackdrop";
 import { useAuth } from "@/lib/auth";
 import { api, apiData } from "@/lib/api";
 
@@ -55,21 +57,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100 dark:from-slate-950 dark:via-blue-950/30 dark:to-slate-900">
+    <div className="gary-public-page flex">
+      <SceneBackdrop />
+      <GlassFilterDefs />
       <div className="hidden lg:flex lg:w-1/2 xl:w-3/5 flex-col justify-center items-center p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/40 rounded-full blur-3xl animate-pulse-subtle" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-blue-400/30 rounded-full blur-3xl animate-pulse-subtle" />
-        </div>
         <div className="relative z-10 text-center space-y-4 max-w-lg">
           <div className="flex flex-col items-center gap-6">
             <LoginLogoShowcase />
           </div>
           <div className="space-y-4 animate-fade-in">
-            <h1 className="text-4xl xl:text-5xl font-bold text-slate-800 dark:text-slate-100">
+            <h1 className="text-4xl font-bold tracking-tight text-foreground xl:text-5xl">
               MSF 管理平台
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-500 max-w-md mx-auto">
+            <p className="mx-auto max-w-md text-sm text-muted-foreground">
               统一管理您的网络服务，提供 DNS 分流、代理管理等功能
             </p>
           </div>
@@ -78,10 +78,10 @@ export default function LoginPage() {
               const Icon = feature.icon;
               return (
                 <div key={feature.label} className="flex flex-col items-center gap-2">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <div className="gary-solid-plate flex h-12 w-12 items-center justify-center">
                     <Icon className="h-6 w-6 text-primary" />
                   </div>
-                  <span className="text-xs text-slate-600 dark:text-slate-400">{feature.label}</span>
+                  <span className="text-xs text-muted-foreground">{feature.label}</span>
                 </div>
               );
             })}
@@ -89,24 +89,24 @@ export default function LoginPage() {
         </div>
         <div
           data-login-version
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs text-slate-500 dark:text-slate-600"
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs text-muted-foreground"
         >
           {releaseVersion}
         </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
-        <div className="text-card-foreground w-full max-w-md animate-scale-in border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-none">
+        <div className="gary-public-card w-full max-w-md animate-scale-in text-card-foreground">
           <div className="p-8 pb-4">
             <div className="mb-6 flex justify-center lg:hidden">
               <LoginLogoShowcase compact />
             </div>
-            <p className="text-base font-medium text-slate-600 dark:text-slate-400">欢迎使用 MSF</p>
+            <p className="text-base font-medium text-muted-foreground">欢迎使用 MSF</p>
           </div>
           <div className="px-8 pb-8">
             <form className="space-y-5" onSubmit={submit}>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">用户名</label>
+                <label className="text-sm font-medium text-foreground">用户名</label>
                 <div className="relative group">
                   <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 group-focus-within:text-primary" />
                   <input
@@ -115,13 +115,13 @@ export default function LoginPage() {
                     value={username}
                     onChange={(event) => setUsername(event.target.value)}
                     placeholder="请输入用户名"
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    className="gary-field w-full py-3 pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">密码</label>
+                <label className="text-sm font-medium text-foreground">密码</label>
                 <div className="relative group">
                   <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 group-focus-within:text-primary" />
                   <input
@@ -130,7 +130,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="请输入密码"
-                    className="w-full pl-11 pr-11 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    className="gary-field w-full py-3 pl-11 pr-11 text-sm text-foreground placeholder:text-muted-foreground"
                   />
                   <button
                     type="button"
@@ -148,7 +148,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={busy}
-                className="inline-flex items-center justify-center gap-2 w-full h-12 bg-gradient-to-r from-primary via-blue-500 to-primary hover:shadow-xl text-white transition-all hover:scale-[1.02] disabled:hover:scale-100 rounded-xl font-medium text-base mt-6 disabled:opacity-60"
+                className="gary-glass-button gary-glass-button--primary mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-base font-medium disabled:opacity-60"
               >
                 <LogIn className="h-5 w-5" />
                 {busy ? "登录中..." : "登录"}
@@ -156,7 +156,7 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-xs text-slate-500 dark:text-slate-500">请使用初始化时创建的账号登录</p>
+              <p className="text-xs text-muted-foreground">请使用初始化时创建的账号登录</p>
             </div>
           </div>
         </div>

@@ -94,36 +94,40 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
   };
 
   return (
-    <header className="fixed top-0 z-50 w-full border-b border-border/50 glass-effect-strong shadow-apple">
-      <div className="flex h-14 items-center px-3 md:h-16 md:px-4">
-        <button
-          onClick={onToggleSidebar}
-          className="mr-2 hidden rounded-[10px] p-2 transition-all hover:bg-accent/50 active:scale-95 md:mr-4 md:block"
-          title={sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏"}
-          aria-label={sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏"}
-        >
-          {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-        </button>
+    <header className="pointer-events-none fixed inset-x-0 top-0 z-50 px-3 pt-3 md:px-4 md:pt-4">
+      <div className="flex h-12 items-center md:h-14">
+        <div className="gary-glass gary-glass--ultrathin gary-glass--overflow-visible pointer-events-auto flex h-full items-center gap-1 rounded-[19.2px] p-1.5 pr-3">
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="gary-icon-button hidden h-9 w-9 rounded-[13px] text-muted-foreground md:inline-flex"
+            title={sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏"}
+            aria-label={sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="h-4.5 w-4.5" /> : <PanelLeftClose className="h-4.5 w-4.5" />}
+          </button>
 
-        <div className="flex items-center gap-2 md:gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-primary/10 to-secondary/10 md:h-10 md:w-10">
-            <Image alt="MSF" src="/logo/logo-square.png" width={32} height={32} className="h-7 w-7 object-contain md:h-8 md:w-8" />
+          <div className="flex items-center gap-2">
+            <div className="gary-solid-plate flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] md:h-10 md:w-10">
+              <Image alt="MSF" src="/logo/logo-square.png" width={32} height={32} className="h-7 w-7 object-contain md:h-8 md:w-8" />
+            </div>
+            <span className="text-base font-semibold tracking-[-0.02em] text-foreground md:text-lg">
+              MSF
+            </span>
           </div>
-          <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-lg font-bold text-transparent md:text-xl">
-            MSF
-          </span>
         </div>
 
-        <div className="ml-auto flex items-center gap-1 md:gap-2">
+        <div className="gary-glass gary-glass--ultrathin gary-glass--overflow-visible pointer-events-auto ml-auto flex h-full items-center gap-0.5 rounded-[19.2px] p-1 md:gap-1">
           <div className="relative">
             <button
+              type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 setThemeOpen((open) => !open);
                 setLangOpen(false);
                 setUserOpen(false);
               }}
-              className="rounded-[10px] p-2 text-gray-700 transition-all hover:bg-accent/50 hover:text-primary active:scale-95 dark:text-gray-300"
+              className="gary-icon-button h-9 w-9 rounded-[13px] border-0 bg-transparent text-muted-foreground shadow-none"
               title="切换主题"
               aria-label="切换主题"
             >
@@ -132,13 +136,13 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
             {themeOpen && (
               <div
                 onClick={(event) => event.stopPropagation()}
-                className="absolute right-0 z-50 mt-2 w-44 animate-slide-up rounded-xl border border-border bg-popover p-1.5 shadow-lg"
+                className="gary-popover absolute right-0 z-50 mt-2 w-44 animate-slide-up p-1.5"
               >
                 {themeOptions.map(({ id, label, Icon }) => (
                   <button
                     key={id}
                     onClick={() => selectTheme(id)}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent"
+                    className="gary-popover__item flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground"
                   >
                     <span className="flex items-center gap-2">
                       <Icon className="h-4 w-4 text-muted-foreground" />
@@ -153,13 +157,14 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
 
           <div className="relative">
             <button
+              type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 setLangOpen((open) => !open);
                 setThemeOpen(false);
                 setUserOpen(false);
               }}
-              className="rounded-[10px] p-2 text-gray-700 transition-all hover:bg-accent/50 hover:text-secondary active:scale-95 dark:text-gray-300"
+              className="gary-icon-button h-9 w-9 rounded-[13px] border-0 bg-transparent text-muted-foreground shadow-none"
               title="语言"
               aria-label="语言"
             >
@@ -168,7 +173,7 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
             {langOpen && (
               <div
                 onClick={(event) => event.stopPropagation()}
-                className="absolute right-0 z-50 mt-2 w-40 animate-slide-up rounded-xl border border-border bg-popover p-1.5 shadow-lg"
+                className="gary-popover absolute right-0 z-50 mt-2 w-40 animate-slide-up p-1.5"
               >
                 {languageOptions.map((item) => (
                   <button
@@ -177,7 +182,7 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
                       setLang(item);
                       setLangOpen(false);
                     }}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent"
+                    className="gary-popover__item flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground"
                   >
                     {item}
                     {lang === item && <Check className="h-4 w-4 text-primary" />}
@@ -189,16 +194,17 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
 
           <div className="relative flex-shrink-0">
             <button
+              type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 setUserOpen((open) => !open);
                 setThemeOpen(false);
                 setLangOpen(false);
               }}
-              className="flex items-center gap-2 rounded-xl px-1 py-1 transition-colors hover:bg-accent/40 md:gap-3"
+              className="gary-icon-button h-10 gap-2 rounded-[14px] border-0 bg-transparent px-1.5 shadow-none md:gap-3 md:pr-3"
               aria-label="打开用户菜单"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-semibold text-primary-foreground shadow-apple md:h-9 md:w-9">
+              <div className="gary-solid-plate flex h-8 w-8 items-center justify-center rounded-[12px] text-sm font-semibold text-foreground md:h-9 md:w-9">
                 {initial}
               </div>
               <div className="hidden items-center gap-2 lg:flex">
@@ -211,10 +217,10 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
             {userOpen && (
               <div
                 onClick={(event) => event.stopPropagation()}
-                className="absolute right-0 z-50 mt-3 w-72 animate-slide-up rounded-2xl border border-border/70 bg-popover/95 p-2 shadow-apple-xl backdrop-blur-xl"
+                className="gary-popover absolute right-0 z-50 mt-3 w-72 animate-slide-up p-2"
               >
-                <div className="mb-2 flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-base font-semibold text-primary-foreground shadow-apple">
+                <div className="gary-solid-plate mb-2 flex items-center gap-3 rounded-[14px] px-3 py-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-[15px] bg-foreground/[0.07] text-base font-semibold text-foreground">
                     {initial}
                   </div>
                   <div className="min-w-0">
@@ -232,7 +238,7 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
                   <button
                     key={label}
                     onClick={onClick}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-accent"
+                    className="gary-popover__item flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-foreground"
                   >
                     <Icon className="h-4 w-4 text-muted-foreground" />
                     {label}

@@ -33,6 +33,8 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { GlassFilterDefs } from "@/components/liquid-glass/GlassFilterDefs";
+import { SceneBackdrop } from "@/components/liquid-glass/SceneBackdrop";
 
 interface NetworkInterface {
   name: string;
@@ -479,7 +481,7 @@ function SetupCard({
   footer: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-b-2xl border-t border-border/70 bg-card shadow-apple">
+    <section className="overflow-hidden rounded-b-2xl border-t border-border/70 bg-transparent">
       <div className="h-[388px] overflow-y-auto px-6 py-5">{children}</div>
       <div className="flex h-[66px] items-center justify-between border-t border-border/70 px-6">{footer}</div>
     </section>
@@ -777,8 +779,10 @@ function SetupDownloadView({
   const failedTitle = downloadComponentMeta[failedComponent]?.title || failedComponent || "-";
 
   return (
-    <div className="fixed inset-0 z-50 flex min-h-screen items-center justify-center bg-background/95 px-4 py-10 text-foreground backdrop-blur-sm">
-      <div className="w-full max-w-md">
+    <div className="gary-public-page fixed inset-0 z-50 flex min-h-screen items-center justify-center px-4 py-10 text-foreground">
+      <SceneBackdrop />
+      <GlassFilterDefs />
+      <div className="gary-public-card w-full max-w-md p-6">
         <div className="mb-8 text-center">
           <div className="mb-4 flex justify-center">
             <div className="relative">
@@ -1258,7 +1262,9 @@ export function SetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="gary-public-page text-foreground">
+      <SceneBackdrop />
+      <GlassFilterDefs />
       <div className="fixed right-8 top-6 z-10 flex items-center gap-4 text-muted-foreground">
         <button className="border-0 bg-transparent p-0 shadow-none hover:text-foreground hover:shadow-none" type="button" title="切换主题">
           <Sun className="h-5 w-5" />
@@ -1274,7 +1280,7 @@ export function SetupPage() {
           <h1 className="text-xl font-bold tracking-normal text-foreground">MSF 初始化向导</h1>
         </header>
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-border/60 bg-card/80 shadow-apple-lg">
+        <div className="gary-public-card mt-6 overflow-hidden">
           <SetupStepper current={step} onStepClick={go} />
           <SetupCard footer={footer}>
             {step === 0 && (
@@ -2016,7 +2022,7 @@ export function SetupPage() {
             aria-modal="true"
             aria-labelledby="setup-validation-title"
             aria-describedby="setup-validation-description"
-            className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 text-foreground shadow-apple-lg"
+            className="gary-public-card w-full max-w-sm p-5 text-foreground"
           >
             <div className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">

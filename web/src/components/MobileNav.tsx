@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { mobileNavItems } from "@/lib/dashboard-data";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 
 export function MobileNav() {
   const pathname = usePathname();
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
-      <div className="mx-2 mb-2 rounded-[20px] glass-effect-strong shadow-apple-lg border border-border/30 overflow-hidden">
-        <div className="flex">
+    <div className="fixed inset-x-0 bottom-0 z-50 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:hidden">
+      <GlassSurface material="ultrathin" className="rounded-[24px]">
+        <div className="flex p-1.5">
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const active =
@@ -22,10 +23,10 @@ export function MobileNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex-1 flex flex-col items-center justify-center py-2.5 transition-colors",
+                  "gary-nav-row flex min-h-11 flex-1 flex-col items-center justify-center rounded-[16px] py-2.5",
                   active
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "gary-nav-row--active"
+                    : "text-muted-foreground"
                 )}
                 aria-label={item.label}
               >
@@ -34,7 +35,7 @@ export function MobileNav() {
             );
           })}
         </div>
-      </div>
+      </GlassSurface>
     </div>
   );
 }

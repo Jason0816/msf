@@ -285,7 +285,7 @@ export function RateChart({
       </svg>
       {activePoint ? (
         <div
-          className="pointer-events-none absolute top-7 z-20 w-[190px] rounded-lg border border-primary/50 bg-card/95 p-3 text-xs text-foreground shadow-lg backdrop-blur"
+          className="gary-popover pointer-events-none absolute top-7 z-20 w-[190px] p-3 text-xs text-foreground"
           style={{
             left: `${tooltipX}%`,
             transform: tooltipX > 68 ? "translateX(-100%)" : tooltipX < 32 ? "translateX(0)" : "translateX(-50%)",

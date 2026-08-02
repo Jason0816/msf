@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { navItems } from "@/lib/dashboard-data";
 import type { NavItem } from "@/types";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 
 const GROUP_STATE_STORAGE_KEY = "msf-sidebar-group-open";
 
@@ -67,13 +68,13 @@ function NavRow({
       title={collapsed ? item.label : undefined}
       aria-label={collapsed ? item.label : undefined}
       className={cn(
-        "flex items-center gap-3 py-2.5 rounded-[10px] transition-all group/item",
+        "gary-nav-row group/item gap-3 py-2.5 focus-visible:outline-none",
         flex1 && "flex-1",
-        collapsed ? "justify-center px-0" : "px-3 group-hover:pl-8",
+        collapsed ? "justify-center px-0" : "px-3",
         indent && !collapsed && "ml-4",
         active
-          ? "bg-primary/10 text-primary font-medium shadow-sm"
-          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          ? "gary-nav-row--active font-medium"
+          : "text-muted-foreground"
       )}
     >
       <Icon className={cn("h-5 w-5 flex-shrink-0", active && "text-primary")} />
@@ -120,15 +121,13 @@ function NavGroup({
       <div className="group relative flex items-center">
         <NavRow item={item} active={active} collapsed={false} flex1 />
         <button
+          type="button"
           onClick={onToggle}
-          className="p-1 rounded hover:bg-accent/70 transition-colors flex items-center justify-center flex-shrink-0"
+          className="gary-icon-button ml-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[11px] border-0 bg-transparent text-muted-foreground shadow-none"
           aria-label={open ? "收起" : "展开"}
+          aria-expanded={open}
         >
-          {open ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          )}
+          <ChevronDown className={cn("h-4 w-4 transition-transform duration-150 ease-out", open && "rotate-180")} />
         </button>
       </div>
       {open && item.children && (
@@ -169,17 +168,18 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <aside
       className={cn(
-        "hidden md:block fixed left-0 top-14 md:top-16 z-40 h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] border-r border-border bg-sidebar transition-all duration-300",
+        "fixed bottom-3 left-3 top-20 z-40 hidden transition-[width] duration-250 ease-out md:block",
         collapsed ? "w-20" : "w-56"
       )}
     >
-      <div className="flex flex-col h-full">
+      <GlassSurface material="ultrathin" className="h-full w-full rounded-[24px]">
+        <div className="flex h-full flex-col">
         <nav
           ref={navRef}
           onScroll={(event) => {
             window.sessionStorage.setItem("msf-sidebar-scroll", String(event.currentTarget.scrollTop));
           }}
-          className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin px-3 py-4 space-y-1"
+          className="scrollbar-thin flex-1 space-y-1 overflow-x-hidden overflow-y-auto px-3 py-4"
         >
           {navItems.map((item) => {
             const active = itemMatchesPath(item, pathname);
@@ -199,7 +199,8 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             );
           })}
         </nav>
-      </div>
+        </div>
+      </GlassSurface>
     </aside>
   );
 }

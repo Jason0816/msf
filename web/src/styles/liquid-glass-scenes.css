@@ -1,0 +1,97 @@
+.gary-app-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  background: transparent;
+}
+
+.gary-scene {
+  position: fixed;
+  inset: 0;
+  z-index: var(--gary-z-scene);
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--gary-scene-base);
+  contain: strict;
+}
+
+.gary-scene::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  background:
+    radial-gradient(ellipse 56% 44% at 18% 18%, var(--gary-scene-a), transparent 72%),
+    radial-gradient(ellipse 48% 42% at 84% 12%, var(--gary-scene-b), transparent 74%),
+    radial-gradient(ellipse 64% 52% at 64% 86%, var(--gary-scene-c), transparent 76%);
+  transform: translate3d(-1.5%, -1%, 0) scale(1.04);
+  transform-origin: center;
+  animation: gary-scene-drift-a 32s var(--gary-ease-soft) infinite alternate;
+}
+
+.gary-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 82% 72% at 50% 44%, transparent 36%, var(--gary-scene-mask) 100%),
+    repeating-radial-gradient(circle at 17% 23%, rgba(255, 255, 255, 0.08) 0 0.35px, rgba(0, 0, 0, 0.04) 0.65px 2.8px);
+  background-size: auto, 5px 5px;
+  opacity: 0.30;
+}
+
+.gary-scene__silk {
+  position: absolute;
+  inset: -14%;
+  background:
+    radial-gradient(ellipse 42% 36% at 32% 72%, color-mix(in srgb, var(--gary-scene-b) 68%, transparent), transparent 76%),
+    radial-gradient(ellipse 44% 38% at 76% 46%, color-mix(in srgb, var(--gary-scene-a) 66%, transparent), transparent 78%);
+  opacity: 0.72;
+  transform: translate3d(1%, 1%, 0) scale(1.02);
+  animation: gary-scene-drift-b 36s var(--gary-ease-soft) infinite alternate;
+}
+
+@keyframes gary-scene-drift-a {
+  to { transform: translate3d(2%, 1.5%, 0) scale(1.08); }
+}
+
+@keyframes gary-scene-drift-b {
+  to { transform: translate3d(-2%, -1.25%, 0) scale(1.06); opacity: 0.58; }
+}
+
+@media (max-width: 767px) {
+  .gary-scene::before,
+  .gary-scene__silk {
+    animation: none;
+    transform: none;
+  }
+
+  .gary-scene__silk {
+    opacity: 0.46;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gary-scene::before,
+  .gary-scene__silk {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+html[data-gary-scene="static"] .gary-scene::before,
+html[data-gary-scene="static"] .gary-scene__silk,
+html[data-gary-quality="balanced"] .gary-scene::before,
+html[data-gary-quality="balanced"] .gary-scene__silk,
+html[data-gary-quality="reduced"] .gary-scene::before,
+html[data-gary-quality="reduced"] .gary-scene__silk {
+  animation: none;
+}
+
+html[data-gary-scene="neutral"] .gary-scene::before,
+html[data-gary-scene="neutral"] .gary-scene__silk {
+  display: none;
+}
+
+html[data-gary-scene="neutral"] .gary-scene::after {
+  opacity: 0.12;
+}

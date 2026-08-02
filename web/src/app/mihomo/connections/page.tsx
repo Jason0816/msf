@@ -286,7 +286,7 @@ export default function MihomoConnectionsPage() {
     <AppShell>
       <div className="space-y-4 animate-fade-in">
         <div className="relative rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-purple-500 via-pink-500 to-amber-400" />
+          <div className="h-px w-full bg-primary/35" />
           <div className="p-4 space-y-3">
             <div className="flex flex-wrap items-center gap-3">
               <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20">
