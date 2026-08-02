@@ -8,22 +8,32 @@
 
 [常见问题 FAQ](docs/faq.md)
 
-`msf` 是一个面向 MosDNS + Mihomo 工作流的 MSM 风格管理面板重构版。项目目标是提供可自部署、可审计的 DNS 分流、透明代理、Mihomo 管理和多平台安装体验。
+`msf` 是一个面向 MosDNS + Mihomo 工作流的 MSM 风格管理面板重构版。项目目标是为合法、授权的网络环境提供可自部署、可审计的 DNS 策略解析、流量转发、Mihomo 管理和多平台安装体验。
 
 当前发布版本：`v0.4.0`
+
+> [!IMPORTANT]
+> 本项目仅用于网络、DNS、流量转发及开源软件部署与管理相关的技术研究、交流和分享。本项目不提供代理节点、代理订阅、账号或访问凭据，也不提供针对网络监管措施、内容过滤或访问控制的规避教程。使用者必须遵守适用法律法规并自行承担使用本项目产生的风险和责任。下载、部署或使用前，请阅读完整的[免责声明](DISCLAIMER.md)。
 
 > **提示：Cloudflare Redirect CLI 插件为测试功能。** 它用于让“不走代理的客户端”访问用户指定的 Cloudflare 盾站时，返回本机网络实测较快的 Cloudflare CDN IPv4/IPv6。该功能依赖本机网络、运营商路由、Cloudflare Anycast、域名名单质量和 MosDNS 当前配置，不保证一定比原解析更快或更稳定。详细用法见 [Cloudflare Redirect 文档](docs/plugins/cloudflare-redirect.md)。
 
 ## 功能概览
 
-- 原版 MSM 风格 6 步初始化向导，覆盖管理员账号、系统参数、DNS、IPv6、Fake-IP、透明代理和组件安装配置。
-- MosDNS + Mihomo 默认组合，按 mssb 风格生成国内外分流链路：MosDNS `:53` 入口，Mihomo DNS `:6666`，Fake-IP `28.0.0.0/8`，TProxy `7896`，Redirect `7877`。
-- 支持机场订阅、手动节点、MosDNS 客户端代理模式、Mihomo 节点/规则/连接/日志/配置页面。
+- 原版 MSM 风格 6 步初始化向导，覆盖管理员账号、系统参数、DNS、IPv6、Fake-IP、流量转发和组件安装配置。
+- MosDNS + Mihomo 默认组合，按 mssb 风格生成基于规则集的 DNS 与流量转发链路：MosDNS `:53` 入口，Mihomo DNS `:6666`，Fake-IP `28.0.0.0/8`，TProxy `7896`，Redirect `7877`。
+- 支持用户自行提供的第三方配置订阅、手动连接配置、MosDNS 客户端转发模式，以及 Mihomo 连接端点、规则、连接、日志和配置管理页面。
 - 支持 Mihomo 自定义配置、CodeMirror YAML 编辑器、组件更新检查、自动下载、更新通知和升级方式配置。
-- 支持 MosDNS、Mihomo、Zashboard 本地上传安装，网络困难时可用预下载核心离线安装。
+- 支持 MosDNS、Mihomo、Zashboard 本地上传安装；需要离线部署时，可由用户自行准备相应上游组件。
 - Linux tarball/systemd、fnOS FPK、Unraid PLG 均支持 nftables 与 TUN；Docker `host-tun` / `macvlan-tun` 正式支持且仅允许 TUN。
 - macOS 15–26 提供未签名 Beta 版原生 Universal 2 菜单栏 App、root LaunchDaemon 和 TUN-only 运行时，不提供系统代理模式；首次打开需由用户手动允许。
 - Docker 部署必须把宿主机数据目录映射到容器 `/opt/msf`，默认示例使用 `./msf-data:/opt/msf`。
+
+## 使用边界
+
+- 本仓库默认不内置任何代理订阅、节点、账号或访问凭据，也不提供相关网络服务。
+- 用户导入的订阅地址、连接信息、规则、配置和外部内容均由用户或相应第三方提供，使用者应自行核验其来源、授权、合法性和安全性。
+- 项目维护者不提供以规避法律监管、内容过滤或访问控制为目的的个性化配置、远程部署、故障排查或其他技术协助。
+- 项目文档中的 DNS、路由和流量转发说明仅适用于使用者拥有或已获得充分管理授权的网络环境。完整边界与责任说明见[免责声明](DISCLAIMER.md)。
 
 ## 架构原理图
 
@@ -66,9 +76,9 @@ https://github.com/scoltzero/msf/releases/tag/v0.4.0
 1. 按你的运行平台选择安装文档：Linux、fnOS、Unraid、Docker 或 macOS。
 2. 安装后打开 WebUI，默认地址是 `http://<服务器IP>:7777`。
 3. 完成初始化向导。首次初始化会写入系统配置、生成 MosDNS/Mihomo 配置，并保存到数据库。
-4. 在主路由上配置 DHCP DNS 和 FakeIP 静态路由，让局域网客户端流量进入 msf。
+4. 在你拥有或已获管理授权的主路由上配置 DHCP DNS 和 FakeIP 静态路由，让局域网客户端按自定义策略使用 msf。
 
-路由器接入教程：
+合法、授权网络环境中的路由器接入参考：
 
 - [路由器接入总览](docs/guide/zh/router-integration.md)
 - [RouterOS（MikroTik）](docs/guide/zh/routeros.md)
@@ -94,7 +104,7 @@ go run ./cmd/msf serve -c ./data -p 7777
 
 ## 说明
 
-`msf` 不包含 MSM 的闭源后端代码。项目目标是做一个非商业用途的开放重构版：外观和使用体验参考 MSM，后端行为围绕 mssb 风格的 MosDNS + Mihomo 工作流重新实现。
+`msf` 不包含 MSM 的闭源后端代码。项目是一个面向技术交流的开放重构版：外观和使用体验参考 MSM，后端行为围绕 mssb 风格的 MosDNS + Mihomo 工作流重新实现。本项目不提供代理订阅、连接凭据或面向特定地区的代理网络服务。
 
 ## 鸣谢
 
