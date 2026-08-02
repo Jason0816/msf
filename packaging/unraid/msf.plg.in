@@ -13,12 +13,12 @@
   <CHANGES>
     <![CDATA[
 ### msf __PLUGIN_VERSION__
-- “重置系统”升级为完整 factory reset：清除用户、令牌、设置、配置历史、规则、日志、备份与运行缓存，并立即废止旧 JWT。
-- 默认保留 MosDNS、Mihomo 与 Zashboard；勾选删除组件时会一并清除，重新初始化后再下载。
-- Linux、Unraid 与 fnOS 的 generated 配置完整支持 nftables / TUN 切换，并在激活前校验数据库、Mihomo YAML、network.yaml 与 nft desired state 一致性。
-- TUN 模式会生成 `tun.enable: true`、system stack、路由包含/排除项与 `proxy-server-nameserver`，并清理遗留 nftables、fwmark 与 table 100 路由。
-- Docker 正式收口为 TUN-only，支持 `host-tun` 与 `macvlan-tun`，缺少 `/dev/net/tun` 或必要 capability 时阻止初始化。
-- Release 资产与 GHCR 镜像统一由同一个干净 tag commit 构建，并嵌入版本、源码 SHA 与 dirty 状态供核验。
+- WebUI 改用独立设计的 Gary Liquid Glass 视觉体系，重构应用外壳、导航、仪表盘、MosDNS 概览、设置、登录与初始化界面。
+- 新增统一的玻璃材质、折射滤镜、场景背景、表单、按钮、对话框和内容板组件，改善信息层级、动效与响应式体验。
+- 项目 Logo 重构为全新的 Mizar 丝带交织标识，并统一替换 Web、PWA、macOS、Unraid、README 与发布资产中的品牌图形。
+- 补充完整品牌资产、动效预览、摘要清单、旧 Logo 归档、免责声明与项目独立性说明。
+- 修复 macOS 发布包图标缺失问题，并强化 AppIcon、Asset Catalog 与发布包验证。
+- 本版本不包含其他 session 中尚未完成的 IPv6 修复，网络与 IPv6 行为继续保持 v0.4.0 的实现。
     ]]>
   </CHANGES>
 

@@ -8,9 +8,9 @@
 
 [常见问题 FAQ](docs/faq.md)
 
-`msf` 是一个面向 MosDNS + Mihomo 工作流的 MSM 风格管理面板重构版。项目目标是为合法、授权的网络环境提供可自部署、可审计的 DNS 策略解析、流量转发、Mihomo 管理和多平台安装体验。
+`msf` 是一个面向 MosDNS + Mihomo 工作流的独立开源管理工具。项目目标是为合法、授权的网络环境提供可自部署、可审计的 DNS 策略解析、流量转发、Mihomo 管理和多平台安装体验；从 v0.4.1 起，WebUI 与项目品牌均采用独立设计。
 
-当前发布版本：`v0.4.0`
+当前发布版本：`v0.4.1`
 
 > [!IMPORTANT]
 > 本项目仅用于网络、DNS、流量转发及开源软件部署与管理相关的技术研究、交流和分享。本项目不提供代理节点、代理订阅、账号或访问凭据，也不提供针对网络监管措施、内容过滤或访问控制的规避教程。使用者必须遵守适用法律法规并自行承担使用本项目产生的风险和责任。下载、部署或使用前，请阅读完整的[免责声明](DISCLAIMER.md)。
@@ -19,7 +19,7 @@
 
 ## 功能概览
 
-- 原版 MSM 风格 6 步初始化向导，覆盖管理员账号、系统参数、DNS、IPv6、Fake-IP、流量转发和组件安装配置。
+- 独立设计的 6 步初始化向导，覆盖管理员账号、系统参数、DNS、IPv6、Fake-IP、流量转发和组件安装配置。
 - MosDNS + Mihomo 默认组合，按 mssb 风格生成基于规则集的 DNS 与流量转发链路：MosDNS `:53` 入口，Mihomo DNS `:6666`，Fake-IP `28.0.0.0/8`，TProxy `7896`，Redirect `7877`。
 - 支持用户自行提供的第三方配置订阅、手动连接配置、MosDNS 客户端转发模式，以及 Mihomo 连接端点、规则、连接、日志和配置管理页面。
 - 支持 Mihomo 自定义配置、CodeMirror YAML 编辑器、组件更新检查、自动下载、更新通知和升级方式配置。
@@ -58,18 +58,18 @@
 GitHub Release：
 
 ```text
-https://github.com/scoltzero/msf/releases/tag/v0.4.0
+https://github.com/scoltzero/msf/releases/tag/v0.4.1
 ```
 
 | 资产 | 下载地址 |
 |---|---|
-| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-amd64.tar.gz` |
-| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-arm64.tar.gz` |
-| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_x86.fpk` |
-| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_arm.fpk` |
-| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf.plg` |
-| macOS Universal 2 DMG（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal-unsigned.dmg` |
-| macOS Universal 2 ZIP（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal-unsigned.zip` |
+| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf-linux-amd64.tar.gz` |
+| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf-linux-arm64.tar.gz` |
+| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf_0.4.1_x86.fpk` |
+| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf_0.4.1_arm.fpk` |
+| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf.plg` |
+| macOS Universal 2 DMG（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.1/MSF-0.4.1-macos-universal-unsigned.dmg` |
+| macOS Universal 2 ZIP（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.1/MSF-0.4.1-macos-universal-unsigned.zip` |
 
 ## 快速开始
 
@@ -104,7 +104,7 @@ go run ./cmd/msf serve -c ./data -p 7777
 
 ## 说明
 
-`msf` 不包含 MSM 的闭源后端代码。项目是一个面向技术交流的开放重构版：外观和使用体验参考 MSM，后端行为围绕 mssb 风格的 MosDNS + Mihomo 工作流重新实现。本项目不提供代理订阅、连接凭据或面向特定地区的代理网络服务。
+`msf` 不包含 MSM 的闭源后端代码。项目早期曾参考 MSM 的公开管理体验；从 v0.4.1 起，当前 WebUI 和 Mizar 品牌均为独立设计，后端行为继续围绕 mssb 风格的 MosDNS + Mihomo 工作流重新实现。本项目不提供代理订阅、连接凭据或面向特定地区的代理网络服务。
 
 ## 鸣谢
 

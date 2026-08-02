@@ -49,12 +49,12 @@ make macos-app-build XCODE_DEVELOPER_DIR=/Applications/Xcode.app/Contents/Develo
 
 ## GitHub Release
 
-当前 v0.4.0 macOS Beta 以未签名方式发布，需要干净且已打 tag 的源码，不需要 Apple Developer 凭据：
+当前 v0.4.1 macOS Beta 以未签名方式发布，需要干净且已打 tag 的源码，不需要 Apple Developer 凭据：
 
 ```bash
 make macos-release-assets \
-  VERSION=0.4.0 \
-  RELEASE_TAG=v0.4.0 \
+  VERSION=0.4.1 \
+  RELEASE_TAG=v0.4.1 \
   MACOS_BUILD_NUMBER=1
 ```
 

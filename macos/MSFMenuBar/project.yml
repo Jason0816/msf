@@ -38,7 +38,7 @@ targets:
       base:
         PRODUCT_NAME: MSF
         PRODUCT_BUNDLE_IDENTIFIER: io.github.scoltzero.msf.menubar
-        MARKETING_VERSION: 0.4.0
+        MARKETING_VERSION: 0.4.1
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: MSF

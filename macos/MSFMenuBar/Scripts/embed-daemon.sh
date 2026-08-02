@@ -9,7 +9,7 @@ helper_dir="$app_contents/Library/HelperTools"
 launchd_dir="$app_contents/Library/LaunchDaemons"
 resource_dir="$app_contents/Resources"
 
-version="${MSF_VERSION:-${MARKETING_VERSION:-0.4.0}}"
+version="${MSF_VERSION:-${MARKETING_VERSION:-0.4.1}}"
 build_commit="${MSF_BUILD_COMMIT:-$(cd "$project_root" && git rev-parse HEAD 2>/dev/null || printf unknown)}"
 build_tag="${MSF_BUILD_TAG:-dev}"
 build_tag_commit="${MSF_BUILD_TAG_COMMIT:-unknown}"

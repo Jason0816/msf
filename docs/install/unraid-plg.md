@@ -4,14 +4,14 @@
 
 Unraid 版本支持 nftables 与 TUN；选择 TUN 时初始化预检会确认 `/dev/net/tun` 与运行权限。
 
-当前版本：`v0.4.0`
+当前版本：`v0.4.1`
 
 ## 安装
 
 在 Unraid WebGUI 中打开 **Plugins / Install Plugin**，填入插件地址：
 
 ```text
-https://github.com/scoltzero/msf/releases/download/v0.4.0/msf.plg
+https://github.com/scoltzero/msf/releases/download/v0.4.1/msf.plg
 ```
 
 安装完成后打开 **Settings / MSF Free**，进入轻量插件控制页，再点击打开 WebUI。完整管理界面运行在独立 WebUI 中，不嵌入 Unraid Settings 页面。
@@ -89,7 +89,7 @@ msf uninstall
 Unraid 发布资产包括：
 
 - `msf.plg`
-- `msf-0.4.0-x86_64-1.txz`
+- `msf-0.4.1-x86_64-1.txz`
 - 对应 `.sha256` 校验文件
 
 Unraid 打包开发说明见 [packaging/unraid/README.md](../../packaging/unraid/README.md)。运行目录和端口说明见 [运行参考](../reference/runtime.md)。

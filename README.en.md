@@ -8,9 +8,9 @@
 
 [FAQ](docs/faq.en.md)
 
-`msf` is an open-source reimplementation of the MSM-style management experience for the MosDNS + Mihomo workflow. It provides self-hosted, auditable DNS policy resolution, traffic forwarding, Mihomo management, and platform-native installs for lawful, authorized network environments.
+`msf` is an independent open-source management tool for MosDNS + Mihomo workflows. It provides self-hosted, auditable DNS policy resolution, traffic forwarding, Mihomo management, and platform-native installs for lawful, authorized network environments. Starting with v0.4.1, both the WebUI and project identity use an independent design.
 
-Current release: `v0.4.0`
+Current release: `v0.4.1`
 
 > [!IMPORTANT]
 > This project is provided solely for technical research, discussion, and sharing concerning networking, DNS, traffic forwarding, and open-source software deployment and management. It does not provide proxy nodes, subscriptions, accounts, or access credentials, nor does it provide instructions intended to circumvent network regulation, content filtering, or access controls. Users must comply with applicable law and bear the risks and responsibilities arising from their use. Read the full [Disclaimer](DISCLAIMER.md) before downloading, deploying, or using this project.
@@ -19,7 +19,7 @@ Current release: `v0.4.0`
 
 ## Features
 
-- MSM-style setup wizard for the administrator account, system parameters, DNS, IPv6, Fake-IP, traffic forwarding, and component installation.
+- Independently designed setup wizard for the administrator account, system parameters, DNS, IPv6, Fake-IP, traffic forwarding, and component installation.
 - MosDNS + Mihomo default runtime based on an mssb-style, rule-set-driven DNS and traffic-forwarding layout: MosDNS `:53`, Mihomo DNS `:6666`, Fake-IP `28.0.0.0/8`, TProxy `7896`, Redirect `7877`.
 - User-supplied third-party configuration subscriptions, manually configured connections, MosDNS client forwarding modes, and Mihomo endpoint, rule, connection, log, and configuration management pages.
 - Mihomo custom configs, CodeMirror YAML editing, component update checks, automatic downloads, update notices, and configurable upgrade behavior.
@@ -58,18 +58,18 @@ Current release: `v0.4.0`
 GitHub Release:
 
 ```text
-https://github.com/scoltzero/msf/releases/tag/v0.4.0
+https://github.com/scoltzero/msf/releases/tag/v0.4.1
 ```
 
 | Asset | URL |
 |---|---|
-| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-amd64.tar.gz` |
-| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf-linux-arm64.tar.gz` |
-| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_x86.fpk` |
-| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf_0.4.0_arm.fpk` |
-| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.0/msf.plg` |
-| macOS Universal 2 DMG (unsigned Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal-unsigned.dmg` |
-| macOS Universal 2 ZIP (unsigned Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.0/MSF-0.4.0-macos-universal-unsigned.zip` |
+| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf-linux-amd64.tar.gz` |
+| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf-linux-arm64.tar.gz` |
+| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf_0.4.1_x86.fpk` |
+| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf_0.4.1_arm.fpk` |
+| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf.plg` |
+| macOS Universal 2 DMG (unsigned Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.1/MSF-0.4.1-macos-universal-unsigned.dmg` |
+| macOS Universal 2 ZIP (unsigned Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.1/MSF-0.4.1-macos-universal-unsigned.zip` |
 
 ## Quick Start
 
@@ -104,7 +104,7 @@ Manual release packaging is documented in [RELEASING.md](RELEASING.md). Unraid p
 
 ## Notes
 
-This project does not contain MSM closed-source backend code. It is an open reimplementation for technical exchange that references MSM's user-facing experience and rebuilds the backend around the mssb-style MosDNS + Mihomo workflow. It does not provide proxy subscriptions, connection credentials, or proxy network services directed at any particular region.
+This project does not contain MSM closed-source backend code. Early versions referenced MSM's public management experience; starting with v0.4.1, the current WebUI and Mizar identity are independently designed. The backend remains a separate reimplementation around the mssb-style MosDNS + Mihomo workflow. This project does not provide proxy subscriptions, connection credentials, or proxy network services directed at any particular region.
 
 Thanks to:
 

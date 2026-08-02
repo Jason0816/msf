@@ -1,20 +1,58 @@
 # 更新日志
 
-## Unreleased
+## v0.4.1 - 2026-08-02
+
+# 从此版本开始本项目不再完全借鉴msm项目的UI实现，并且为了防止引起不必要的误会，现也重构了项目logo。
 
 ### 中文
+
+#### 说明
+
+- v0.4.1 是一次以 WebUI 视觉重构和项目品牌更新为主的版本；本版本不包含其他 session 中尚未完成的 IPv6 修复，网络与 IPv6 行为继续保持 v0.4.0 的实现。
+- Linux、Unraid、fnOS、macOS 与 Docker 继续从 `main` 上同一个干净 tag 构建。GitHub Release 提供 20 个安装资产及 SHA-256 文件，GHCR 同时发布 `v0.4.1` 与 `latest` 多架构镜像。
+- macOS App 仍为未使用 Apple Developer ID 签名或公证的 Beta，只提供 TUN 模式；首次打开需要用户手动允许。
+
+#### UI
+
+- WebUI 改用独立设计的 Gary Liquid Glass 视觉体系，重构应用外壳、侧边栏、移动导航、页头、仪表盘、MosDNS 概览、系统设置、登录与初始化等主要界面，不再沿用此前完整的 MSM UI 实现方式。
+- 新增统一的玻璃材质、折射滤镜、场景背景、按钮、表单、分段控制器、对话框和实体内容板组件，并统一透明度、间距、圆角、层级、动效和响应式行为。
+- 优化仪表盘卡片、导航状态、设置操作区和实用工具页面的信息层级与交互反馈，同时保留原有业务能力和操作路径。
+
+#### 品牌
+
+- 将项目 Logo 重构为全新的 Mizar 丝带交织标识，并统一替换 WebUI、登录动画、favicon、PWA 图标、macOS AppIcon、Unraid 图标、README 与安装资产中的品牌图形。
+- 新增可复用的 SVG、透明 PNG、应用图标、favicon、动效预览和 SHA-256 清单；旧 MSM 风格 Logo 已归档至设计参考目录，便于溯源但不再用于当前产品界面。
+- 补充项目免责声明与使用边界说明，进一步明确本项目为独立开源实现，与其他项目不存在官方隶属、授权或背书关系。
 
 #### 修复
 
 - 修复 macOS `MSF.app` 发布包缺少应用图标的问题；加入完整的 `AppIcon` 资源集，并在 Release 验证中强制检查 `AppIcon.icns`、Asset Catalog 和 `CFBundleIconName`，避免无图标构建再次进入发布资产。
-- 将 macOS AppIcon 调整为规范的圆角方形图标，使用透明外角、统一安全边距和适合 macOS 桌面的浅色背景，同时保持原 MSF Logo、字形和品牌配色。
+- 将 macOS AppIcon 调整为规范的圆角方形图标，使用透明外角、统一安全边距和适合 macOS 桌面的浅色背景，并在本版本统一切换为新的 Mizar 标识。
 
 ### English
+
+#### Notes
+
+- v0.4.1 focuses on the WebUI redesign and the new project identity. It intentionally excludes the unfinished IPv6 work from another session, so network and IPv6 behavior remain aligned with v0.4.0.
+- Linux, Unraid, fnOS, macOS, and Docker continue to be built from one clean tag on `main`. GitHub Release provides 20 installation and SHA-256 assets, while GHCR publishes the multi-architecture `v0.4.1` and `latest` images.
+- The macOS app remains an unsigned and unnotarized TUN-only Beta. Users must explicitly allow its first launch.
+
+#### UI
+
+- Replaced the previous end-to-end MSM UI implementation approach with an independently designed Gary Liquid Glass visual system across the app shell, sidebar, mobile navigation, page headers, dashboard, MosDNS overview, settings, login, and setup surfaces.
+- Added shared glass materials, refraction filters, scene backdrops, buttons, fields, segmented controls, dialogs, and solid content plates, with consistent transparency, spacing, radii, layering, motion, and responsive behavior.
+- Improved information hierarchy and interaction feedback throughout dashboard cards, navigation states, settings actions, and utility pages while preserving existing product capabilities and workflows.
+
+#### Brand
+
+- Rebuilt the project identity around the new Mizar orbit-weave ribbon mark and rolled it out to the WebUI, login motion, favicons, PWA icons, macOS AppIcon, Unraid artwork, READMEs, and packaged assets.
+- Added reusable SVG, transparent PNG, app-icon, favicon, motion-preview, and SHA-256 asset sets. The former MSM-style logo assets are archived for provenance and are no longer used by the current interface.
+- Added a fuller disclaimer and usage-boundary documentation to make clear that this is an independent open-source implementation with no official affiliation, authorization, or endorsement from other projects.
 
 #### Fixed
 
 - Fixed the missing application icon in macOS `MSF.app` release bundles. Added the complete `AppIcon` asset set and release checks for `AppIcon.icns`, the compiled asset catalog, and `CFBundleIconName` so iconless builds cannot be packaged again.
-- Refined the macOS AppIcon into a standard rounded-square icon with transparent outer corners, consistent safe-area spacing, and a macOS-appropriate light background while preserving the original MSF logo, lettering, and brand colors.
+- Refined the macOS AppIcon into a standard rounded-square icon with transparent outer corners, consistent safe-area spacing, and a macOS-appropriate light background, then updated it to the new Mizar mark for this release.
 
 ## v0.4.0 - 2026-07-29
 
