@@ -27,14 +27,18 @@ import SystemPage from "@/app/system/page";
 import { SettingsClient } from "@/app/settings/SettingsClient";
 import { SetupPage } from "@/pages/SetupPage";
 import { SingBoxPage } from "@/pages/SingBoxPage";
+import { LiquidGlassLab } from "@/pages/LiquidGlassLab";
+import { SceneBackdrop } from "@/components/liquid-glass/SceneBackdrop";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 
 function Splash() {
   return (
-    <div className="grid min-h-screen place-items-center bg-background text-foreground">
-      <div className="flex items-center gap-3 rounded-xl border bg-card px-5 py-4 shadow-sm">
+    <div className="gary-public-page grid min-h-screen place-items-center text-foreground">
+      <SceneBackdrop />
+      <GlassSurface material="thick" className="flex items-center gap-3 px-5 py-4">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
         <span className="text-sm text-muted-foreground">正在加载 MSF 管理平台</span>
-      </div>
+      </GlassSurface>
     </div>
   );
 }
@@ -113,6 +117,10 @@ export function App() {
       <Route path="/users" element={protectedRoute(<UsersPage />)} />
       <Route path="/settings" element={protectedRoute(<SettingsRoute />)} />
       <Route path="/system" element={protectedRoute(<SystemPage />)} />
+
+      {import.meta.env.DEV ? (
+        <Route path="/__liquid-glass-lab" element={protectedRoute(<LiquidGlassLab />)} />
+      ) : null}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "../styles/liquid-glass-tokens.css";
+@import "../styles/liquid-glass-scenes.css";
+@import "../styles/liquid-glass-materials.css";
+@import "../styles/liquid-glass-controls.css";
+@import "../styles/liquid-glass-motion.css";
+@import "../styles/liquid-glass-pages.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -117,7 +123,8 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background: var(--gary-scene-base);
   }
   html {
     @apply font-sans antialiased;
@@ -371,24 +378,16 @@
   }
 
   .glass-effect {
-    background: color-mix(in oklch, var(--card) 90%, transparent);
-    -webkit-backdrop-filter: blur(12px) saturate(150%);
-    backdrop-filter: blur(12px) saturate(150%);
-    border: 1px solid color-mix(in oklch, var(--border) 50%, transparent);
+    background: var(--gary-glass-fill-regular);
+    -webkit-backdrop-filter: blur(var(--gary-blur-regular)) saturate(var(--gary-saturate));
+    backdrop-filter: blur(var(--gary-blur-regular)) saturate(var(--gary-saturate));
+    border: 1px solid var(--gary-edge-dim);
   }
   .glass-effect-strong {
-    background: color-mix(in oklch, var(--card) 95%, transparent);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
-    backdrop-filter: blur(16px) saturate(160%);
-    border: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
-  }
-  .dark .glass-effect {
-    background: #171b1ee6;
-    border: 1px solid #2e343780;
-  }
-  .dark .glass-effect-strong {
-    background: #171b1ef2;
-    border: 1px solid #2e343799;
+    background: var(--gary-glass-fill-strong);
+    -webkit-backdrop-filter: blur(var(--gary-blur-regular)) saturate(var(--gary-saturate));
+    backdrop-filter: blur(var(--gary-blur-regular)) saturate(var(--gary-saturate));
+    border: 1px solid var(--gary-edge-dim);
   }
 
   .shadow-apple {
