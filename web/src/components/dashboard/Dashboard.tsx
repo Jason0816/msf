@@ -42,9 +42,9 @@ const RANGE_COUNTS: Record<string, number> = {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-right">{value}</span>
+    <div className="gary-solid-plate flex items-center justify-between gap-3 px-3 py-2.5">
+      <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
+      <span className="min-w-0 break-words text-right text-sm font-medium tabular-nums">{value}</span>
     </div>
   );
 }
@@ -68,7 +68,7 @@ function TimePills({
   onChange: (option: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 overflow-x-auto">
+    <div className="gary-solid-plate flex items-center gap-1 overflow-x-auto p-1">
       {options.map((option) => (
         <button
           type="button"
@@ -77,10 +77,10 @@ function TimePills({
           aria-pressed={option === active}
           title={`显示 ${RANGE_COUNTS[option] || HISTORY_LIMIT} 个点`}
           className={
-            "flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-all " +
+            "gary-segmented__item flex-shrink-0 px-2.5 py-1.5 text-[10px] font-medium " +
             (option === active
-              ? "bg-primary/10 text-primary border border-primary/20"
-              : "text-muted-foreground hover:bg-muted/50 border border-transparent")
+              ? "gary-segmented__item--active text-primary"
+              : "text-muted-foreground")
           }
         >
           {option}
@@ -92,10 +92,10 @@ function TimePills({
 
 function scaleButtonClass(active: boolean) {
   return (
-    "flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-all " +
+    "gary-segmented__item flex-shrink-0 px-2.5 py-1.5 text-[10px] font-medium " +
     (active
-      ? "bg-primary/10 text-primary border border-primary/20"
-      : "text-muted-foreground hover:bg-muted/50 border border-transparent")
+      ? "gary-segmented__item--active text-primary"
+      : "text-muted-foreground")
   );
 }
 
@@ -193,7 +193,7 @@ function ServiceCard({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">状态</span>
-            <span className={(running ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-muted text-muted-foreground") + " inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"}>
+            <span className={(running ? "text-green-700 dark:text-green-400" : "text-muted-foreground") + " gary-status-pill text-xs font-medium"}>
               <span className={(running ? "bg-green-500" : "bg-muted-foreground") + " w-1.5 h-1.5 rounded-full"} />
               {running ? "运行中" : "已停止"}
             </span>
@@ -201,19 +201,19 @@ function ServiceCard({
           <InfoLine label="CPU" value={formatPercent(service.cpu ?? service.cpu_percent)} />
           <InfoLine label="内存" value={typeof service.memory === "string" ? service.memory : formatBytes(service.memory_bytes ?? service.memory)} />
           <InfoLine label="运行时间" value={formatUptime(service.uptime ?? service.uptime_seconds)} />
-          <div className="flex gap-2 pt-2 border-t border-border/30">
+          <div className="flex gap-2 pt-2">
             {running ? (
-              <button onClick={() => void runAction("stop")} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
+              <button onClick={() => void runAction("stop")} className="gary-glass-button flex-1 gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-destructive">
                 <Square className="h-3.5 w-3.5" />
                 停止
               </button>
             ) : (
-              <button onClick={() => void runAction("start")} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-green-500/10 text-green-600 hover:bg-green-500/20 transition-colors">
+              <button onClick={() => void runAction("start")} className="gary-glass-button flex-1 gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-green-600 dark:text-green-400">
                 <Play className="h-3.5 w-3.5" />
                 启动
               </button>
             )}
-            <button onClick={() => void runAction("restart")} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+            <button onClick={() => void runAction("restart")} className="gary-glass-button flex-1 gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-primary">
               <RotateCw className="h-3.5 w-3.5" />
               重启
             </button>
@@ -344,7 +344,7 @@ export function Dashboard() {
         <DashboardCard title="硬件信息" icon={Cpu} compact={compact}>
           <div className="space-y-2">
             {rows.hardware.map((row) => <InfoLine key={row.label} {...row} />)}
-            <div className="py-2 border-b border-border/30 last:border-0">
+            <div className="gary-solid-plate px-3 py-2.5">
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-sm text-muted-foreground">硬盘使用率</span>
                 <span className="text-sm font-medium">{formatPercent(resource.disk_percent)}</span>
@@ -369,7 +369,7 @@ export function Dashboard() {
           }
         >
           <div className="flex flex-col h-full">
-            <div className="flex gap-2 flex-1 min-h-[150px]">
+            <div className="gary-solid-plate flex min-h-[150px] flex-1 gap-2 overflow-hidden p-3">
               <div className="flex flex-col justify-between text-[10px] text-muted-foreground py-1">
                 <span>{trendScaleMax}%</span><span>{Math.round(trendScaleMax / 2)}%</span><span>0%</span>
               </div>
@@ -410,7 +410,7 @@ export function Dashboard() {
           }
         >
           <div className="flex flex-col h-full">
-            <div className="flex gap-2 flex-1 min-h-[200px]">
+            <div className="gary-solid-plate flex min-h-[200px] flex-1 gap-2 overflow-hidden p-3">
               <div className="flex flex-col justify-between text-[10px] text-muted-foreground py-1">
                 <span>512K</span><span>256K</span><span>0</span>
               </div>
@@ -431,7 +431,7 @@ export function Dashboard() {
         <DashboardCard title="统计信息" icon={Activity} compact={compact}>
           <div className="space-y-2">
             {rows.stats.map((row) => (
-              <div key={row.label} className="p-2.5 rounded-[10px] bg-muted/30 border border-border/30 hover:bg-muted/50 transition-colors">
+              <div key={row.label} className="gary-solid-plate p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{row.label}</span>
                   <span className="text-sm font-medium">{row.value}</span>

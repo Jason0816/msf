@@ -17,6 +17,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { cn } from "@/lib/utils";
 import { apiData, apiList, formatBytes, formatPercent } from "@/lib/api";
 import { useApiPath } from "@/lib/use-api";
@@ -73,14 +75,15 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div
+    <GlassSurface
+      material="thick"
       className={cn(
-        "rounded-[12px] border bg-card text-card-foreground !border-border/20 !shadow-none overflow-hidden flex flex-col",
+        "flex min-h-0 flex-col text-card-foreground",
         className
       )}
     >
       {children}
-    </div>
+    </GlassSurface>
   );
 }
 
@@ -266,7 +269,7 @@ function QueryTrendChart({ trend }: { trend: QueryTrendData }) {
 
   return (
     <div
-      className="relative h-full w-full"
+      className="absolute inset-0 min-h-0 min-w-0"
       onMouseLeave={() => setHoverIndex(null)}
       onMouseMove={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -298,7 +301,7 @@ function QueryTrendChart({ trend }: { trend: QueryTrendData }) {
       </svg>
       {activeBucket ? (
         <div
-          className="pointer-events-none absolute top-7 z-20 w-[170px] rounded-lg border border-primary/50 bg-card/95 p-3 text-xs text-foreground shadow-lg backdrop-blur"
+          className="gary-popover pointer-events-none absolute top-7 z-20 w-[170px] p-3 text-xs text-foreground"
           style={{
             left: `${tooltipX}%`,
             transform: tooltipX > 68 ? "translateX(-100%)" : tooltipX < 32 ? "translateX(0)" : "translateX(-50%)",
@@ -371,9 +374,9 @@ function RankList({ rows, accent }: { rows: RankRow[]; accent: string }) {
   return (
     <div className="flex-1 space-y-3 overflow-y-auto p-4 scrollbar-thin">
       {rows.length === 0 ? (
-        <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">暂无数据</div>
+        <SolidPlate className="p-6 text-center text-sm text-muted-foreground">暂无数据</SolidPlate>
       ) : rows.map((r, i) => (
-        <div key={`${r.name}-${i}`} className="space-y-1">
+        <SolidPlate key={`${r.name}-${i}`} className="space-y-2 px-3 py-2.5">
           <div className="flex items-center gap-2">
             <span className="flex-shrink-0 w-5 h-5 rounded text-[11px] font-semibold flex items-center justify-center bg-muted text-muted-foreground">
               {i + 1}
@@ -389,7 +392,7 @@ function RankList({ rows, accent }: { rows: RankRow[]; accent: string }) {
           <div className="h-1 w-full rounded-full bg-muted overflow-hidden ml-7" style={{ width: "calc(100% - 1.75rem)" }}>
             <div className={cn("h-full rounded-full", r.danger ? "bg-red-500" : accent)} style={{ width: `${Math.min((r.pct ?? 0) * (r.danger ? 1 : 4), 100)}%` }} />
           </div>
-        </div>
+        </SolidPlate>
       ))}
     </div>
   );
@@ -430,7 +433,7 @@ function tileBg(color: string) {
 function MetricTile({ m }: { m: Metric }) {
   const Icon = metricIcons[m.icon];
   return (
-    <div className="rounded-[12px] border bg-card text-card-foreground !border-border/20 !shadow-none group">
+    <SolidPlate className="group">
       <div className="p-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -443,7 +446,7 @@ function MetricTile({ m }: { m: Metric }) {
           </div>
         </div>
       </div>
-    </div>
+    </SolidPlate>
   );
 }
 
@@ -596,7 +599,7 @@ export default function MosdnsOverviewPage() {
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-foreground">MosDNS 概述</h1>
-          <div className="flex items-center gap-2">
+          <div className="gary-status-pill flex items-center gap-2">
             <span className={cn("h-2 w-2 rounded-full", running ? "bg-green-500 animate-pulse" : "bg-gray-400")} />
             <span className="text-sm text-muted-foreground">{running ? "运行中" : "已停止"}</span>
           </div>
@@ -615,7 +618,7 @@ export default function MosdnsOverviewPage() {
                 </div>
               }
             />
-            <div className="p-4 flex-1 flex flex-col">
+            <div className="flex min-h-0 flex-1 flex-col p-4">
               <div className="flex items-end gap-6 mb-3">
                 <div>
                   <p className="text-2xl font-bold text-foreground leading-none">{formatCount(totalQueries)}</p>
@@ -626,7 +629,7 @@ export default function MosdnsOverviewPage() {
                   <p className="text-[10px] text-muted-foreground mt-1">平均耗时</p>
                 </div>
               </div>
-              <div className="flex-1 min-h-[120px] relative">
+              <div className="gary-solid-plate relative min-h-[120px] flex-1 overflow-hidden p-3">
                 <QueryTrendChart trend={trend} />
               </div>
               <div className="flex items-center gap-4 mt-2">
@@ -652,11 +655,11 @@ export default function MosdnsOverviewPage() {
                 </div>
               }
             />
-            <div className="p-4 space-y-3 overflow-y-auto scrollbar-thin max-h-[210px]">
+            <div className="scrollbar-thin max-h-[210px] space-y-3 overflow-y-auto p-4">
               {splitStats.length === 0 ? (
-                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">暂无分流统计</div>
+                <SolidPlate className="p-6 text-center text-sm text-muted-foreground">暂无分流统计</SolidPlate>
               ) : splitStats.map((r) => (
-                <div key={r.key} className="space-y-1.5">
+                <SolidPlate key={r.key} className="space-y-2 px-3 py-2.5">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-foreground">
                       <span className="font-medium">{r.name}</span>{" "}
@@ -669,7 +672,7 @@ export default function MosdnsOverviewPage() {
                   <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
                     <div className={cn("h-full rounded-full", r.color)} style={{ width: `${r.pct}%` }} />
                   </div>
-                </div>
+                </SolidPlate>
               ))}
             </div>
           </Card>
@@ -692,7 +695,7 @@ export default function MosdnsOverviewPage() {
 
         <Card className="h-[463px]">
           <CardHeader icon={Database} iconColor="text-primary" title="上游 DNS 统计" />
-          <div className="flex-1 overflow-auto scrollbar-thin">
+          <div className="gary-solid-plate scrollbar-thin m-4 flex-1 overflow-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border/50 text-xs text-muted-foreground">
@@ -746,6 +749,7 @@ export default function MosdnsOverviewPage() {
                       <h3 className="text-lg font-semibold text-foreground">{c.title}</h3>
                     </div>
                     <div className="space-y-3">
+                      <div className="space-y-2">
                       {[
                         ["请求总数", c.total, "text-foreground"],
                         ["缓存命中", c.hits, "text-foreground"],
@@ -754,11 +758,12 @@ export default function MosdnsOverviewPage() {
                         ["过期缓存命中率", `${c.staleRate.toFixed(2)}%`, "font-semibold text-amber-600 dark:text-amber-400"],
                         ["缓存条目数", c.entries, "font-semibold text-foreground"],
                       ].map(([label, value, vc]) => (
-                        <div key={label} className="flex justify-between items-center">
+                        <div key={label} className="gary-solid-plate flex items-center justify-between px-3 py-2">
                           <span className="text-sm text-muted-foreground">{label}</span>
                           <span className={cn("text-sm font-medium", vc)}>{value}</span>
                         </div>
                       ))}
+                      </div>
                       <div className="pt-3 mt-2 border-t border-border space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-xs font-medium text-muted-foreground">缓存分布</span>
@@ -796,12 +801,11 @@ export default function MosdnsOverviewPage() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-5 border border-primary/20 space-y-4">
+        <Card className="space-y-4 p-5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">运行指标</h3>
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
               </span>
               实时更新
@@ -822,7 +826,7 @@ export default function MosdnsOverviewPage() {
               {runtime.system.map((m) => <MetricTile key={m.label} m={m} />)}
             </div>
           </div>
-        </div>
+        </Card>
       </div>
     </AppShell>
   );

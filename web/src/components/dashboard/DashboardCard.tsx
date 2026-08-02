@@ -1,5 +1,6 @@
 import { GripVertical, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 
 interface DashboardCardProps {
   title: string;
@@ -19,13 +20,14 @@ export function DashboardCard({
   children,
 }: DashboardCardProps) {
   return (
-    <div
+    <GlassSurface
+      material="thick"
       className={cn(
-        "rounded-[12px] border bg-card text-card-foreground !border-border/20 !shadow-none hover:!shadow-sm transition-shadow overflow-hidden h-full flex flex-col animate-fade-in",
+        "flex h-full flex-col text-card-foreground animate-fade-in",
         className
       )}
     >
-      <div className={cn("flex items-center justify-between border-b border-border/50", compact ? "p-3" : "p-4")}>
+      <div className={cn("flex items-center justify-between border-b border-border/35", compact ? "p-3" : "p-4")}>
         <div className="flex items-center gap-2">
           <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab active:cursor-grabbing" />
           <Icon className="h-5 w-5 text-primary" />
@@ -34,6 +36,6 @@ export function DashboardCard({
         {headerRight}
       </div>
       <div className={cn("flex-1", compact ? "p-3" : "p-4")}>{children}</div>
-    </div>
+    </GlassSurface>
   );
 }
