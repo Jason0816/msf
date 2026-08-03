@@ -1040,6 +1040,25 @@ function InitConfigEditor({
           <p>开启会联动 Mihomo ipv6、dns.ipv6、FakeIPv6 捕获、NFT IPv6 规则、IPv6 policy route，以及 TUN/Docker IPv6 路由；关闭会卸载这些代理链路，但保留 FakeIPv6 前缀。</p>
           <p>此项不等同于 MosDNS“屏蔽 AAAA”。关闭数据面但允许 AAAA 时，客户端可能通过原生 IPv6 绕过 Mihomo；请同时检查 MosDNS 的 AAAA 屏蔽及 IPv4/IPv6 优先设置。</p>
         </div>
+        <div className="mt-4 overflow-hidden rounded-lg border border-border/70 text-sm">
+          <div className="grid grid-cols-[minmax(140px,0.8fr)_minmax(0,1.7fr)] border-b border-border/70 bg-muted/60 px-3 py-2 font-medium text-foreground">
+            <span>设置</span>
+            <span>控制内容</span>
+          </div>
+          {[
+            ["启用 IPv6 数据面", "Mihomo、FakeIPv6、NFT、policy route、TUN/Docker IPv6 接管"],
+            ["MosDNS 阻止 AAAA", "是否向客户端返回 AAAA"],
+            ["客户端使用哪个 DNS", "AAAA 从 MSF/MosDNS 还是其他 DNS 获取"],
+          ].map(([label, description], index) => (
+            <div
+              key={label}
+              className={`grid grid-cols-[minmax(140px,0.8fr)_minmax(0,1.7fr)] gap-3 px-3 py-2 ${index < 2 ? "border-b border-border/60" : ""}`}
+            >
+              <span className="font-medium text-foreground">{label}</span>
+              <span className="text-muted-foreground">{description}</span>
+            </div>
+          ))}
+        </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="IPv4 FakeIP 网段">
             <input
