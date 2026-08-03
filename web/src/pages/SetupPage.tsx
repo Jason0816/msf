@@ -1551,6 +1551,7 @@ export function SetupPage() {
                       <p>开启后会联动 Mihomo 顶层 ipv6、dns.ipv6、FakeIPv6 捕获、NFT IPv6 规则、IPv6 policy route，以及 TUN/Docker IPv6 路由；关闭后保留 FakeIPv6 前缀配置，但卸载这些 IPv6 代理链路。</p>
                       <p>此开关不等同于 MosDNS 的“屏蔽 AAAA”。若关闭 IPv6 数据面但 MosDNS 仍允许 AAAA，客户端可能获得真实 IPv6 地址并通过原生 IPv6 绕过 Mihomo。请同时在 MosDNS 系统设置中确认 AAAA 屏蔽与 IPv4/IPv6 优先级。</p>
                       <p>修改 FakeIPv6 网段会清理相关缓存；若当前 Mihomo 不支持在线清理，系统会短暂重启服务并重建缓存。自定义配置模式下需先手工对齐 active config，否则保存会被拒绝。</p>
+                      <p>若修改后个别网页仍无法访问，请停止 Mihomo，仅清除用户数据目录下的 Mihomo FakeIP 缓存后再启动；不要删除配置或订阅。详细路径见常见问题 FAQ。</p>
                     </div>
                   </div>
                 </div>

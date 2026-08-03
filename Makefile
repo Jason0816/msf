@@ -1,4 +1,4 @@
-.PHONY: dev build frontend import-web package release-package release-assets checksums verify-release-source verify-release-assets unraid fnos test audit-compliance macos-app-project macos-app-test macos-app-build macos-app-build-debug macos-app-build-release macos-app-build-release-assets macos-app-build-signed macos-app-verify macos-release-assets macos-release-assets-signed macos-app-open clean
+.PHONY: dev build frontend import-web package release-package release-assets checksums verify-release-source verify-release-assets unraid fnos test test-dns-fixture test-e2e-ipv6 audit-compliance macos-app-project macos-app-test macos-app-build macos-app-build-debug macos-app-build-release macos-app-build-release-assets macos-app-build-signed macos-app-verify macos-release-assets macos-release-assets-signed macos-app-open clean
 
 APP_NAME := msf
 DIST := dist
@@ -121,6 +121,12 @@ dev:
 
 test:
 	go test ./...
+
+test-dns-fixture:
+	npm run test:dns-fixture
+
+test-e2e-ipv6:
+	npm run test:e2e:ipv6
 
 audit-compliance:
 	scripts/audit-compliance.sh

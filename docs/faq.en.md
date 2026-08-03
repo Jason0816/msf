@@ -32,3 +32,11 @@ sudo lsof -i:53
 ```
 
 If the process is not `systemd-resolved`, do not apply the setting above. Stop the service shown by `lsof`, or change that service's listen port/address.
+
+## 2. What should I do if some sites stop working after changing the FakeIPv6 range?
+
+Mihomo may still have old FakeIP domain mappings in its cache. Stop Mihomo in MSF, remove only the Mihomo FakeIP cache files under the MSF user data directory, and then start Mihomo again.
+
+Common cache locations include `configs/mihomo/cache.db`, `configs/mihomo/.cache/cache.db`, and `configs/mihomo/fakeip.cache`; the actual files vary by Mihomo version. Do not remove the Mihomo configuration, subscriptions, or other user data. Back up the cache files before removing them.
+
+If the issue remains, confirm that `dns.fake-ip-range6` in the active Mihomo configuration contains the new range, then renew the client's DNS result or clear its DNS cache.

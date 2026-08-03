@@ -1076,6 +1076,9 @@ function InitConfigEditor({
               className={`${inputClass} h-12 text-base`}
             />
             {!draft.ipv6 ? <p className="mt-1 text-xs text-amber-600">已保存但未激活；重新开启 IPv6 时会继续使用此网段。</p> : null}
+            <p className="mt-1 text-xs text-muted-foreground">
+              修改后若个别网页仍无法访问，请停止 Mihomo，仅清除用户数据目录下的 Mihomo FakeIP 缓存后再启动；不要删除配置或订阅。
+            </p>
           </Field>
         </div>
       </SectionBox>

@@ -32,3 +32,11 @@ sudo lsof -i:53
 ```
 
 如果占用者不是 `systemd-resolved`，不要套用上述配置；请根据 `lsof` 输出的服务名称停止对应服务，或修改它的监听端口/地址。
+
+## 2. 修改 FakeIPv6 网段后，个别网页无法访问怎么办？
+
+这通常是 Mihomo 仍保留旧的 FakeIP 域名映射。请先在 MSF 中停止 Mihomo，清除 MSF 用户数据目录下的 Mihomo FakeIP 缓存，再重新启动 Mihomo。
+
+常见缓存文件包括 `configs/mihomo/cache.db`、`configs/mihomo/.cache/cache.db` 和 `configs/mihomo/fakeip.cache`；不同 Mihomo 版本实际生成的文件可能不同。只清理缓存文件，不要删除 Mihomo 配置、订阅或其他用户数据。执行前建议先备份对应文件。
+
+如果重新启动后仍异常，请确认当前 Mihomo 配置中的 `dns.fake-ip-range6` 已更新为新网段，并让客户端重新获取 DNS 结果或清除客户端 DNS 缓存。

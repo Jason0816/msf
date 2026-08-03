@@ -1,6 +1,10 @@
 {
   "name": "msf",
   "private": true,
+  "scripts": {
+    "test:dns-fixture": "python3 tests/fixtures/dns/test_fixture.py",
+    "test:e2e:ipv6": "node tests/e2e/ipv6-settings.mjs"
+  },
   "dependencies": {
     "playwright": "^1.60.0"
   },
