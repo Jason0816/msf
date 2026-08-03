@@ -4,12 +4,12 @@
 
 Docker `host-tun` 与 `macvlan-tun` 已正式收口为 TUN-only。初始化界面不会提供 nftables，后端也会拒绝 Docker 环境的 nftables 请求。
 
-当前版本：`v0.4.1`
+当前版本：`v0.4.2`
 
 当前 Docker 镜像：
 
 ```text
-ghcr.io/scoltzero/msf:v0.4.1
+ghcr.io/scoltzero/msf:v0.4.2
 ```
 
 发布流程同时推送版本化 tag 与 `latest`；生产部署仍建议固定使用明确的版本 tag。
@@ -67,7 +67,7 @@ host TUN 使用宿主机 IP 对外提供 WebUI、DNS 和代理服务。
 ```yaml
 services:
   msf:
-    image: ghcr.io/scoltzero/msf:v0.4.1
+    image: ghcr.io/scoltzero/msf:v0.4.2
     container_name: msf
     network_mode: host
     cap_add:
@@ -95,7 +95,7 @@ docker compose up -d
 
 默认 compose 文件使用：
 
-- 镜像：`ghcr.io/scoltzero/msf:v0.4.1`
+- 镜像：`ghcr.io/scoltzero/msf:v0.4.2`
 - 网络：`host`
 - 数据目录：`./msf-data:/opt/msf`
 - WebUI：`http://<宿主机IP>:7777`
@@ -126,7 +126,7 @@ docker run -d \
   -e MSF_DOCKER_NETWORK_MODE=host-tun \
   -e MSF_DATA_DIR=/opt/msf \
   -v "$PWD/msf-data:/opt/msf" \
-  ghcr.io/scoltzero/msf:v0.4.1
+  ghcr.io/scoltzero/msf:v0.4.2
 ```
 
 ## 快速启动：macvlan TUN
@@ -140,7 +140,7 @@ macvlan TUN 给容器分配独立 LAN IPv4。路由器侧 DHCP DNS 和 FakeIP �
 ```yaml
 services:
   msf:
-    image: ${MSF_IMAGE:-ghcr.io/scoltzero/msf:v0.4.1}
+    image: ${MSF_IMAGE:-ghcr.io/scoltzero/msf:v0.4.2}
     container_name: ${MSF_CONTAINER_NAME:-msf}
     cap_add:
       - NET_ADMIN
@@ -181,7 +181,7 @@ cp docker.env.example .env
 也可以直接复制下面这个 macvlan compose `.env` 示例保存为 `.env` 后修改：
 
 ```text
-MSF_IMAGE=ghcr.io/scoltzero/msf:v0.4.1
+MSF_IMAGE=ghcr.io/scoltzero/msf:v0.4.2
 MSF_CONTAINER_NAME=msf
 MSF_DOCKER_DATA_DIR=./msf-data
 MSF_DOCKER_NETWORK_NAME=msf-macvlan
@@ -388,7 +388,7 @@ fi
 
 | 变量 | 默认值 | 用途 |
 |---|---|---|
-| `MSF_IMAGE` | `ghcr.io/scoltzero/msf:v0.4.1` | 容器镜像 |
+| `MSF_IMAGE` | `ghcr.io/scoltzero/msf:v0.4.2` | 容器镜像 |
 | `MSF_CONTAINER_NAME` | `msf` | 容器名称 |
 | `MSF_DOCKER_DATA_DIR` | `$PWD/msf-data` | 宿主机数据目录 |
 | `MSF_DOCKER_NETWORK_MODE` | `host-tun` | `host-tun` 或 `macvlan-tun` |
@@ -503,7 +503,7 @@ docker compose up -d
 普通 Docker：
 
 ```bash
-docker pull ghcr.io/scoltzero/msf:v0.4.1
+docker pull ghcr.io/scoltzero/msf:v0.4.2
 docker stop msf
 docker rm msf
 ./docker-run.sh

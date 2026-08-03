@@ -1,5 +1,59 @@
 # 更新日志
 
+## v0.4.2 - 2026-08-03
+
+### 中文
+
+#### 说明
+
+- v0.4.2 完成 IPv6、FakeIPv6 与 MosDNS 配置链路的端到端修复，使 WebUI、数据库、Mihomo、MosDNS、nftables、TUN、策略路由与 Docker host-tun 使用一致的启用状态和 FakeIP 网段。
+- Linux、Unraid、fnOS、macOS 与 Docker 继续从 `main` 上同一个干净 tag 构建。GitHub Release 提供与 v0.4.1 一致的 20 个安装资产及 SHA-256 文件，GHCR 同时发布 `v0.4.2` 与 `latest` 多架构镜像。
+- macOS App 仍为未使用 Apple Developer ID 签名或公证的 TUN-only Beta；首次打开需要用户手动允许。
+
+#### 新增
+
+- 新增统一的 IPv4/IPv6 FakeIP CIDR 规范化、地址族校验和运行配置一致性检查，自定义 FakeIPv6 网段可确定性写入 Mihomo、MosDNS、network.yaml、nftables、TUN 与 Docker 路由。
+- 新增 MosDNS 托管配置渲染，支持 ECS 与上游覆盖写入实际运行 YAML，并明确区分 IPv6 主开关、阻止 AAAA、自动、IPv4 优先和 IPv6 优先策略。
+- 新增 DNS fixture、IPv6 设置 E2E 脚本和后端完整性测试，覆盖 partial save、FakeIP cache 回退、IPv6 路由清理、A/AAAA 策略以及 generated/custom 配置一致性。
+
+#### 修复
+
+- 修复关闭 IPv6 后仍残留 IPv6 nftables、TUN、fwmark rule 或 table 100 local route，以及 FakeIPv6 网段在不同组件之间不一致的问题。
+- 修复设置和初始化接口遗漏字段时重置 FakeIP 网段、订阅、节点或其他配置的问题；配置变更现在串行执行，并在生成、缓存处理、网络应用或服务重启失败时安全回滚。
+- 修复 Mihomo controller 不支持 FakeIP cache 热清理时阻止网段切换的问题，增加停服重建缓存的事务式回退；同时修正系统设置中的 IPv6 状态说明与相关交互反馈。
+- 修复 MosDNS 规则编辑弹窗受页面布局影响而无法稳定居中于视口的问题。
+
+#### 文档
+
+- 补充 IPv6 数据面控制、AAAA 直连风险、FakeIP 网段切换与 MosDNS 协议优先级说明，并保留完整实施和验证计划。
+- README 改用透明背景的 Mizar 动态 Logo，改善浅色与深色页面中的展示效果。
+
+### English
+
+#### Notes
+
+- v0.4.2 completes the end-to-end IPv6, FakeIPv6, and MosDNS configuration flow so the WebUI, database, Mihomo, MosDNS, nftables, TUN, policy routing, and Docker host-tun share one effective state and FakeIP prefix set.
+- Linux, Unraid, fnOS, macOS, and Docker continue to be built from one clean tag on `main`. GitHub Release provides the same 20 installation and SHA-256 assets as v0.4.1, while GHCR publishes the multi-architecture `v0.4.2` and `latest` images.
+- The macOS app remains an unsigned and unnotarized TUN-only Beta. Users must explicitly allow its first launch.
+
+#### Added
+
+- Added shared IPv4/IPv6 FakeIP CIDR normalization, address-family validation, and runtime consistency checks. Custom FakeIPv6 prefixes are now rendered deterministically across Mihomo, MosDNS, network.yaml, nftables, TUN, and Docker routes.
+- Added managed MosDNS rendering for ECS and upstream overrides, with explicit separation between the main IPv6 switch, AAAA blocking, automatic selection, IPv4 preference, and IPv6 preference.
+- Added DNS fixtures, an IPv6 settings E2E script, and backend coverage for partial saves, FakeIP cache fallback, IPv6 route cleanup, A/AAAA policy, and generated/custom configuration consistency.
+
+#### Fixed
+
+- Fixed stale IPv6 nftables, TUN, fwmark rules, and table 100 local routes remaining after IPv6 was disabled, along with mismatched FakeIPv6 prefixes between runtime components.
+- Fixed settings and setup requests resetting FakeIP prefixes, subscriptions, nodes, or other omitted fields. Configuration mutations are now serialized and safely rolled back when generation, cache handling, network application, or service restart fails.
+- Fixed FakeIPv6 prefix changes being blocked when the Mihomo controller lacks hot FakeIP-cache deletion by adding a transactional stopped-service cache rebuild fallback. Also corrected IPv6 state descriptions and related interaction feedback in system settings.
+- Fixed MosDNS rule editor dialogs being positioned by page layout instead of remaining centered in the viewport.
+
+#### Documentation
+
+- Documented IPv6 data-plane controls, real-AAAA bypass risk, FakeIP prefix changes, and MosDNS protocol preference behavior, together with the complete implementation and validation plans.
+- Updated the README to use the transparent animated Mizar logo for improved presentation on light and dark surfaces.
+
 ## v0.4.1 - 2026-08-02
 
 # 从此版本开始本项目不再完全借鉴msm项目的UI实现，并且为了防止引起不必要的误会，现也重构了项目logo。

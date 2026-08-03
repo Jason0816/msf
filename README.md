@@ -10,7 +10,7 @@
 
 `msf` 是一个面向 MosDNS + Mihomo 工作流的独立开源管理工具。项目目标是为合法、授权的网络环境提供可自部署、可审计的 DNS 策略解析、流量转发、Mihomo 管理和多平台安装体验；从 v0.4.1 起，WebUI 与项目品牌均采用独立设计。
 
-当前发布版本：`v0.4.1`
+当前发布版本：`v0.4.2`
 
 > [!IMPORTANT]
 > 本项目仅用于网络、DNS、流量转发及开源软件部署与管理相关的技术研究、交流和分享。本项目不提供代理节点、代理订阅、账号或访问凭据，也不提供针对网络监管措施、内容过滤或访问控制的规避教程。使用者必须遵守适用法律法规并自行承担使用本项目产生的风险和责任。下载、部署或使用前，请阅读完整的[免责声明](DISCLAIMER.md)。
@@ -58,18 +58,18 @@
 GitHub Release：
 
 ```text
-https://github.com/scoltzero/msf/releases/tag/v0.4.1
+https://github.com/scoltzero/msf/releases/tag/v0.4.2
 ```
 
 | 资产 | 下载地址 |
 |---|---|
-| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf-linux-amd64.tar.gz` |
-| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf-linux-arm64.tar.gz` |
-| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf_0.4.1_x86.fpk` |
-| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf_0.4.1_arm.fpk` |
-| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.1/msf.plg` |
-| macOS Universal 2 DMG（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.1/MSF-0.4.1-macos-universal-unsigned.dmg` |
-| macOS Universal 2 ZIP（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.1/MSF-0.4.1-macos-universal-unsigned.zip` |
+| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf-linux-amd64.tar.gz` |
+| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf-linux-arm64.tar.gz` |
+| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf_0.4.2_x86.fpk` |
+| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf_0.4.2_arm.fpk` |
+| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf.plg` |
+| macOS Universal 2 DMG（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.2/MSF-0.4.2-macos-universal-unsigned.dmg` |
+| macOS Universal 2 ZIP（未签名 Beta） | `https://github.com/scoltzero/msf/releases/download/v0.4.2/MSF-0.4.2-macos-universal-unsigned.zip` |
 
 ## 快速开始
 

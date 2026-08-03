@@ -6,10 +6,10 @@ MSF v0.4.0 首次提供 macOS Beta 版菜单栏 App，最低支持 macOS 15，�
 
 ## 下载与安装
 
-从 [v0.4.1 GitHub Release](https://github.com/scoltzero/msf/releases/tag/v0.4.1) 下载：
+从 [v0.4.2 GitHub Release](https://github.com/scoltzero/msf/releases/tag/v0.4.2) 下载：
 
-- `MSF-0.4.1-macos-universal-unsigned.dmg`：推荐安装包。
-- `MSF-0.4.1-macos-universal-unsigned.zip`：直接解压版本。
+- `MSF-0.4.2-macos-universal-unsigned.dmg`：推荐安装包。
+- `MSF-0.4.2-macos-universal-unsigned.zip`：直接解压版本。
 - 对应的 `.sha256`：用于校验下载文件。
 
 首个 macOS Beta 未使用 Apple Developer ID 签名，也未提交 Apple 公证。使用 DMG 时，将 `MSF.app` 拖入 `/Applications`，然后在 Finder 中按住 Control 点击或右键 `MSF.app`，选择“打开”并再次确认。若系统仍阻止启动，请到“系统设置 → 隐私与安全”找到 MSF 的拦截提示并选择“仍要打开”。该确认只应对从本项目 GitHub Release 下载且 SHA-256 校验正确的文件执行。
