@@ -1,7 +1,7 @@
 # msf
 
 <p align="center">
-  <img src="docs/brand-assets/mizar/motion/msf-mizar-orbit-weave-preview.gif" alt="MSF Mizar 丝带交织动态 Logo" width="320">
+  <img src="docs/brand-assets/mizar/motion/msf-mizar-orbit-weave-transparent.webp" alt="MSF Mizar 丝带交织透明动态 Logo" width="320">
 </p>
 
 [English README](README.en.md)
