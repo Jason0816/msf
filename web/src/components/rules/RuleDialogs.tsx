@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Check,
@@ -11,7 +12,50 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-/** Shared centered modal backdrop + card frame (matches site's rounded-3xl gradient dialog). */
+/**
+ * Render rule dialogs at the document root so page transitions, long lists, and
+ * transformed glass containers cannot turn viewport-fixed positioning into
+ * container-relative positioning.
+ */
+function ModalViewport({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain p-3 sm:p-4">
+      <div
+        className="absolute inset-0 bg-slate-950/25 dark:bg-black/50 animate-fade-in"
+        aria-hidden="true"
+        onClick={onClose}
+      />
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+/** Shared centered modal card frame (matches site's rounded-3xl gradient dialog). */
 function ModalShell({
   onClose,
   children,
@@ -21,24 +65,16 @@ function ModalShell({
   children: React.ReactNode;
   className?: string;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <ModalViewport onClose={onClose}>
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
-        onClick={onClose}
-      />
-      <div
-        className={`relative w-full ${className} bg-gradient-to-br from-background via-background to-muted/20 rounded-3xl border-2 border-border/50 shadow-2xl max-h-[90vh] overflow-auto animate-scale-in`}
+        role="dialog"
+        aria-modal="true"
+        className={`relative w-full ${className} max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-gradient-to-br from-background via-background to-muted/20 rounded-3xl border-2 border-border/50 shadow-2xl animate-scale-in`}
       >
         {children}
       </div>
-    </div>
+    </ModalViewport>
   );
 }
 
@@ -173,9 +209,12 @@ export function AddRuleSetModal({
   const canSubmit = Boolean(name.trim() && url.trim() && type.trim());
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <div className="relative w-full max-w-[680px] max-h-[92vh] overflow-hidden rounded-lg border border-slate-900/70 bg-background shadow-2xl animate-scale-in">
+    <ModalViewport onClose={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative w-full max-w-[680px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden rounded-lg border border-slate-900/70 bg-background shadow-2xl animate-scale-in"
+      >
         <div className="relative border-b border-slate-900/70 bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 px-5 py-5 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
           <button
             type="button"
@@ -192,7 +231,7 @@ export function AddRuleSetModal({
           </p>
         </div>
 
-        <div className="max-h-[calc(92vh-168px)] overflow-y-auto px-5 py-5">
+        <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-5 py-5">
           <div className="space-y-5">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-foreground">规则名称</label>
@@ -304,7 +343,7 @@ export function AddRuleSetModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalViewport>
   );
 }
 
