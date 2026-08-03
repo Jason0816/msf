@@ -1522,8 +1522,8 @@ export function SetupPage() {
                       <div className="text-sm font-semibold">IPv6 设置</div>
                     </div>
                     <ToggleRow
-                      title="启用 IPv6"
-                      description="开启后代理核心将支持 IPv6 流量处理，关闭则仅处理 IPv4 流量。如果您的网络不支持 IPv6，请务必关闭此选项"
+                      title="启用 IPv6 数据面"
+                      description="控制 MSF/Mihomo IPv6 代理数据面；不会关闭主机或路由器的原生 IPv6，也不等同于 MosDNS 屏蔽 AAAA。"
                       checked={form.enableIPv6}
                       onChange={(checked) => update("enableIPv6", checked)}
                     />
@@ -1546,7 +1546,12 @@ export function SetupPage() {
                         <input className={cn(inputClass, "h-8 text-xs")} value={form.fakeIPRangeV6} onChange={(event) => update("fakeIPRangeV6", event.target.value)} />
                       </Field>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">💡 提示：Fake-IP 网段修改功能正在开发中，当前仅支持查看默认配置</p>
+                    <div className="mt-3 space-y-1 text-xs leading-5 text-muted-foreground">
+                      <p>此开关控制 MSF/Mihomo 的 IPv6 代理数据面，不会关闭操作系统、路由器或运营商提供的原生 IPv6。</p>
+                      <p>开启后会联动 Mihomo 顶层 ipv6、dns.ipv6、FakeIPv6 捕获、NFT IPv6 规则、IPv6 policy route，以及 TUN/Docker IPv6 路由；关闭后保留 FakeIPv6 前缀配置，但卸载这些 IPv6 代理链路。</p>
+                      <p>此开关不等同于 MosDNS 的“屏蔽 AAAA”。若关闭 IPv6 数据面但 MosDNS 仍允许 AAAA，客户端可能获得真实 IPv6 地址并通过原生 IPv6 绕过 Mihomo。请同时在 MosDNS 系统设置中确认 AAAA 屏蔽与 IPv4/IPv6 优先级。</p>
+                      <p>修改 FakeIPv6 网段会清理相关缓存；若当前 Mihomo 不支持在线清理，系统会短暂重启服务并重建缓存。自定义配置模式下需先手工对齐 active config，否则保存会被拒绝。</p>
+                    </div>
                   </div>
                 </div>
               )}

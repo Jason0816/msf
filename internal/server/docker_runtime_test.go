@@ -606,6 +606,15 @@ func TestPolicyRouteCommandsAreIdempotent(t *testing.T) {
 	if len(deletes) != 32 {
 		t.Fatalf("policyRouteRuleDeleteCommands len=%d, want 32", len(deletes))
 	}
+	reconcile := strings.Join(flattenCommandArgs(policyRouteReconcileDeleteCommands()), "\n")
+	for _, want := range []string{
+		"ip route del local 0.0.0.0/0 dev lo table 100",
+		"ip -6 route del local ::/0 dev lo table 100",
+	} {
+		if !strings.Contains(reconcile, want) {
+			t.Fatalf("reconcile commands missing %q:\n%s", want, reconcile)
+		}
+	}
 	install := strings.Join(flattenCommandArgs(policyRouteInstallCommands(true)), "\n")
 	for _, want := range []string{
 		"ip rule add fwmark 1 table 100",

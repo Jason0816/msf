@@ -835,9 +835,11 @@ func (a *App) renderMosDNSYAML(cfg SetupConfig) string {
 		content = strings.ReplaceAll(content, "28.0.0.0/8", fakeIPv4RouteCIDR(cfg.FakeIPRangeV4))
 		content = strings.ReplaceAll(content, "2001:2::/64", fakeIPv6RouteCIDR(cfg.FakeIPRangeV6))
 		content = strings.ReplaceAll(content, "f2b0::/18", fakeIPv6RouteCIDR(cfg.FakeIPRangeV6))
+		content = removeMosDNSInlinePriority(content)
 		if !cfg.EnableIPv6 {
 			content = addMosDNSRealAAAABypass(content)
 		}
+		content = addMosDNSClientPriorityWrapper(content)
 		return content
 	}
 	return fmt.Sprintf(`log:
@@ -898,8 +900,54 @@ plugins:
 `, filepath.ToSlash(filepath.Join(a.DataDir, "logs/mosdns.log")))
 }
 
+func removeMosDNSInlinePriority(content string) string {
+	const priority = `      - matches:
+        - switch8 'A'                       #Prefer IPV4开
+        - switch10 'B'                      #Prefer IPV6关
+        exec: prefer_ipv4
+      - matches:
+        - switch8 'B'                       #Prefer IPV4关
+        - switch10 'A'                      #Prefer IPV6开
+        exec: prefer_ipv6`
+	return strings.ReplaceAll(content, "\n"+priority, "")
+}
+
+func addMosDNSClientPriorityWrapper(content string) string {
+	const marker = "\n#对外服务器"
+	const wrapper = `
+
+  - tag: forward_priority_core
+    type: forward
+    args:
+      concurrent: 1
+      upstreams:
+        - addr: "udp://127.0.0.1:5656"
+
+  - tag: sequence_client
+    type: sequence
+    args:
+      - matches:                            #客户端入口优先阻止AAAA
+        - "qtype 28"
+        - switch6 'A'
+        exec: reject 0
+      - matches:
+        - switch8 'A'                       #Prefer IPV4开
+        - switch10 'B'                      #Prefer IPV6关
+        exec: prefer_ipv4
+      - matches:
+        - switch8 'B'                       #Prefer IPV4关
+        - switch10 'A'                      #Prefer IPV6开
+        exec: prefer_ipv6
+      - exec: $forward_priority_core`
+	content = strings.Replace(content, marker, wrapper+marker, 1)
+	for i := 0; i < 2; i++ {
+		content = strings.Replace(content, "entry: sequence_6666", "entry: sequence_client", 1)
+	}
+	return content
+}
+
 func addMosDNSRealAAAABypass(content string) string {
-	const block = `      - matches:                            #阻止AAAA类型的dns查询
+	const blockAAAA = `      - matches:                            #阻止AAAA类型的dns查询
         - "qtype 28"
         - switch6 'A'
         exec: reject 0`
@@ -910,7 +958,7 @@ func addMosDNSRealAAAABypass(content string) string {
         exec:
           - $sequence_google
           - exit`
-	return strings.ReplaceAll(content, block, block+bypass)
+	return strings.ReplaceAll(content, blockAAAA, blockAAAA+bypass)
 }
 
 func mssbMainSplitServerYAML() string {

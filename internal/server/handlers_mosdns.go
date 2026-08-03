@@ -130,6 +130,7 @@ func (a *App) registerMosDNSRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/mosdns/system/routing/scheduler", a.handleMosDNSRoutingSchedulerPut)
 	mux.HandleFunc("GET /api/v1/mosdns/system/switches", a.handleMosDNSSystemSwitches)
 	mux.HandleFunc("POST /api/v1/mosdns/system/switches", a.handleMosDNSSwitchesPutCompat)
+	mux.HandleFunc("PUT /api/v1/mosdns/system/priority", a.handleMosDNSResolutionPriorityPut)
 	mux.HandleFunc("GET /api/v1/mosdns/system/upstream-overrides", a.handleMosDNSUpstreamOverrides)
 	mux.HandleFunc("POST /api/v1/mosdns/system/upstream-overrides", a.handleMosDNSUpstreamOverridesPut)
 }
@@ -1313,6 +1314,49 @@ func (a *App) handleMosDNSSwitchesPutCompat(w http.ResponseWriter, r *http.Reque
 	}
 	_ = a.rewriteMosDNSSwitchFile()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": a.mosDNSSwitchMap()})
+}
+
+func (a *App) handleMosDNSResolutionPriorityPut(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Priority string `json:"priority"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	var ipv4First, ipv6First bool
+	switch strings.ToLower(strings.TrimSpace(req.Priority)) {
+	case "auto":
+	case "ipv4":
+		ipv4First = true
+	case "ipv6":
+		ipv6First = true
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_priority", "priority must be auto, ipv4, or ipv6")
+		return
+	}
+	tx, err := a.DB.Begin()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	now := time.Now()
+	for key, enabled := range map[string]bool{"switch8": ipv4First, "switch10": ipv6First} {
+		if _, err = tx.Exec(`insert into mosdns_switch_states(switch_key,enabled,created_at,updated_at) values(?,?,?,?) on conflict(switch_key) do update set enabled=excluded.enabled,updated_at=excluded.updated_at`, key, enabled, now, now); err != nil {
+			_ = tx.Rollback()
+			writeError(w, http.StatusInternalServerError, "db_error", err.Error())
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	if err := a.rewriteMosDNSSwitchFile(); err != nil {
+		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "priority": strings.ToLower(strings.TrimSpace(req.Priority)), "data": a.mosDNSSwitchMap()})
 }
 
 func (a *App) setMosDNSSwitchState(key string, enabled bool) {

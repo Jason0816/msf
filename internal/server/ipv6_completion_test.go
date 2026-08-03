@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -71,6 +72,23 @@ func TestIPv6GeneratedArtifactsSharePrefixAndDisableDataPlane(t *testing.T) {
 	mosdns := app.renderMosDNSYAML(disabled)
 	if count := strings.Count(mosdns, "IPv6 数据面关闭时显式返回真实 AAAA"); count != 2 {
 		t.Fatalf("real AAAA bypass count=%d, want 2", count)
+	}
+	if strings.Count(mosdns, "entry: sequence_client") != 2 || strings.Count(mosdns, "entry: sequence_6666") != 2 {
+		t.Fatal("client UDP/TCP entries must use the priority wrapper while the internal core stays independent")
+	}
+	wrapperStart := strings.Index(mosdns, "tag: sequence_client")
+	if wrapperStart < 0 {
+		t.Fatal("MosDNS client priority wrapper is missing")
+	}
+	wrapperEnd := strings.Index(mosdns[wrapperStart:], "#对外服务器")
+	if wrapperEnd < 0 {
+		t.Fatal("MosDNS client priority wrapper is incomplete")
+	}
+	wrapper := mosdns[wrapperStart : wrapperStart+wrapperEnd]
+	for _, want := range []string{"switch6 'A'", "exec: prefer_ipv4", "exec: prefer_ipv6", "exec: $forward_priority_core"} {
+		if !strings.Contains(wrapper, want) {
+			t.Fatalf("MosDNS client priority wrapper missing %q", want)
+		}
 	}
 }
 
@@ -173,5 +191,122 @@ func TestMosDNSPrioritySwitchesAreMutuallyExclusive(t *testing.T) {
 	switches := app.mosDNSSwitchMap()
 	if switches["switch8"] || !switches["switch10"] {
 		t.Fatalf("priority switches should be mutually exclusive: %#v", switches)
+	}
+}
+
+func TestMosDNSPriorityAPIUpdatesBothSwitchesAtomically(t *testing.T) {
+	app := newTestApp(t)
+	token := tokenForRole(t, app, "admin")
+	for _, test := range []struct {
+		priority string
+		ipv4     bool
+		ipv6     bool
+	}{
+		{priority: "auto"},
+		{priority: "ipv4", ipv4: true},
+		{priority: "ipv6", ipv6: true},
+	} {
+		res := requestJSON(t, app, http.MethodPut, "/api/v1/mosdns/system/priority", token, map[string]any{"priority": test.priority})
+		if res.Code != http.StatusOK {
+			t.Fatalf("priority %s status=%d body=%s", test.priority, res.Code, res.Body.String())
+		}
+		switches := app.mosDNSSwitchMap()
+		if switches["switch8"] != test.ipv4 || switches["switch10"] != test.ipv6 || (switches["switch8"] && switches["switch10"]) {
+			t.Fatalf("priority %s produced invalid switches: %#v", test.priority, switches)
+		}
+	}
+	res := requestJSON(t, app, http.MethodPut, "/api/v1/mosdns/system/priority", token, map[string]any{"priority": "invalid"})
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("invalid priority status=%d body=%s", res.Code, res.Body.String())
+	}
+}
+
+func TestPartialIPv6SavesPreserveDatabaseProviderFields(t *testing.T) {
+	app := newTestApp(t)
+	token := tokenForRole(t, app, "admin")
+	initial := requestJSON(t, app, http.MethodPut, "/api/v1/setup/config", token, map[string]any{
+		"username":           "root",
+		"selected_interface": "eth0",
+		"proxy_core":         "mihomo",
+		"mos_dns_enabled":    true,
+		"enable_ipv6":        false,
+		"subscription_urls":  "https://example.com/sub",
+		"mihomo_proxies":     "- name: manual-node\n  type: socks5\n  server: 127.0.0.1\n  port: 1080",
+	})
+	if initial.Code != http.StatusOK {
+		t.Fatalf("initial config status=%d body=%s", initial.Code, initial.Body.String())
+	}
+	active := filepath.Join(app.DataDir, mihomoActiveConfigRelPath)
+	if err := os.WriteFile(active, []byte("ipv6: false\ndns:\n  ipv6: false\nproxy-providers: {}\nproxies: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	partial := requestJSON(t, app, http.MethodPut, "/api/v1/setup/config", token, map[string]any{"enable_ipv6": false})
+	if partial.Code != http.StatusOK {
+		t.Fatalf("partial setup status=%d body=%s", partial.Code, partial.Body.String())
+	}
+	cfg, _, ok := app.latestSetupConfigForSettingsRaw()
+	if !ok || cfg.SubscriptionURLs != "https://example.com/sub" || !strings.Contains(cfg.MihomoProxies, "manual-node") {
+		t.Fatalf("setup partial save lost DB provider fields: %#v", cfg)
+	}
+
+	if err := os.WriteFile(active, []byte("ipv6: false\ndns:\n  ipv6: false\nproxy-providers: {}\nproxies: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	structured := requestJSON(t, app, http.MethodPut, "/api/v1/settings/structured", token, map[string]any{"mosdns": map[string]any{"enable_ipv6": false}})
+	if structured.Code != http.StatusOK {
+		t.Fatalf("partial structured status=%d body=%s", structured.Code, structured.Body.String())
+	}
+	cfg, _, ok = app.latestSetupConfigForSettingsRaw()
+	if !ok || cfg.SubscriptionURLs != "https://example.com/sub" || !strings.Contains(cfg.MihomoProxies, "manual-node") {
+		t.Fatalf("structured partial save lost DB provider fields: %#v", cfg)
+	}
+
+	clear := requestJSON(t, app, http.MethodPut, "/api/v1/setup/config", token, map[string]any{
+		"subscription_urls": "",
+		"mihomo_proxies":    "",
+	})
+	if clear.Code != http.StatusOK {
+		t.Fatalf("explicit provider clear status=%d body=%s", clear.Code, clear.Body.String())
+	}
+	cfg, _, ok = app.latestSetupConfigForSettingsRaw()
+	if !ok || cfg.SubscriptionURLs != "" || cfg.MihomoProxies != "" {
+		t.Fatalf("explicit provider clear was not persisted: %#v", cfg)
+	}
+}
+
+func TestFakeIPCacheQuarantineCommitAndRollback(t *testing.T) {
+	app := newTestApp(t)
+	cache := filepath.Join(app.DataDir, "configs", "mihomo", "cache.db")
+	if err := os.MkdirAll(filepath.Dir(cache), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cache, []byte("old-cache"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tx := &fakeIPCacheInvalidation{OriginallyRunning: map[string]bool{}}
+	if err := app.quarantineFakeIPCacheFiles(tx, []string{cache}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(cache); !os.IsNotExist(err) {
+		t.Fatalf("cache was not quarantined: %v", err)
+	}
+	if err := tx.restoreServiceFiles("mihomo", app); err != nil {
+		t.Fatal(err)
+	}
+	if body, err := os.ReadFile(cache); err != nil || string(body) != "old-cache" {
+		t.Fatalf("cache rollback failed: body=%q err=%v", body, err)
+	}
+
+	if err := app.quarantineFakeIPCacheFiles(tx, []string{cache}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(tx.Root); !os.IsNotExist(err) {
+		t.Fatalf("cache backup remained after commit: %v", err)
+	}
+	if err := tx.rollback(context.Background(), app); err != nil {
+		t.Fatal(err)
 	}
 }

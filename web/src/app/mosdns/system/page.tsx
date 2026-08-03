@@ -358,6 +358,7 @@ export default function MosdnsSystemPage() {
   const [runMode, setRunMode] = useState<RunMode>("compatible");
   const [filterSettings, setFilterSettings] = useState<FilterSettings>(defaultFilterSettings);
   const [resolutionSettings, setResolutionSettings] = useState<ResolutionSettings>(defaultResolutionSettings);
+  const [prioritySaving, setPrioritySaving] = useState(false);
   const [cacheData, setCacheData] = useState<CacheSystemData>(defaultCacheData);
   const [cacheDomains, setCacheDomains] = useState<Partial<Record<"realIp" | "fakeIp" | "noV4" | "noV6", CacheDomainRow[]>>>({});
   const [taskEvents, setTaskEvents] = useState<string[]>([]);
@@ -574,18 +575,22 @@ export default function MosdnsSystemPage() {
   };
 
   const changeResolutionPriority = async (priority: "auto" | "ipv4" | "ipv6") => {
+    if (prioritySaving) return;
     const previous = resolutionSettings;
     const next = { ipv4First: priority === "ipv4", ipv6First: priority === "ipv6" };
     setResolutionSettings(next);
+    setPrioritySaving(true);
     try {
-      await Promise.all([
-        postSwitch(SWITCH.ipv4First, next.ipv4First),
-        postSwitch(SWITCH.ipv6First, next.ipv6First),
-      ]);
+      await api("/api/v1/mosdns/system/priority", {
+        method: "PUT",
+        body: JSON.stringify({ priority }),
+      });
       showToast("解析策略已保存");
     } catch (error) {
       setResolutionSettings(previous);
       showToast(error instanceof Error ? error.message : "解析策略保存失败");
+    } finally {
+      setPrioritySaving(false);
     }
   };
 
@@ -710,6 +715,7 @@ export default function MosdnsSystemPage() {
             runMode={runMode}
             onChangeRunMode={(mode) => void changeRunMode(mode)}
             resolutionSettings={resolutionSettings}
+            prioritySaving={prioritySaving}
             onChangePriority={(priority) => void changeResolutionPriority(priority)}
           />
         </div>

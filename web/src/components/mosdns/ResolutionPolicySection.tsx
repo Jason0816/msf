@@ -8,6 +8,7 @@ interface ResolutionPolicySectionProps {
   onChangeRunMode: (mode: RunMode) => void;
   resolutionSettings: ResolutionSettings;
   onChangePriority: (priority: "auto" | "ipv4" | "ipv6") => void;
+  prioritySaving?: boolean;
 }
 
 export function ResolutionPolicySection({
@@ -15,6 +16,7 @@ export function ResolutionPolicySection({
   onChangeRunMode,
   resolutionSettings,
   onChangePriority,
+  prioritySaving = false,
 }: ResolutionPolicySectionProps) {
   const priority = resolutionSettings.ipv4First ? "ipv4" : resolutionSettings.ipv6First ? "ipv6" : "auto";
   return (
@@ -86,9 +88,10 @@ export function ResolutionPolicySection({
                   type="button"
                   role="radio"
                   aria-checked={priority === value}
+                  disabled={prioritySaving}
                   onClick={() => onChangePriority(value)}
                   className={cn(
-                    "rounded-lg border px-3 py-3 text-sm transition-colors",
+                    "rounded-lg border px-3 py-3 text-sm transition-colors disabled:cursor-wait disabled:opacity-60",
                     priority === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/30 text-foreground hover:bg-muted"
                   )}
                 >
@@ -96,9 +99,12 @@ export function ResolutionPolicySection({
                 </button>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground mt-2 p-2 rounded bg-muted/50 border border-foreground">
-              该选项只控制 DNS 结果排序，不会开启或关闭 IPv6 数据面。
-            </p>
+            <div className="mt-2 space-y-1 rounded border border-foreground bg-muted/50 p-2 text-xs text-muted-foreground">
+              <p>自动：同时保留上游实际存在的 A 与 AAAA。</p>
+              <p>IPv4 优先：双栈域名存在 A 时抑制 AAAA，v6-only 域名仍返回 AAAA。</p>
+              <p>IPv6 优先：双栈域名存在 AAAA 时抑制 A，v4-only 域名仍返回 A。</p>
+              <p>该策略只控制客户端 DNS 结果，不会改变 IPv6 主开关、FakeIPv6、NFT 或透明代理路由。</p>
+            </div>
           </div>
         </div>
       </div>

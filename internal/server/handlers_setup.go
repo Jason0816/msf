@@ -168,7 +168,7 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	existing, _, hasExisting := a.latestSetupConfigForSettings()
+	existing, _, hasExisting := a.latestSetupConfigForSettingsRaw()
 	if hasExisting {
 		preserveMissingSetupFields(&cfg, meta, existing)
 	}
@@ -222,12 +222,6 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "timezone_error", err.Error())
 		return
 	}
-	if hasExisting && fakeIPPrefixChanged(existing, cfg) {
-		if err := a.clearFakeIPCaches(); err != nil {
-			writeError(w, http.StatusConflict, "fake_ip_cache_flush_failed", err.Error())
-			return
-		}
-	}
 	if err := a.writeGeneratedConfigs(cfg); err != nil {
 		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
 		return
@@ -245,20 +239,8 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.SetConfiguredRuntimeDesired(cfg)
-	if err := a.validateProxyModeRuntimeState(cfg); err != nil {
-		_, _ = a.DB.Exec(`delete from system_setups where id=?`, setupID)
-		if hasExisting {
-			a.SetConfiguredRuntimeDesired(existing)
-			_ = a.writeGeneratedConfigs(existing)
-		} else {
-			a.Services.setDesired("mihomo", false)
-			a.Services.setDesired("mosdns", false)
-			a.setSetting(nftDesiredKey, "false")
-		}
-		writeError(w, http.StatusConflict, "proxy_mode_mismatch", err.Error())
-		return
-	}
-	if err := setupApplyProxyNetworkState(a, r.Context(), cfg); err != nil {
+	var cacheTx *fakeIPCacheInvalidation
+	rollbackSetup := func() {
 		_, _ = a.DB.Exec(`delete from system_setups where id=?`, setupID)
 		if hasExisting {
 			a.SetConfiguredRuntimeDesired(existing)
@@ -269,6 +251,23 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 			a.Services.setDesired("mosdns", false)
 			a.setSetting(nftDesiredKey, "false")
 		}
+		_ = cacheTx.rollback(r.Context(), a)
+	}
+	if hasExisting && fakeIPPrefixChanged(existing, cfg) {
+		cacheTx, err = a.beginFakeIPCacheInvalidation(r.Context())
+		if err != nil {
+			rollbackSetup()
+			writeError(w, http.StatusConflict, "fake_ip_cache_flush_failed", err.Error())
+			return
+		}
+	}
+	if err := a.validateProxyModeRuntimeState(cfg); err != nil {
+		rollbackSetup()
+		writeError(w, http.StatusConflict, "proxy_mode_mismatch", err.Error())
+		return
+	}
+	if err := setupApplyProxyNetworkState(a, r.Context(), cfg); err != nil {
+		rollbackSetup()
 		writeError(w, http.StatusInternalServerError, "network_apply_failed", err.Error())
 		return
 	}
@@ -276,10 +275,18 @@ func (a *App) handleSetupPutConfig(w http.ResponseWriter, r *http.Request) {
 	for _, name := range managedServiceNames() {
 		st := a.Services.Status(name)
 		if st.Running {
-			if _, err := a.Services.Restart(r.Context(), name); err == nil {
-				restarted = append(restarted, name)
+			if _, err := a.Services.Restart(r.Context(), name); err != nil {
+				rollbackSetup()
+				writeError(w, http.StatusInternalServerError, "service_restart_failed", err.Error())
+				return
 			}
+			restarted = append(restarted, name)
 		}
+	}
+	if err := cacheTx.commit(); err != nil {
+		rollbackSetup()
+		writeError(w, http.StatusInternalServerError, "fake_ip_cache_commit_failed", err.Error())
+		return
 	}
 	missing := a.setupMissingComponentsForConfig(cfg)
 	payload := setupConfigPayload(cfg, true)

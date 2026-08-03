@@ -36,7 +36,7 @@ func (a *App) handleSettingsStructuredPut(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	cfg, initialized, setupExists := a.latestSetupConfigForSettings()
+	cfg, initialized, setupExists := a.latestSetupConfigForSettingsRaw()
 	previous := cfg
 	if cfg.Username == "" {
 		if u := currentUser(r); u != nil {
@@ -89,12 +89,6 @@ func (a *App) handleSettingsStructuredPut(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusBadRequest, "unsupported_proxy_mode", err.Error())
 			return
 		}
-		if setupExists && fakeIPPrefixChanged(previous, cfg) {
-			if err := a.clearFakeIPCaches(); err != nil {
-				writeError(w, http.StatusConflict, "fake_ip_cache_flush_failed", err.Error())
-				return
-			}
-		}
 		if err := a.writeGeneratedConfigs(cfg); err != nil {
 			writeError(w, http.StatusInternalServerError, "config_error", err.Error())
 			return
@@ -126,11 +120,24 @@ func (a *App) handleSettingsStructuredPut(w http.ResponseWriter, r *http.Request
 		}
 		if initialized {
 			a.SetConfiguredRuntimeDesired(cfg)
-			if err := setupApplyProxyNetworkState(a, r.Context(), cfg); err != nil {
+			var cacheTx *fakeIPCacheInvalidation
+			rollbackSetup := func() {
 				_, _ = a.DB.Exec(`delete from system_setups where id=?`, setupID)
 				a.SetConfiguredRuntimeDesired(previous)
 				_ = a.writeGeneratedConfigs(previous)
 				_ = setupApplyProxyNetworkState(a, r.Context(), previous)
+				_ = cacheTx.rollback(r.Context(), a)
+			}
+			if setupExists && fakeIPPrefixChanged(previous, cfg) {
+				cacheTx, err = a.beginFakeIPCacheInvalidation(r.Context())
+				if err != nil {
+					rollbackSetup()
+					writeError(w, http.StatusConflict, "fake_ip_cache_flush_failed", err.Error())
+					return
+				}
+			}
+			if err := setupApplyProxyNetworkState(a, r.Context(), cfg); err != nil {
+				rollbackSetup()
 				writeError(w, http.StatusInternalServerError, "network_apply_failed", err.Error())
 				return
 			}
@@ -138,15 +145,17 @@ func (a *App) handleSettingsStructuredPut(w http.ResponseWriter, r *http.Request
 				for _, name := range managedServiceNames() {
 					if a.Services.Status(name).Running {
 						if _, err := a.Services.Restart(r.Context(), name); err != nil {
-							_, _ = a.DB.Exec(`delete from system_setups where id=?`, setupID)
-							a.SetConfiguredRuntimeDesired(previous)
-							_ = a.writeGeneratedConfigs(previous)
-							_ = setupApplyProxyNetworkState(a, r.Context(), previous)
+							rollbackSetup()
 							writeError(w, http.StatusInternalServerError, "service_restart_failed", err.Error())
 							return
 						}
 					}
 				}
+			}
+			if err := cacheTx.commit(); err != nil {
+				rollbackSetup()
+				writeError(w, http.StatusInternalServerError, "fake_ip_cache_commit_failed", err.Error())
+				return
 			}
 		}
 	}

@@ -837,7 +837,7 @@ function InitConfigSummary({
         <PlainInfo label="自动设置 DNS" value={macOSRuntime ? "由 TUN 强制启用" : config.autoDns ? "已启用" : "已禁用"} />
         <PlainInfo label="DNS 启用地址" value={macOSRuntime ? "127.0.0.1" : config.dnsEnable} />
         <PlainInfo label="DNS 停用恢复" value={macOSRuntime ? "按启动前系统快照恢复" : config.dnsDisable} />
-        <PlainInfo label="启用 IPv6" value={config.ipv6 ? "已启用" : "DNS自动设置"} />
+        <PlainInfo label="启用 IPv6 数据面" value={config.ipv6 ? "已启用" : "已禁用"} />
         <PlainInfo label="代理服务器" value={config.githubProxyEnabled ? "已启用" : "已禁用"} />
         <PlainInfo label="GitHub 加速源" value={config.githubAcceleratorEnabled ? "已启用" : "已禁用"} />
       </div>
@@ -1033,11 +1033,13 @@ function InitConfigEditor({
             onChange={(event) => setDraft((current) => ({ ...current, ipv6: event.target.checked }))}
             className="h-5 w-5 accent-primary"
           />
-          启用 IPv6
+          启用 IPv6 数据面
         </label>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          开启后代理核心将支持 IPv6 流量处理，关闭则仅处理 IPv4 流量。如果您的网络不支持 IPv6，请务必关闭此选项
-        </p>
+        <div className="mt-3 space-y-1 text-sm leading-relaxed text-muted-foreground">
+          <p>控制 MSF/Mihomo 的 IPv6 代理数据面，不会关闭主机、路由器或运营商提供的原生 IPv6。</p>
+          <p>开启会联动 Mihomo ipv6、dns.ipv6、FakeIPv6 捕获、NFT IPv6 规则、IPv6 policy route，以及 TUN/Docker IPv6 路由；关闭会卸载这些代理链路，但保留 FakeIPv6 前缀。</p>
+          <p>此项不等同于 MosDNS“屏蔽 AAAA”。关闭数据面但允许 AAAA 时，客户端可能通过原生 IPv6 绕过 Mihomo；请同时检查 MosDNS 的 AAAA 屏蔽及 IPv4/IPv6 优先设置。</p>
+        </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field label="IPv4 FakeIP 网段">
             <input

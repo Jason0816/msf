@@ -466,7 +466,7 @@ func (a *App) applyNFT(ctx context.Context) (string, error) {
 	var output bytes.Buffer
 	ignoreNetworkCommandError(ctx, &output, 8*time.Second, "nft", "delete", "table", "inet", "msf")
 	cmds := [][]string{{"nft", "-f", nftPath}}
-	runNetworkCommandsIgnoringErrors(ctx, &output, 8*time.Second, policyRouteRuleDeleteCommands())
+	runNetworkCommandsIgnoringErrors(ctx, &output, 8*time.Second, policyRouteReconcileDeleteCommands())
 	enableIPv6 := false
 	if cfg, ok := a.latestSetupConfig(); ok {
 		cfg.defaults()
@@ -507,13 +507,25 @@ func policyRouteInstallCommands(enableIPv6 bool) [][]string {
 	return cmds
 }
 
-func policyRouteClearCommands() [][]string {
+func policyRouteRouteDeleteCommands() [][]string {
+	return [][]string{
+		{"ip", "route", "del", "local", "0.0.0.0/0", "dev", "lo", "table", "100"},
+		{"ip", "-6", "route", "del", "local", "::/0", "dev", "lo", "table", "100"},
+	}
+}
+
+func policyRouteReconcileDeleteCommands() [][]string {
 	cmds := policyRouteRuleDeleteCommands()
-	cmds = append(cmds,
-		[]string{"ip", "route", "del", "local", "0.0.0.0/0", "dev", "lo", "table", "100"},
-		[]string{"ip", "-6", "route", "del", "local", "::/0", "dev", "lo", "table", "100"},
-	)
-	return cmds
+	return append(cmds, policyRouteRouteDeleteCommands()...)
+}
+
+func policyRouteReconcileCommands(enableIPv6 bool) [][]string {
+	cmds := policyRouteReconcileDeleteCommands()
+	return append(cmds, policyRouteInstallCommands(enableIPv6)...)
+}
+
+func policyRouteClearCommands() [][]string {
+	return policyRouteReconcileDeleteCommands()
 }
 
 func runNetworkCommand(ctx context.Context, output *bytes.Buffer, timeout time.Duration, args ...string) error {
