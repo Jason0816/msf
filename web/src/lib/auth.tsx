@@ -20,7 +20,8 @@ export interface CurrentUser {
 
 interface AuthContextValue {
   loading: boolean;
-  initialized: boolean;
+  initialized: boolean | null;
+  initializationError: string | null;
   setupNeedsRecovery: boolean;
   setupDownloadComponents: string[];
   user: CurrentUser | null;
@@ -33,30 +34,46 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
+  const [initialized, setInitialized] = useState<boolean | null>(null);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
   const [setupNeedsRecovery, setSetupNeedsRecovery] = useState(false);
   const [setupDownloadComponents, setSetupDownloadComponents] = useState<string[]>([]);
   const [user, setUser] = useState<CurrentUser | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setInitialized(null);
+    setInitializationError(null);
     try {
       const setup = await api<any>("/api/v1/setup/check", { skipAuth: true });
-      const ready = !!setup?.is_initialized;
+      if (typeof setup?.is_initialized !== "boolean") {
+        throw new Error("初始化状态响应无效");
+      }
+      const ready = setup.is_initialized;
       const components = Array.isArray(setup?.download_component)
         ? setup.download_component.map((item: unknown) => String(item)).filter(Boolean)
         : [];
       setInitialized(ready);
       setSetupNeedsRecovery(Boolean(setup?.needs_recovery || setup?.needs_download));
       setSetupDownloadComponents(components);
-      if (ready && getToken()) {
+      if (!ready || !getToken()) {
+        setUser(null);
+        return;
+      }
+
+      try {
         const me = await api<any>("/api/v1/auth/me");
         setUser(me.user || me.data || null);
-      } else {
+      } catch (error) {
+        // An expired/invalid token means the user must log in again. It does
+        // not mean that the system has lost its initialized state.
+        console.warn("Failed to restore authenticated session:", error);
         setUser(null);
       }
-    } catch {
-      setInitialized(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "无法确认系统初始化状态";
+      setInitialized(null);
+      setInitializationError(message);
       setSetupNeedsRecovery(false);
       setSetupDownloadComponents([]);
       setUser(null);
@@ -93,8 +110,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ loading, initialized, setupNeedsRecovery, setupDownloadComponents, user, refresh, login, logout }),
-    [loading, initialized, setupNeedsRecovery, setupDownloadComponents, user, refresh, login, logout]
+    () => ({
+      loading,
+      initialized,
+      initializationError,
+      setupNeedsRecovery,
+      setupDownloadComponents,
+      user,
+      refresh,
+      login,
+      logout,
+    }),
+    [loading, initialized, initializationError, setupNeedsRecovery, setupDownloadComponents, user, refresh, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

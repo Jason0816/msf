@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Lock, LogIn, Network, Server, Shield, User } from "lucide-react";
 import { LoginLogoShowcase } from "@/components/login/LoginLogoShowcase";
 import { GlassFilterDefs } from "@/components/liquid-glass/GlassFilterDefs";
@@ -15,6 +15,7 @@ const features = [
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [params] = useSearchParams();
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +48,9 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await login(username, password);
-      const redirect = params.get("redirect") || "/";
+      const state = location.state as { from?: unknown } | null;
+      const stateRedirect = typeof state?.from === "string" ? state.from : "";
+      const redirect = stateRedirect || params.get("redirect") || "/";
       navigate(redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
