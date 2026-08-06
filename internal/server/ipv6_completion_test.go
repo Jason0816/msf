@@ -73,22 +73,29 @@ func TestIPv6GeneratedArtifactsSharePrefixAndDisableDataPlane(t *testing.T) {
 	if count := strings.Count(mosdns, "IPv6 数据面关闭时显式返回真实 AAAA"); count != 2 {
 		t.Fatalf("real AAAA bypass count=%d, want 2", count)
 	}
-	if strings.Count(mosdns, "entry: sequence_client") != 2 || strings.Count(mosdns, "entry: sequence_6666") != 2 {
-		t.Fatal("client UDP/TCP entries must use the priority wrapper while the internal core stays independent")
+	if strings.Contains(mosdns, "sequence_client") || strings.Contains(mosdns, "forward_priority_core") {
+		t.Fatal("client entry must not forward through a localhost wrapper that loses the original client IP")
 	}
-	wrapperStart := strings.Index(mosdns, "tag: sequence_client")
-	if wrapperStart < 0 {
-		t.Fatal("MosDNS client priority wrapper is missing")
+	if strings.Count(mosdns, "entry: sequence_6666") != 2 {
+		t.Fatal("only the public UDP/TCP :53 entries should enter sequence_6666 directly")
 	}
-	wrapperEnd := strings.Index(mosdns[wrapperStart:], "#对外服务器")
-	if wrapperEnd < 0 {
-		t.Fatal("MosDNS client priority wrapper is incomplete")
-	}
-	wrapper := mosdns[wrapperStart : wrapperStart+wrapperEnd]
-	for _, want := range []string{"switch6 'A'", "exec: prefer_ipv4", "exec: prefer_ipv6", "exec: $forward_priority_core"} {
-		if !strings.Contains(wrapper, want) {
-			t.Fatalf("MosDNS client priority wrapper missing %q", want)
+	for _, want := range []string{"switch6 'A'", `listen: ":53"`, "fast_accel: true", "exec: prefer_ipv4", "exec: prefer_ipv6"} {
+		if !strings.Contains(mosdns, want) {
+			t.Fatalf("MosDNS direct client sequence missing %q", want)
 		}
+	}
+	if strings.Count(mosdns, "exec: prefer_ipv4") != 2 || strings.Count(mosdns, "exec: prefer_ipv6") != 2 {
+		t.Fatal("IPv4/IPv6 preference must execute inline in both primary MosDNS sequences")
+	}
+	priorityIndex := strings.Index(mosdns, "exec: prefer_ipv4")
+	clientExitIndex := strings.Index(mosdns, "matches: fast_mark 39")
+	bypassIndex := strings.Index(mosdns, "IPv6 数据面关闭时显式返回真实 AAAA")
+	cacheIndex := strings.Index(mosdns, "#web ui中选择泄露版")
+	if priorityIndex < 0 || clientExitIndex < 0 || priorityIndex > clientExitIndex {
+		t.Fatal("resolution priority must run before client-specific branches can exit")
+	}
+	if bypassIndex < clientExitIndex || cacheIndex < bypassIndex {
+		t.Fatal("real AAAA fallback must run after priority/client routing and before cache routing")
 	}
 }
 
@@ -191,6 +198,87 @@ func TestMosDNSPrioritySwitchesAreMutuallyExclusive(t *testing.T) {
 	switches := app.mosDNSSwitchMap()
 	if switches["switch8"] || !switches["switch10"] {
 		t.Fatalf("priority switches should be mutually exclusive: %#v", switches)
+	}
+}
+
+func TestLegacyMosDNSConfigMigratesWithoutUnusedLoopbackHops(t *testing.T) {
+	app := newTestApp(t)
+	legacy := `plugins:
+  - tag: forward_priority_core
+    type: forward
+    args:
+      upstreams:
+        - addr: "udp://127.0.0.1:5656"
+
+  - tag: sequence_client
+    type: sequence
+    args:
+      - exec: $forward_priority_core
+#对外服务器
+  - tag: udp_all
+    type: udp_server
+    args:
+      entry: sequence_client
+      listen: ":53"
+  - tag: sequence_6666
+    type: sequence
+    args:
+      - matches: fast_mark 6                #向上游请求ddns域名，无过期缓存
+        exec: $domestic
+      - matches:                            #web ui中选择泄露版（默认），用cache_all，否则用cache_all_noleak
+        exec: $cache_all
+  - tag: sequence_requery
+    type: sequence
+    args:
+      - matches: fast_mark 6                #向上游请求ddns域名，无过期缓存
+        exec: $domestic
+      - matches:                            #web ui中选择泄露版（默认），用cache_all，否则用cache_all_noleak
+        exec: $cache_all
+
+  - tag: forward_all_in
+    type: forward
+    args:
+      concurrent: 1
+      upstreams:
+        - addr: "udp://127.0.0.1:5656"
+
+  - tag: udp_main
+    type: udp_server
+    args:
+      entry: sequence_6666
+      listen: 127.0.0.1:5656
+
+  - tag: tcp_main
+    type: tcp_server
+    args:
+      entry: sequence_6666
+      listen: 127.0.0.1:5656
+      idle_timeout: 720
+`
+	if err := app.writeTextFile("configs/mosdns/config.yaml", legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.writeTextFile("configs/mosdns/sub_config/forward_2.yaml", "stale\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.migrateLegacyMosDNSConfig(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := app.readTextFile("configs/mosdns/config.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "sequence_client") || strings.Contains(got, "forward_priority_core") || strings.Contains(got, "127.0.0.1:5656") || strings.Contains(got, "forward_all_in") || strings.Contains(got, "tag: udp_main") || strings.Contains(got, "tag: tcp_main") {
+		t.Fatalf("deprecated localhost wrapper remains after migration:\n%s", got)
+	}
+	if !strings.Contains(got, "entry: sequence_6666") {
+		t.Fatalf("direct MosDNS entry missing after migration:\n%s", got)
+	}
+	if strings.Count(got, "exec: prefer_ipv4") != 2 || strings.Count(got, "exec: prefer_ipv6") != 2 {
+		t.Fatalf("inline IPv4/IPv6 preference was not restored during migration:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(app.DataDir, "configs/mosdns/sub_config/forward_2.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("stale forward_2.yaml was not removed, err=%v", err)
 	}
 }
 

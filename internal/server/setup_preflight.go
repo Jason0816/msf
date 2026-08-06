@@ -517,7 +517,6 @@ func setupReservedPorts(proxyModes ...string) []setupReservedPort {
 		{2222, "MosDNS forward_1"},
 		{3333, "MosDNS forward_nocn"},
 		{4444, "MosDNS forward_nocn_ecs"},
-		{5656, "MosDNS forward_2"},
 		{6666, "Mihomo DNS"},
 		{8888, "MosDNS for_singbox"},
 		{9099, "MosDNS API"},

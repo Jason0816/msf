@@ -44,7 +44,6 @@ macOS 在 TUN 接管期间额外保存 `configs/network/darwin-state.json`，其
 | mosdns | `2222` | 内部的国内 DNS 服务器 |
 | mosdns | `3333` | 转发国外请求到内部带过期缓存的服务 |
 | mosdns | `4444` | 带过期缓存的内部使用/外部使用的国外 DNS 服务器 |
-| mosdns | `5656` | 主分流服务器 |
 | mosdns | `6666` | 与 mihomo/sing-box 的 DNS 对接 |
 | mosdns | `8888` | 内部 DNS（代理核心的默认上游 `default-nameserver`） |
 | mosdns | `9099` | MosDNS 统计 / API 接口 |

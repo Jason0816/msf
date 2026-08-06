@@ -74,6 +74,14 @@ plugins:
         exec: reject 0
       - exec: $top_domains
       - exec: $rewrite                      #匹配成功重定向后直接结束不执行后续流程
+      - matches:
+        - switch8 'A'                       #Prefer IPV4开
+        - switch10 'B'                      #Prefer IPV6关
+        exec: prefer_ipv4
+      - matches:
+        - switch8 'B'                       #Prefer IPV4关
+        - switch10 'A'                      #Prefer IPV6开
+        exec: prefer_ipv6
       - matches: fast_mark 6                #向上游请求ddns域名，无过期缓存
         exec:
           - $domestic
@@ -93,14 +101,6 @@ plugins:
           - $sequence_local
           - tag_setter 指定客户端直连
           - exit
-      - matches:
-        - switch8 'A'                       #Prefer IPV4开
-        - switch10 'B'                      #Prefer IPV6关
-        exec: prefer_ipv4
-      - matches:
-        - switch8 'B'                       #Prefer IPV4关
-        - switch10 'A'                      #Prefer IPV6开
-        exec: prefer_ipv6
       - matches:                            #web ui中选择泄露版（默认），用cache_all，否则用cache_all_noleak
         - switch3 'A'                       #泄露模式
         - switch13 'A'                      #缓存开关打开
@@ -123,6 +123,7 @@ plugins:
       entry: sequence_6666
       listen: ":53"
       enable_audit: true
+      fast_accel: true
 
   - tag: tcp_all
     type: tcp_server
@@ -175,6 +176,14 @@ plugins:
         - fast_mark 5
         exec: reject 0
       - exec: $rewrite                      #匹配成功重定向后直接结束不执行后续流程
+      - matches:
+        - switch8 'A'                       #Prefer IPV4开
+        - switch10 'B'                      #Prefer IPV6关
+        exec: prefer_ipv4
+      - matches:
+        - switch8 'B'                       #Prefer IPV4关
+        - switch10 'A'                      #Prefer IPV6开
+        exec: prefer_ipv6
       - matches: fast_mark 6                #向上游请求ddns域名，无过期缓存
         exec:
           - $domestic
@@ -194,14 +203,6 @@ plugins:
           - $sequence_local
           - tag_setter 指定客户端直连
           - exit
-      - matches:
-        - switch8 'A'                       #Prefer IPV4开
-        - switch10 'B'                      #Prefer IPV6关
-        exec: prefer_ipv4
-      - matches:
-        - switch8 'B'                       #Prefer IPV4关
-        - switch10 'A'                      #Prefer IPV6开
-        exec: prefer_ipv6
       - matches:                            #web ui中选择泄露版（默认），用cache_all，否则用cache_all_noleak
         - switch3 'A'                       #泄露模式
         - switch13 'A'                      #缓存开关打开

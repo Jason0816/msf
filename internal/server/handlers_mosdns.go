@@ -789,7 +789,7 @@ func (a *App) handleMosDNSSwitchesPut(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	for k, enabled := range req {
-		_, _ = a.DB.Exec(`insert into mosdns_switch_states(switch_key,enabled,created_at,updated_at) values(?,?,?,?) on conflict(switch_key) do update set enabled=excluded.enabled,updated_at=excluded.updated_at`, k, enabled, now, now)
+		a.setMosDNSSwitchStateAt(k, enabled, now)
 	}
 	_ = a.rewriteMosDNSSwitchFile()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": a.mosDNSSwitchMap()})
@@ -1325,7 +1325,8 @@ func (a *App) handleMosDNSResolutionPriorityPut(w http.ResponseWriter, r *http.R
 		return
 	}
 	var ipv4First, ipv6First bool
-	switch strings.ToLower(strings.TrimSpace(req.Priority)) {
+	priority := strings.ToLower(strings.TrimSpace(req.Priority))
+	switch priority {
 	case "auto":
 	case "ipv4":
 		ipv4First = true
@@ -1356,11 +1357,14 @@ func (a *App) handleMosDNSResolutionPriorityPut(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "priority": strings.ToLower(strings.TrimSpace(req.Priority)), "data": a.mosDNSSwitchMap()})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "priority": priority, "data": a.mosDNSSwitchMap()})
 }
 
 func (a *App) setMosDNSSwitchState(key string, enabled bool) {
-	now := time.Now()
+	a.setMosDNSSwitchStateAt(key, enabled, time.Now())
+}
+
+func (a *App) setMosDNSSwitchStateAt(key string, enabled bool, now time.Time) {
 	_, _ = a.DB.Exec(`insert into mosdns_switch_states(switch_key,enabled,created_at,updated_at) values(?,?,?,?) on conflict(switch_key) do update set enabled=excluded.enabled,updated_at=excluded.updated_at`, key, enabled, now, now)
 	if enabled && (key == "switch8" || key == "switch10") {
 		other := "switch8"

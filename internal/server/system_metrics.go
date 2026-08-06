@@ -489,7 +489,6 @@ func diagnosticPortRows() []map[string]any {
 		{"mosdns", 2222, "国内 DNS"},
 		{"mosdns", 3333, "国外转发"},
 		{"mosdns", 4444, "国外缓存 DNS"},
-		{"mosdns", 5656, "主分流服务器"},
 		{"mosdns", 6666, "Mihomo DNS 对接"},
 		{"mosdns", 8888, "内部 DNS"},
 		{"mosdns", 9099, "统计接口"},

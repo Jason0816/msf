@@ -126,7 +126,7 @@ func serviceHealthPorts(name string) []map[string]any {
 	}{
 		"mosdns": {
 			{53, "DNS"}, {7777, "node-resolver"}, {8888, "internal-dns"}, {2222, "local-upstream"},
-			{3333, "nocn-forward"}, {4444, "nocn-cache"}, {5656, "split-router"}, {9099, "webinfo"},
+			{3333, "nocn-forward"}, {4444, "nocn-cache"}, {9099, "webinfo"},
 		},
 		"mihomo": {
 			{7890, "http"}, {7891, "socks"}, {7892, "mixed"}, {6666, "dns"},

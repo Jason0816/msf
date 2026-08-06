@@ -82,7 +82,7 @@ func componentDownloadURLFor(component, goos, goarch, mihomoCoreType string, amd
 		if goos == "darwin" {
 			switch goarch {
 			case "amd64", "arm64":
-				return fmt.Sprintf("https://github.com/baozaodetudou/mssb/releases/download/mosdns/mosdns-darwin-%s.zip", goarch)
+				return fmt.Sprintf("https://github.com/yyysuo/mosdns/releases/latest/download/mosdns-darwin-%s.zip", goarch)
 			default:
 				return ""
 			}
@@ -94,7 +94,7 @@ func componentDownloadURLFor(component, goos, goarch, mihomoCoreType string, amd
 		if arch == "" {
 			return ""
 		}
-		return fmt.Sprintf("https://github.com/baozaodetudou/mssb/releases/download/mosdns/mosdns-linux-%s.zip", arch)
+		return fmt.Sprintf("https://github.com/yyysuo/mosdns/releases/latest/download/mosdns-linux-%s.zip", arch)
 	case "zashboard", "ui":
 		return "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip"
 	default:

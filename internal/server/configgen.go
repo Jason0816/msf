@@ -829,17 +829,12 @@ func (a *App) renderMosDNSYAML(cfg SetupConfig) string {
 	if template, ok := mssbTemplateText("mosdns/config.yaml"); ok {
 		logPath := filepath.ToSlash(filepath.Join(a.DataDir, "logs/mosdns.log"))
 		content := strings.Replace(template, `file: "/tmp/mosdns.log"`, fmt.Sprintf(`file: "%s"`, logPath), 1)
-		if !strings.Contains(content, "tag: udp_main") {
-			content = strings.Replace(content, "\n  - tag: sequence_requery", mssbMainSplitServerYAML()+"\n  - tag: sequence_requery", 1)
-		}
 		content = strings.ReplaceAll(content, "28.0.0.0/8", fakeIPv4RouteCIDR(cfg.FakeIPRangeV4))
 		content = strings.ReplaceAll(content, "2001:2::/64", fakeIPv6RouteCIDR(cfg.FakeIPRangeV6))
 		content = strings.ReplaceAll(content, "f2b0::/18", fakeIPv6RouteCIDR(cfg.FakeIPRangeV6))
-		content = removeMosDNSInlinePriority(content)
 		if !cfg.EnableIPv6 {
 			content = addMosDNSRealAAAABypass(content)
 		}
-		content = addMosDNSClientPriorityWrapper(content)
 		return content
 	}
 	return fmt.Sprintf(`log:
@@ -900,69 +895,22 @@ plugins:
 `, filepath.ToSlash(filepath.Join(a.DataDir, "logs/mosdns.log")))
 }
 
-func removeMosDNSInlinePriority(content string) string {
-	const priority = `      - matches:
-        - switch8 'A'                       #Prefer IPV4开
-        - switch10 'B'                      #Prefer IPV6关
-        exec: prefer_ipv4
-      - matches:
-        - switch8 'B'                       #Prefer IPV4关
-        - switch10 'A'                      #Prefer IPV6开
-        exec: prefer_ipv6`
-	return strings.ReplaceAll(content, "\n"+priority, "")
-}
-
-func addMosDNSClientPriorityWrapper(content string) string {
-	const marker = "\n#对外服务器"
-	const wrapper = `
-
-  - tag: forward_priority_core
-    type: forward
-    args:
-      concurrent: 1
-      upstreams:
-        - addr: "udp://127.0.0.1:5656"
-
-  - tag: sequence_client
-    type: sequence
-    args:
-      - matches:                            #客户端入口优先阻止AAAA
-        - "qtype 28"
-        - switch6 'A'
-        exec: reject 0
-      - matches:
-        - switch8 'A'                       #Prefer IPV4开
-        - switch10 'B'                      #Prefer IPV6关
-        exec: prefer_ipv4
-      - matches:
-        - switch8 'B'                       #Prefer IPV4关
-        - switch10 'A'                      #Prefer IPV6开
-        exec: prefer_ipv6
-      - exec: $forward_priority_core`
-	content = strings.Replace(content, marker, wrapper+marker, 1)
-	for i := 0; i < 2; i++ {
-		content = strings.Replace(content, "entry: sequence_6666", "entry: sequence_client", 1)
+func removeMosDNSClientPriorityWrapper(content string) string {
+	const wrapperStart = "\n  - tag: forward_priority_core\n"
+	const serverMarker = "\n#对外服务器"
+	start := strings.Index(content, wrapperStart)
+	if start < 0 {
+		return content
 	}
-	return content
+	end := strings.Index(content[start:], serverMarker)
+	if end < 0 {
+		return content
+	}
+	return content[:start] + content[start+end:]
 }
 
-func addMosDNSRealAAAABypass(content string) string {
-	const blockAAAA = `      - matches:                            #阻止AAAA类型的dns查询
-        - "qtype 28"
-        - switch6 'A'
-        exec: reject 0`
-	const bypass = `
-      - matches:                            #IPv6 数据面关闭时显式返回真实 AAAA
-        - "qtype 28"
-        - switch6 'B'
-        exec:
-          - $sequence_google
-          - exit`
-	return strings.ReplaceAll(content, blockAAAA, blockAAAA+bypass)
-}
-
-func mssbMainSplitServerYAML() string {
-	return `
+func removeMosDNSUnusedMainSplitLoopback(content string) string {
+	const block = `
   - tag: forward_all_in
     type: forward
     args:
@@ -983,6 +931,64 @@ func mssbMainSplitServerYAML() string {
       listen: 127.0.0.1:5656
       idle_timeout: 720
 `
+	return strings.ReplaceAll(content, block, "\n")
+}
+
+func normalizeMosDNSInlinePriority(content string) string {
+	const marker = `      - matches: fast_mark 6                #向上游请求ddns域名，无过期缓存`
+	if strings.Count(content, marker) < 2 {
+		return content
+	}
+	const priority = `      - matches:
+        - switch8 'A'                       #Prefer IPV4开
+        - switch10 'B'                      #Prefer IPV6关
+        exec: prefer_ipv4
+      - matches:
+        - switch8 'B'                       #Prefer IPV4关
+        - switch10 'A'                      #Prefer IPV6开
+        exec: prefer_ipv6
+`
+	content = strings.ReplaceAll(content, "\n"+strings.TrimSuffix(priority, "\n"), "")
+	return strings.ReplaceAll(content, marker, priority+marker)
+}
+
+func (a *App) migrateLegacyMosDNSConfig() error {
+	const rel = "configs/mosdns/config.yaml"
+	content, err := a.readTextFile(rel)
+	if err != nil {
+		return err
+	}
+	next := content
+	if strings.Contains(next, "tag: forward_priority_core") || strings.Contains(next, "entry: sequence_client") {
+		next = removeMosDNSClientPriorityWrapper(next)
+		next = strings.ReplaceAll(next, "entry: sequence_client", "entry: sequence_6666")
+	}
+	next = normalizeMosDNSInlinePriority(next)
+	next = removeMosDNSUnusedMainSplitLoopback(next)
+	if next != content {
+		a.createConfigHistory("mosdns", rel, content, "auto backup before legacy MosDNS entry migration", "system")
+		if err := a.writeTextFile(rel, next); err != nil {
+			return err
+		}
+	}
+	staleForward2 := filepath.Join(a.DataDir, "configs/mosdns/sub_config/forward_2.yaml")
+	if err := os.Remove(staleForward2); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func addMosDNSRealAAAABypass(content string) string {
+	const marker = `      - matches:                            #web ui中选择泄露版（默认），用cache_all，否则用cache_all_noleak`
+	const bypass = `
+      - matches:                            #IPv6 数据面关闭时显式返回真实 AAAA
+        - "qtype 28"
+        - switch6 'B'
+        exec:
+          - $sequence_google
+          - exit
+`
+	return strings.ReplaceAll(content, marker, strings.TrimPrefix(bypass, "\n")+marker)
 }
 
 func (a *App) renderNetworkYAML(cfg SetupConfig) string {

@@ -896,7 +896,7 @@ func (a *App) componentRemoteInfo(component string) (githubRelease, error) {
 	if runtime.GOOS == "darwin" {
 		switch normalizeComponent(component) {
 		case "mosdns":
-			return a.fetchReleaseByTag("baozaodetudou", "mssb", "mosdns")
+			return a.fetchLatestRelease("yyysuo", "mosdns")
 		case "mihomo":
 			return a.fetchLatestRelease("MetaCubeX", "mihomo")
 		case "zashboard":
@@ -907,7 +907,7 @@ func (a *App) componentRemoteInfo(component string) (githubRelease, error) {
 	}
 	switch normalizeComponent(component) {
 	case "mosdns":
-		return a.fetchReleaseByTag("baozaodetudou", "mssb", "mosdns")
+		return a.fetchLatestRelease("yyysuo", "mosdns")
 	case "mihomo":
 		return a.fetchReleaseByTag("baozaodetudou", "mssb", "mihomo")
 	case "zashboard":
@@ -917,7 +917,7 @@ func (a *App) componentRemoteInfo(component string) (githubRelease, error) {
 	}
 }
 
-var componentVersionTokenRE = regexp.MustCompile(`(?i)(ph-yyds-[0-9a-z._-]+|v?\d+(?:\.\d+){1,3}(?:[-+][0-9a-z._-]+)?)`)
+var componentVersionTokenRE = regexp.MustCompile(`(?i)(v?5-ph-srs-[0-9a-z._-]+|ph-yyds-[0-9a-z._-]+|v?\d+(?:\.\d+){1,3}(?:[-+][0-9a-z._-]+)?)`)
 var componentCommitTokenRE = regexp.MustCompile(`(?i)\b[0-9a-f]{7,40}\b`)
 
 func (a *App) componentRemoteVersion(component string, release githubRelease) string {
@@ -925,6 +925,9 @@ func (a *App) componentRemoteVersion(component string, release githubRelease) st
 	mihomoCoreType, _ := a.componentDownloadOptions()
 	switch component {
 	case "mosdns":
+		if tag := strings.TrimSpace(release.TagName); strings.HasPrefix(strings.ToLower(tag), "v5-ph-srs-") {
+			return tag
+		}
 		if v := releaseBodyFieldVersion(release.Body, "版本号"); v != "" {
 			return v
 		}

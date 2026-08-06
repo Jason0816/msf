@@ -192,8 +192,8 @@ const RELEASE_REPO = `${RELEASE_REPO_OWNER}/${RELEASE_REPO_NAME}`;
 const RELEASE_REPO_URL = `https://github.com/${RELEASE_REPO}`;
 const COMPONENT_RELEASE_LINKS: Record<string, { label: string; url: string }> = {
   mosdns: {
-    label: "baozaodetudou/mssb/releases/tag/mosdns",
-    url: "https://github.com/baozaodetudou/mssb/releases/tag/mosdns",
+    label: "yyysuo/mosdns/releases",
+    url: "https://github.com/yyysuo/mosdns/releases",
   },
   mihomo: {
     label: "MetaCubeX/mihomo/releases",

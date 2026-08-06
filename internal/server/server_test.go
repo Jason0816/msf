@@ -96,9 +96,14 @@ func TestSetupInitializeLoginAndGeneratedConfigs(t *testing.T) {
 		t.Fatal(err)
 	}
 	mosdnsText := string(mosdnsConfig)
-	for _, want := range []string{"sequence_6666", `listen: ":53"`, `listen: ":66"`, `listen: ":77"`, "listen: 127.0.0.1:5656"} {
+	for _, want := range []string{"sequence_6666", `listen: ":53"`, `listen: ":66"`, `listen: ":77"`} {
 		if !strings.Contains(mosdnsText, want) {
 			t.Fatalf("mosdns config missing %q:\n%s", want, mosdnsText)
+		}
+	}
+	for _, obsolete := range []string{"127.0.0.1:5656", "forward_all_in", "tag: udp_main", "tag: tcp_main"} {
+		if strings.Contains(mosdnsText, obsolete) {
+			t.Fatalf("mosdns config contains unused loopback entry %q:\n%s", obsolete, mosdnsText)
 		}
 	}
 	mssbFiles := map[string][]string{
@@ -106,7 +111,6 @@ func TestSetupInitializeLoginAndGeneratedConfigs(t *testing.T) {
 		"configs/mosdns/sub_config/forward_nocn.yaml":     {`listen: ":3333"`},
 		"configs/mosdns/sub_config/forward_nocn_ecs.yaml": {`listen: ":4444"`},
 		"configs/mosdns/sub_config/for_singbox.yaml":      {`listen: ":7778"`, `listen: ":8888"`},
-		"configs/mosdns/sub_config/forward_2.yaml":        {"127.0.0.1:5656", "entry: sequence_6666"},
 	}
 	for rel, wants := range mssbFiles {
 		b, err := os.ReadFile(filepath.Join(app.DataDir, rel))
@@ -119,6 +123,9 @@ func TestSetupInitializeLoginAndGeneratedConfigs(t *testing.T) {
 				t.Fatalf("%s missing %q:\n%s", rel, want, got)
 			}
 		}
+	}
+	if _, err := os.Stat(filepath.Join(app.DataDir, "configs/mosdns/sub_config/forward_2.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("unused forward_2.yaml should not be generated, err=%v", err)
 	}
 	nft, err := os.ReadFile(filepath.Join(app.DataDir, "configs/network/network.nft"))
 	if err != nil {
@@ -210,7 +217,7 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 			goos:          "linux",
 			goarch:        "amd64",
 			amd64v3:       true,
-			wantSubstring: "mosdns-linux-amd64-v3.zip",
+			wantSubstring: "yyysuo/mosdns/releases/latest/download/mosdns-linux-amd64-v3.zip",
 		},
 		{
 			name:          "mosdns arm64",
@@ -218,7 +225,7 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 			goos:          "linux",
 			goarch:        "arm64",
 			amd64v3:       true,
-			wantSubstring: "mosdns-linux-arm64.zip",
+			wantSubstring: "yyysuo/mosdns/releases/latest/download/mosdns-linux-arm64.zip",
 		},
 		{
 			name:          "mihomo darwin arm64",
@@ -241,14 +248,14 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 			component:     "mosdns",
 			goos:          "darwin",
 			goarch:        "arm64",
-			wantSubstring: "baozaodetudou/mssb/releases/download/mosdns/mosdns-darwin-arm64.zip",
+			wantSubstring: "yyysuo/mosdns/releases/latest/download/mosdns-darwin-arm64.zip",
 		},
 		{
 			name:          "mosdns darwin amd64",
 			component:     "mosdns",
 			goos:          "darwin",
 			goarch:        "amd64",
-			wantSubstring: "baozaodetudou/mssb/releases/download/mosdns/mosdns-darwin-amd64.zip",
+			wantSubstring: "yyysuo/mosdns/releases/latest/download/mosdns-darwin-amd64.zip",
 		},
 		{
 			name:          "zashboard is architecture independent",
@@ -762,11 +769,18 @@ func TestComponentRemoteVersionParsesReleaseMetadata(t *testing.T) {
 	app := newTestApp(t)
 
 	mosdns := githubRelease{
+		TagName: "v5-ph-srs-20260730-b93784b",
+		Body:    "Built with Go 1.26.5\n\nFull Changelog: https://github.com/yyysuo/mosdns/compare/v5-ph-srs-20260729-5124b1e...v5-ph-srs-20260730-b93784b",
+	}
+	if got := app.componentRemoteVersion("mosdns", mosdns); got != "v5-ph-srs-20260730-b93784b" {
+		t.Fatalf("mosdns remote version = %q", got)
+	}
+	legacyMosDNS := githubRelease{
 		TagName: "mosdns",
 		Body:    "源码时间: 2026-05-15 16:16:33\n版本号: ph-yyds-20260515-7a2a3f3\nCommit: 7a2a3f397561f750874b0fcbd1ba131e2844af46\n",
 	}
-	if got := app.componentRemoteVersion("mosdns", mosdns); got != "ph-yyds-20260515-7a2a3f3" {
-		t.Fatalf("mosdns remote version = %q", got)
+	if got := app.componentRemoteVersion("mosdns", legacyMosDNS); got != "ph-yyds-20260515-7a2a3f3" {
+		t.Fatalf("legacy mosdns remote version = %q", got)
 	}
 
 	mihomoBody := "更新 [mihomo Meta 版](https://github.com/MetaCubeX/mihomo/tree/Meta)至 v1.19.27，发布于 2026-06-06\n更新 [mihomo Alpha 版](https://github.com/MetaCubeX/mihomo/tree/Alpha)至 checksums.txt，发布于 2026-06-06"

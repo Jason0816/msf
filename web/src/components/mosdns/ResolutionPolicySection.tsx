@@ -103,7 +103,7 @@ export function ResolutionPolicySection({
               <p>自动：同时保留上游实际存在的 A 与 AAAA。</p>
               <p>IPv4 优先：双栈域名存在 A 时抑制 AAAA，v6-only 域名仍返回 AAAA。</p>
               <p>IPv6 优先：双栈域名存在 AAAA 时抑制 A，v4-only 域名仍返回 A。</p>
-              <p>该策略只控制客户端 DNS 结果，不会改变 IPv6 主开关、FakeIPv6、NFT 或透明代理路由。</p>
+              <p>该策略直接在主分流序列内执行，不会通过 localhost 二次转发。</p>
             </div>
           </div>
         </div>
