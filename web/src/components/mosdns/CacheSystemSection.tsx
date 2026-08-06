@@ -10,6 +10,7 @@ import type {
   ScheduledTask,
   TaskStatus,
 } from "@/lib/mosdns-system-data";
+import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 import { cn } from "@/lib/utils";
 
 type CacheStatKey = Exclude<keyof CacheStats, "totalDomains">;
@@ -129,8 +130,8 @@ function CacheDomainModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="flex h-[78vh] w-full max-w-[680px] flex-col rounded-xl border border-border/40 bg-card text-card-foreground shadow-apple-xl">
+    <ModalViewport onClose={onClose}>
+      <div role="dialog" aria-modal="true" className="relative flex h-[min(78dvh,780px)] w-full max-w-[680px] flex-col rounded-xl border border-border/40 bg-card text-card-foreground shadow-apple-xl">
         <div className="flex items-center justify-between border-b border-border/50 px-4 py-4">
           <div className="flex items-center gap-3">
             <span className="rounded-lg bg-primary/10 p-2 text-primary">
@@ -217,7 +218,7 @@ function CacheDomainModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalViewport>
   );
 }
 

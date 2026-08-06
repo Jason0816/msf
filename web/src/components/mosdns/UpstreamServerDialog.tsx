@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, Globe2, Trash2, X } from "lucide-react";
+import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 import type { UpstreamGroup, UpstreamServer } from "@/lib/mosdns-system-data";
 
 export type UpstreamServerFormValues = {
@@ -76,9 +77,8 @@ export function UpstreamServerDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <div className="relative w-full max-w-[600px] max-h-[92vh] overflow-hidden rounded-lg border border-border bg-background shadow-2xl animate-scale-in">
+    <ModalViewport onClose={onClose}>
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-[600px] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-lg border border-border bg-background shadow-2xl animate-scale-in">
         <div className="relative overflow-hidden border-b border-border bg-gradient-to-r from-sky-50 via-background to-cyan-50 px-5 py-5 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
           <div className="absolute right-0 top-0 h-28 w-28 rounded-bl-full bg-cyan-400/20" />
           <button
@@ -203,6 +203,6 @@ export function UpstreamServerDialog({
           </div>
         </div>
       </div>
-    </div>
+    </ModalViewport>
   );
 }

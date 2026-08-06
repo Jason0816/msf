@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import {
   X,
   Check,
@@ -11,49 +10,7 @@ import {
   TriangleAlert,
   CheckCircle2,
 } from "lucide-react";
-
-/**
- * Render rule dialogs at the document root so page transitions, long lists, and
- * transformed glass containers cannot turn viewport-fixed positioning into
- * container-relative positioning.
- */
-function ModalViewport({
-  onClose,
-  children,
-}: {
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    const previousOverflow = document.body.style.overflow;
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  if (!mounted) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain p-3 sm:p-4">
-      <div
-        className="absolute inset-0 bg-slate-950/25 dark:bg-black/50 animate-fade-in"
-        aria-hidden="true"
-        onClick={onClose}
-      />
-      {children}
-    </div>,
-    document.body,
-  );
-}
+import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 
 /** Shared centered modal card frame (matches site's rounded-3xl gradient dialog). */
 function ModalShell({

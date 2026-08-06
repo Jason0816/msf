@@ -21,6 +21,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 import { useToaster, ToastStack } from "@/components/Toaster";
 import { YamlEditor } from "@/components/mihomo/YamlEditor";
 import { ApiError, api, apiList, formatBytes, formatPercent } from "@/lib/api";
@@ -729,8 +730,8 @@ export default function MihomoConfigPage() {
       </div>
 
       {fullscreen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-scale-in">
+        <ModalViewport onClose={() => setFullscreen(false)}>
+          <div role="dialog" aria-modal="true" className="relative flex h-[calc(100dvh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-scale-in">
             <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
               <h3 className="font-semibold text-foreground">{currentConfigName}</h3>
               {dirty && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">未保存</span>}
@@ -756,7 +757,7 @@ export default function MihomoConfigPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalViewport>
       )}
     </AppShell>
   );

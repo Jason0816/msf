@@ -34,6 +34,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { ToastStack, useToaster } from "@/components/Toaster";
 import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { api, apiData, apiList, clearSession } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -2485,8 +2486,8 @@ function UpdateTab({ showToast }: { showToast: (message: string) => void }) {
       </Card>
 
       {selectedRelease ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl animate-scale-in">
+        <ModalViewport onClose={() => setReleaseModal(null)}>
+          <div role="dialog" aria-modal="true" className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl animate-scale-in">
             <div className="flex items-center justify-between border-b border-border/50 bg-gradient-to-r from-purple-500/10 to-blue-500/10 p-4">
               <div>
                 <h3 className="font-bold text-foreground">版本 {releaseTitle(selectedRelease)} 变更日志</h3>
@@ -2522,7 +2523,7 @@ function UpdateTab({ showToast }: { showToast: (message: string) => void }) {
               ) : null}
             </div>
           </div>
-        </div>
+        </ModalViewport>
       ) : null}
     </div>
   );
@@ -2566,8 +2567,8 @@ function ResetTab({ showToast }: { showToast: (message: string) => void }) {
       </Card>
 
       {confirmOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-[12px] border border-border bg-card text-card-foreground shadow-apple-xl animate-fade-in">
+        <ModalViewport onClose={() => setConfirmOpen(false)}>
+          <div role="dialog" aria-modal="true" className="relative w-full max-w-md rounded-[12px] border border-border bg-card text-card-foreground shadow-apple-xl animate-fade-in">
             <div className="border-b border-border/50 p-6 pb-3">
               <div className="flex items-center gap-2">
                 <TriangleAlert className="h-3.5 w-3.5 text-destructive" />
@@ -2616,7 +2617,7 @@ function ResetTab({ showToast }: { showToast: (message: string) => void }) {
               </div>
             </div>
           </div>
-        </div>
+        </ModalViewport>
       ) : null}
     </>
   );

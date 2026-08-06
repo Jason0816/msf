@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 import { useToaster, ToastStack } from "@/components/Toaster";
 import { cn } from "@/lib/utils";
 import { api, apiData, apiList, formatBytes } from "@/lib/api";
@@ -599,12 +600,11 @@ function ProxySettingsModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <ModalViewport onClose={onClose}>
       <div
-        className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl border border-border bg-card shadow-apple-xl"
+        role="dialog"
+        aria-modal="true"
+        className="relative w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-apple-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-3.5">
@@ -748,7 +748,7 @@ function ProxySettingsModal({
           </section>
         </div>
       </div>
-    </div>
+    </ModalViewport>
   );
 }
 
@@ -1604,12 +1604,11 @@ export default function MihomoProxiesPage() {
       />
 
       {showGroupModal && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setShowGroupModal(false)}
-        >
+        <ModalViewport onClose={() => setShowGroupModal(false)}>
           <div
-            className="w-full max-w-[920px] max-h-[86vh] overflow-auto rounded-xl border border-border bg-card shadow-apple-xl p-5 animate-scale-in"
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-[920px] max-h-[calc(100dvh-2rem)] overflow-auto rounded-xl border border-border bg-card shadow-apple-xl p-5 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
@@ -1715,16 +1714,15 @@ export default function MihomoProxiesPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalViewport>
       )}
 
       {showProviderModal && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setShowProviderModal(false)}
-        >
+        <ModalViewport onClose={() => setShowProviderModal(false)}>
           <div
-            className="w-full max-w-[680px] rounded-xl border border-border bg-card shadow-apple-xl p-5 animate-scale-in"
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-[680px] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-border bg-card shadow-apple-xl p-5 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
@@ -1799,7 +1797,7 @@ export default function MihomoProxiesPage() {
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">保存并重启会调用 Mihomo 重启接口以加载新的供应商配置。</p>
           </div>
-        </div>
+        </ModalViewport>
       )}
 
       <ToastStack toasts={toasts} />

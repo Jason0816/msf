@@ -18,6 +18,7 @@ import {
   CircleCheckBig,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 import { cn } from "@/lib/utils";
 import { ToastStack, type ToastItem } from "@/components/rules/RuleDialogs";
 import { api, apiData, apiList } from "@/lib/api";
@@ -590,9 +591,8 @@ export default function MosdnsClientsPage() {
       </div>
 
       {showAdd && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setShowAdd(false)} />
-          <div className="relative w-full max-w-md bg-card rounded-2xl border-2 border-border/50 shadow-2xl p-6 animate-scale-in space-y-4">
+        <ModalViewport onClose={() => setShowAdd(false)}>
+          <div role="dialog" aria-modal="true" className="relative w-full max-w-md bg-card rounded-2xl border-2 border-border/50 shadow-2xl p-6 animate-scale-in space-y-4">
             <h2 className="text-lg font-bold text-foreground">新增客户端</h2>
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">客户端 IP</label>
@@ -610,7 +610,7 @@ export default function MosdnsClientsPage() {
               <button disabled={busyKey === "add"} onClick={() => void handleAdd()} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60">添加</button>
             </div>
           </div>
-        </div>
+        </ModalViewport>
       )}
 
       <ToastStack toasts={toasts} />

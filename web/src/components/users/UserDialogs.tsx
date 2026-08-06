@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 
 export interface User {
   id: string;
@@ -29,17 +30,16 @@ export const ROLE_LABEL: Record<User["role"], string> = {
 
 function Overlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-    >
+    <ModalViewport onClose={onClose}>
       <div
-        className="bg-background rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 animate-slide-up"
+        role="dialog"
+        aria-modal="true"
+        className="relative bg-background rounded-xl shadow-2xl p-6 max-w-md w-full animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {children}
       </div>
-    </div>
+    </ModalViewport>
   );
 }
 
