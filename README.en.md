@@ -110,6 +110,7 @@ Thanks to:
 
 - [`msm9527/msm-wiki`](https://github.com/msm9527/msm-wiki), used as the public reference for the MSM management experience.
 - [`baozaodetudou/mssb`](https://github.com/baozaodetudou/mssb), used as the public reference for the MosDNS + Mihomo backend behavior.
+- [`yyysuo/mosdns`](https://github.com/yyysuo/mosdns), with thanks for providing open-source support for MosDNS functionality.
 - [Gzh256](https://github.com/Gzh256), with thanks for helping test and validate multiple versions.
 
 This project is not affiliated with the upstream MSM or mssb projects.
