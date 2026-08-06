@@ -1,5 +1,51 @@
 # 更新日志
 
+## v0.4.3 - 2026-08-07
+
+### 中文
+
+#### 说明
+
+- v0.4.3 是针对 v0.4.2 的 MosDNS 主查询链路和 Web 会话路由修复版：恢复 IPv4/IPv6 优先策略，保留真实客户端 IP，并移除未使用的 `127.0.0.1:5656` 回环入口。
+- Linux、Unraid、fnOS、macOS 与 Docker 继续从 `main` 上同一个干净 tag 构建；GitHub Release 提供 20 个安装产物及 SHA-256 文件，GHCR 同时发布 `v0.4.3` 和 `latest` 多架构镜像。
+- macOS App 仍为未使用 Apple Developer ID 签名或公证的 TUN-only Beta，首次打开需要用户手动允许。
+
+#### MosDNS
+
+- MosDNS 组件更新源切换为 `yyysuo/mosdns` 正式 Release，支持 `v5-ph-srs-*` 版本标签、架构资产选择和 GitHub SHA-256 digest 验证。
+- 修复 v0.4.2 将客户端 `:53` 查询经 `sequence_client` 二次转发到 `127.0.0.1:5656`，导致 MosDNS `client_ip` 只能看到回环地址的问题。UDP/TCP `:53` 现在直接进入 `sequence_6666`。
+- 恢复 `prefer_ipv4` / `prefer_ipv6` 在主分流序列内执行，保留自动、IPv4 优先和 IPv6 优先完整功能，并调整执行顺序，避免 DDNS、客户端直连和真实 AAAA 兜底提前退出而绕过优先策略。
+- 为客户端 UDP `:53` 显式启用新内核 `fast_accel` 落点，并删除未被 include 或正式 sequence 使用的 `forward_2.yaml`、`forward_all_in`、`udp_main/tcp_main` 和 5656 端口。
+- 新增启动兼容迁移，自动备份并清理 v0.4.2 旧入口配置，同时将 IPv4/IPv6 优先规则恢复到正确位置。
+
+#### WebUI 与认证
+
+- 修复 Token 缺失、过期或无效时被误判为系统未初始化并跳转 `/setup` 的问题；已初始化系统现在正确进入 `/login`，初始化状态检查失败时显示可重试错误页。
+- 新增认证路由 E2E 覆盖，保留登录前的安全站内路径，登录后可返回原页面。
+- 统一设置、规则、客户端、上游 DNS、Mihomo 配置与节点页面的视口级弹窗容器，避免弹窗被页面布局、滚动区域或移动端视口截断。
+
+### English
+
+#### Notes
+
+- v0.4.3 is a corrective release for the MosDNS primary query path and Web session routing introduced around v0.4.2. It restores IPv4/IPv6 preference handling, preserves the real client address, and removes the unused `127.0.0.1:5656` loopback entry.
+- Linux, Unraid, fnOS, macOS, and Docker continue to be built from one clean tag on `main`. GitHub Release publishes 20 installation and SHA-256 assets, while GHCR publishes the multi-architecture `v0.4.3` and `latest` images.
+- The macOS app remains an unsigned and unnotarized TUN-only Beta. Users must explicitly allow its first launch.
+
+#### MosDNS
+
+- Switched MosDNS component updates to official `yyysuo/mosdns` releases, including `v5-ph-srs-*` version parsing, architecture-specific asset selection, and GitHub SHA-256 digest validation.
+- Fixed the v0.4.2 client path that sent `:53` through `sequence_client` and a second UDP query to `127.0.0.1:5656`, which replaced the original client address before `client_ip` matching. UDP and TCP `:53` now enter `sequence_6666` directly.
+- Restored `prefer_ipv4` / `prefer_ipv6` inside the primary sequence, preserving automatic, IPv4-preferred, and IPv6-preferred behavior. Execution order now prevents DDNS, client-direct, and real-AAAA fallback branches from bypassing address preference.
+- Marked client-facing UDP `:53` as the explicit `fast_accel` landing point and removed the unused `forward_2.yaml`, `forward_all_in`, `udp_main/tcp_main`, and port 5656 definitions.
+- Added startup migration that backs up and repairs v0.4.2-generated configurations, restores inline preference rules, and removes obsolete loopback entries and files.
+
+#### WebUI and authentication
+
+- Fixed missing, expired, or invalid tokens being mistaken for an uninitialized system and redirected to `/setup`. Initialized installations now correctly redirect to `/login`, while initialization-check failures show a retryable error state.
+- Added authentication-routing E2E coverage and safe return-to-page behavior after login.
+- Unified viewport-level modal containers across settings, rules, clients, upstream DNS, Mihomo configuration, and proxy pages so dialogs are not clipped by page layout, scroll containers, or mobile viewports.
+
 ## v0.4.2 - 2026-08-03
 
 ### 中文
