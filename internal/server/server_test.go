@@ -1830,7 +1830,7 @@ func TestMihomoConnectionsProxiesRulesAndClose(t *testing.T) {
 		t.Fatalf("proxy select mismatch: status=%d body=%s", selectProxy.Code, selectProxy.Body.String())
 	}
 	rules := requestJSON(t, app, http.MethodGet, "/api/v1/mihomo/rules?type=DOMAIN-SUFFIX", token, nil)
-	if rules.Code != http.StatusOK || !strings.Contains(rules.Body.String(), `"payload":"google.com"`) || strings.Contains(rules.Body.String(), "geoip") {
+	if rules.Code != http.StatusOK || !strings.Contains(rules.Body.String(), `"payload":"google.com"`) || !strings.Contains(rules.Body.String(), `"hit_count":12`) || !strings.Contains(rules.Body.String(), `"miss_count":3`) || !strings.Contains(rules.Body.String(), `"hit_at":"2026-05-30T10:00:00Z"`) || strings.Contains(rules.Body.String(), "geoip") {
 		t.Fatalf("rules filtering mismatch: status=%d body=%s", rules.Code, rules.Body.String())
 	}
 }
@@ -2811,7 +2811,10 @@ func newFakeMihomoController(t *testing.T) *httptest.Server {
 			_ = json.NewEncoder(w).Encode(map[string]any{"updated": true})
 		case "/rules":
 			_ = json.NewEncoder(w).Encode(map[string]any{"rules": []any{
-				map[string]any{"type": "DOMAIN-SUFFIX", "payload": "google.com", "proxy": "Proxy", "provider": "geosite"},
+				map[string]any{
+					"type": "DOMAIN-SUFFIX", "payload": "google.com", "proxy": "Proxy", "provider": "geosite",
+					"extra": map[string]any{"hitCount": 12, "missCount": 3, "hitAt": "2026-05-30T10:00:00Z", "missAt": "2026-05-30T09:00:00Z"},
+				},
 				map[string]any{"type": "GEOIP", "payload": "CN", "proxy": "DIRECT"},
 			}})
 		case "/providers/proxies":

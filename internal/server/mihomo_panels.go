@@ -899,14 +899,22 @@ func normalizeMihomoRules(items []any) []map[string]any {
 	for i, item := range items {
 		switch v := item.(type) {
 		case map[string]any:
-			out = append(out, map[string]any{
+			row := map[string]any{
 				"id": i + 1, "index": i + 1,
 				"type":     firstNonEmpty(stringMapValue(v, "type"), stringMapValue(v, "ruleType")),
 				"payload":  firstNonEmpty(stringMapValue(v, "payload"), stringMapValue(v, "rulePayload")),
 				"proxy":    firstNonEmpty(stringMapValue(v, "proxy"), stringMapValue(v, "adapter")),
 				"provider": stringMapValue(v, "provider"),
 				"raw":      v,
-			})
+			}
+			if extra, ok := v["extra"].(map[string]any); ok {
+				row["extra"] = extra
+				row["hit_count"] = firstNumericMapValue(extra, "hitCount", "hit_count")
+				row["miss_count"] = firstNumericMapValue(extra, "missCount", "miss_count")
+				row["hit_at"] = firstNonEmpty(stringMapValue(extra, "hitAt"), stringMapValue(extra, "hit_at"))
+				row["miss_at"] = firstNonEmpty(stringMapValue(extra, "missAt"), stringMapValue(extra, "miss_at"))
+			}
+			out = append(out, row)
 		case string:
 			parts := strings.Split(v, ",")
 			row := map[string]any{"id": i + 1, "index": i + 1, "raw": v}
@@ -923,6 +931,15 @@ func normalizeMihomoRules(items []any) []map[string]any {
 		}
 	}
 	return out
+}
+
+func firstNumericMapValue(m map[string]any, keys ...string) float64 {
+	for _, key := range keys {
+		if _, ok := m[key]; ok {
+			return numericMapValue(m, key)
+		}
+	}
+	return 0
 }
 
 func (a *App) mihomoProvidersPayload() map[string]any {

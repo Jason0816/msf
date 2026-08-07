@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -180,14 +181,14 @@ func (a *App) networkExitInfo() (map[string]any, map[string]any) {
 	}()
 	go func() {
 		defer wg.Done()
-		international = probeInternationalExit()
+		international = a.probeInternationalExit()
 	}()
 	wg.Wait()
 	return domestic, international
 }
 
 func probeDomesticExit() map[string]any {
-	client := networkExitHTTPClient(networkExitProbeTimeout)
+	client := networkExitHTTPClient(networkExitProbeTimeout, nil)
 	var lastErr error
 	for _, endpoint := range []string{"https://myip.ipip.net", "http://myip.ipip.net"} {
 		body, err := fetchExitBody(client, endpoint)
@@ -208,15 +209,32 @@ func probeDomesticExit() map[string]any {
 	return exitProbeError("myip.ipip.net", "direct", lastErr)
 }
 
-func probeInternationalExit() map[string]any {
-	client := networkExitHTTPClient(networkExitProbeTimeout)
+func (a *App) probeInternationalExit() map[string]any {
+	proxyURL, err := a.mihomoExitProxyURL()
+	if err != nil {
+		return exitProbeError("api.ip.sb", "mihomo", err)
+	}
+	client := networkExitHTTPClient(networkExitProbeTimeout, proxyURL)
 	info, err := fetchInternationalExit(client)
 	if err != nil {
-		return exitProbeError("api.ip.sb", "direct", err)
+		return exitProbeError("api.ip.sb", "mihomo", err)
 	}
-	info["via"] = "direct"
+	info["via"] = "mihomo"
+	info["proxy"] = proxyURL.String()
 	info["success"] = true
 	return info
+}
+
+func (a *App) mihomoExitProxyURL() (*url.URL, error) {
+	cfg := a.mihomoConfigMap()
+	port := intMapValue(cfg, "mixed-port", 0)
+	if port <= 0 {
+		port = intMapValue(cfg, "port", 0)
+	}
+	if port <= 0 || port > 65535 {
+		return nil, fmt.Errorf("mihomo HTTP/mixed proxy port is not configured")
+	}
+	return url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
 }
 
 func fetchInternationalExit(client *http.Client) (map[string]any, error) {
@@ -243,9 +261,12 @@ func fetchInternationalExit(client *http.Client) (map[string]any, error) {
 	return nil, lastErr
 }
 
-func networkExitHTTPClient(timeout time.Duration) *http.Client {
+func networkExitHTTPClient(timeout time.Duration, proxyURL *url.URL) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
+	if proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
 	return &http.Client{Timeout: timeout, Transport: transport}
 }
 

@@ -3,18 +3,28 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
-  Eye,
-  EyeOff,
   Network,
-  RotateCw,
   Settings,
   ShieldCheck,
   Terminal,
   Zap,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { RateChart, type ChartPoint } from "@/components/dashboard/charts";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
+import {
+  ConnectionHistoryPanel,
+  ConnectionSankey,
+  FaviconLatencyTester,
+  NetworkInfoPanel,
+  normalizeOverviewConnections,
+  OverviewStatCards,
+  ProviderTrafficPanel,
+  RuleHitChart,
+  type OverviewConnectionHistoryPoint,
+  type OverviewTrafficHistoryPoint,
+} from "@/components/mihomo/overview/OverviewWidgets";
+import { useMihomoTrafficStream } from "@/components/mihomo/overview/trafficStream";
 import { apiData, formatBytes, formatPercent } from "@/lib/api";
 import { useApiPath } from "@/lib/use-api";
 
@@ -50,15 +60,27 @@ const toneClasses: Record<Tone, { icon: string; iconWrap: string; badge: string 
   },
 };
 
-const HISTORY_LIMIT = 200;
-const RANGE_COUNTS: Record<string, number> = {
-  全部: HISTORY_LIMIT,
-  "1/2": 100,
-  "1/4": 50,
-  "1/5": 40,
-  "1/10": 20,
-};
-const TRAFFIC_RANGES = ["全部", "1/2", "1/4", "1/5", "1/10"];
+const HISTORY_SECONDS = 60;
+const HISTORY_LIMIT = HISTORY_SECONDS + 2;
+
+function makeInitialTrafficHistory(): OverviewTrafficHistoryPoint[] {
+  const now = Date.now();
+  return Array.from({ length: HISTORY_LIMIT }, (_, index) => ({
+    timestamp: now - (HISTORY_LIMIT - 1 - index) * 1000,
+    downloadSpeed: 0,
+    uploadSpeed: 0,
+    init: true,
+  }));
+}
+
+function makeInitialConnectionHistory(): OverviewConnectionHistoryPoint[] {
+  const now = Date.now();
+  return Array.from({ length: HISTORY_LIMIT }, (_, index) => ({
+    timestamp: now - (HISTORY_LIMIT - 1 - index) * 1000,
+    connections: 0,
+    init: true,
+  }));
+}
 
 function numberValue(value: unknown) {
   const numeric = Number(value || 0);
@@ -67,10 +89,6 @@ function numberValue(value: unknown) {
 
 function clampPercent(value: unknown) {
   return Math.max(0, Math.min(numberValue(value), 100));
-}
-
-function visibleHistory(points: ChartPoint[], range: string) {
-  return points.slice(-(RANGE_COUNTS[range] || HISTORY_LIMIT));
 }
 
 function firstText(...values: unknown[]) {
@@ -83,10 +101,6 @@ function firstText(...values: unknown[]) {
 
 function objectValue(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
-}
-
-function stringArray(value: unknown) {
-  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
 }
 
 function maskAddress(value: string) {
@@ -246,18 +260,18 @@ function rangeButtonClass(active: boolean) {
 
 function Card({ className = "", children }: { className?: string; children: ReactNode }) {
   return (
-    <section className={`overflow-hidden rounded-[12px] border border-border/30 bg-card text-card-foreground ${className}`}>
+    <GlassSurface material="thick" className={`overflow-hidden rounded-[20px] text-card-foreground ${className}`}>
       {children}
-    </section>
+    </GlassSurface>
   );
 }
 
 function FieldCard({ label, value, valueClassName = "", className = "" }: FieldItem) {
   return (
-    <div className={`min-w-0 rounded-lg border border-border/50 bg-muted/15 px-2 py-2 ${className}`}>
+    <SolidPlate className={`min-w-0 rounded-lg px-2 py-2 ${className}`}>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className={`mt-0.5 truncate text-sm font-semibold leading-5 text-foreground ${valueClassName}`}>{value}</div>
-    </div>
+    </SolidPlate>
   );
 }
 
@@ -352,13 +366,16 @@ function ConfigGrid({ items, columns = "grid-cols-2 sm:grid-cols-3 xl:grid-cols-
 }
 
 export default function MihomoOverviewPage() {
-  const [trafficRange, setTrafficRange] = useState("全部");
-  const [trafficHistory, setTrafficHistory] = useState<ChartPoint[]>([]);
-  const [showPublicIp, setShowPublicIp] = useState(false);
-  const overview = useApiPath<any>("/api/v1/mihomo/overview", [], 3000);
+  const [trafficHistory, setTrafficHistory] = useState<OverviewTrafficHistoryPoint[]>(makeInitialTrafficHistory);
+  const [connectionHistory, setConnectionHistory] = useState<OverviewConnectionHistoryPoint[]>(makeInitialConnectionHistory);
+  const trafficStream = useMihomoTrafficStream();
+  const overview = useApiPath<any>("/api/v1/mihomo/overview", [], 1000);
   const fullOverview = useApiPath<any>("/api/v1/mihomo/overview?full=1", [], 5000);
   const configQuery = useApiPath<any>("/api/v1/mihomo/config", [], 0);
   const networkQuery = useApiPath<any>("/api/v1/network/info", [], 0);
+  const connectionsQuery = useApiPath<any>("/api/v1/mihomo/connections", [], 2000);
+  const providersQuery = useApiPath<any>("/api/v1/mihomo/proxy-providers", [], 60000);
+  const rulesQuery = useApiPath<any>("/api/v1/mihomo/rules?page_size=10000", [], 10000);
   const data = apiData<any>(overview.data, {});
   const fullData = apiData<any>(fullOverview.data, {});
   const configResponse = apiData<any>(configQuery.data, configQuery.data || {});
@@ -368,32 +385,54 @@ export default function MihomoOverviewPage() {
   const running = Boolean(data.running || data.status === "running");
   const version = String(data.version || "-");
   const connections = String(data.activeConnections ?? data.active_connections ?? stats.activeConnections ?? stats.active_connections ?? 0);
-  const downloadSpeedValue = Number(data.downloadSpeed ?? data.download_speed ?? stats.downloadSpeed ?? stats.download_speed ?? 0);
-  const uploadSpeedValue = Number(data.uploadSpeed ?? data.upload_speed ?? stats.uploadSpeed ?? stats.upload_speed ?? 0);
+  const overviewDownloadSpeedValue = Number(data.downloadSpeed ?? data.download_speed ?? stats.downloadSpeed ?? stats.download_speed ?? 0);
+  const overviewUploadSpeedValue = Number(data.uploadSpeed ?? data.upload_speed ?? stats.uploadSpeed ?? stats.upload_speed ?? 0);
+  const downloadSpeedValue = trafficStream.sample?.downloadSpeed ?? overviewDownloadSpeedValue;
+  const uploadSpeedValue = trafficStream.sample?.uploadSpeed ?? overviewUploadSpeedValue;
   const connectionCount = Number(data.activeConnections ?? data.active_connections ?? stats.activeConnections ?? stats.active_connections ?? 0);
   const cpuPercentValue = numberValue(data.cpu ?? data.cpu_percent ?? stats.cpu ?? stats.cpu_percent);
   const memoryPercentValue = Number(data.memory_percent ?? data.mem_percent ?? stats.memory_percent ?? stats.mem_percent);
-  const downloadSpeed = formatBytes(downloadSpeedValue) + "/s";
-  const uploadSpeed = formatBytes(uploadSpeedValue) + "/s";
-  const downloadTotal = formatBytes(data.downloadTotal ?? data.download_total ?? stats.downloadTotal ?? stats.download_total);
-  const uploadTotal = formatBytes(data.uploadTotal ?? data.upload_total ?? stats.uploadTotal ?? stats.upload_total);
-  const cpu = formatPercent(cpuPercentValue);
-  const memory = typeof data.memory === "string" ? data.memory : formatBytes(data.memory_bytes ?? data.memory ?? stats.memory);
-  const visibleTrafficHistory = useMemo(
-    () => visibleHistory(trafficHistory, trafficRange),
-    [trafficHistory, trafficRange]
-  );
+  const memoryValue = numberValue(data.memory_bytes ?? (typeof data.memory === "number" ? data.memory : stats.memory));
+  const memory = typeof data.memory === "string" ? data.memory : formatBytes(memoryValue);
   const { ports, networkSettings, runtimeFeatures, tunSettings, tunEnabled } = useMemo(
     () => buildMihomoConfigFields(fullData, data, configText),
     [fullData, data, configText]
   );
-  const localIPs = stringArray(networkData.local_ips ?? networkData.localIPs ?? networkData.ips);
-  const localIP = firstText(networkData.localIP, networkData.local_ip, localIPs[0]) || "-";
   const domesticExit = exitInfo(networkData.ipip ?? networkData.domestic ?? networkData.china_exit);
   const internationalExit = exitInfo(networkData.ipsb ?? networkData.international ?? networkData.global_exit);
-  const PublicIpIcon = showPublicIp ? EyeOff : Eye;
+  const connectionPayload = apiData<any>(connectionsQuery.data, {});
+  const providerPayload = apiData<any>(providersQuery.data, {});
+  const rulePayload = apiData<any>(rulesQuery.data, {});
+  const connectionRows = useMemo(
+    () => normalizeOverviewConnections(connectionPayload),
+    [connectionPayload],
+  );
 
   useEffect(() => {
+    if (!trafficStream.sample) return;
+    setTrafficHistory((prev) => [
+      ...prev,
+      {
+        timestamp: trafficStream.sample!.at,
+        downloadSpeed: trafficStream.sample!.downloadSpeed,
+        uploadSpeed: trafficStream.sample!.uploadSpeed,
+      },
+    ].slice(-HISTORY_LIMIT));
+  }, [trafficStream.sample]);
+
+  useEffect(() => {
+    if (!overview.data) return;
+    setConnectionHistory((prev) => [
+      ...prev,
+      {
+        timestamp: Date.now(),
+        connections: connectionCount,
+      },
+    ].slice(-HISTORY_LIMIT));
+  }, [overview.data, connectionCount]);
+
+  useEffect(() => {
+    if (trafficStream.connected || trafficStream.sample) return;
     if (!overview.data) return;
     setTrafficHistory((prev) => [
       ...prev,
@@ -401,14 +440,13 @@ export default function MihomoOverviewPage() {
         timestamp: Date.now(),
         downloadSpeed: downloadSpeedValue,
         uploadSpeed: uploadSpeedValue,
-        connections: connectionCount,
       },
     ].slice(-HISTORY_LIMIT));
-  }, [overview.data, downloadSpeedValue, uploadSpeedValue, connectionCount]);
+  }, [overview.data, overviewDownloadSpeedValue, overviewUploadSpeedValue, trafficStream.connected, trafficStream.sample]);
 
   return (
-    <AppShell>
-      <div className="space-y-6 animate-fade-in">
+    <AppShell fillViewport>
+      <div className="scrollbar-thin h-full min-h-0 space-y-6 overflow-y-auto pr-1 animate-fade-in">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold leading-8 text-foreground">Mihomo 概览</h1>
           <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-primary/25">
@@ -420,152 +458,39 @@ export default function MihomoOverviewPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <div className="flex items-center gap-2 px-6 pb-3 pt-6">
-              <Activity className="h-5 w-5 text-primary" />
-              <h2 className="text-2xl font-semibold leading-8">实时流量</h2>
-            </div>
-            <div className="px-6 pb-5 pt-2">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-                <span className="text-muted-foreground">
-                  连接数 <span className="font-semibold text-foreground">{connections}</span>
-                </span>
-                <span className="flex flex-wrap gap-4">
-                  <span className="text-muted-foreground">
-                    下载 <span className="font-semibold text-sky-600 dark:text-sky-400">{downloadSpeed}</span>
-                  </span>
-                  <span className="text-muted-foreground">
-                    上传 <span className="font-semibold text-emerald-600 dark:text-emerald-400">{uploadSpeed}</span>
-                  </span>
-                </span>
-              </div>
-              <div className="relative h-[210px] border-b border-border/40 pb-5">
-                <div className="absolute left-0 top-1 flex h-[150px] flex-col justify-between text-xs text-muted-foreground">
-                  <span>50K</span>
-                  <span>25K</span>
-                  <span>0</span>
-                </div>
-                <div className="ml-12 h-full">
-                  <RateChart points={visibleTrafficHistory} downloadSpeed={downloadSpeedValue} uploadSpeed={uploadSpeedValue} connections={connectionCount} />
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-amber-400" />
-                    连接数
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    上传速度
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-sky-500" />
-                    下载速度
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {TRAFFIC_RANGES.map((label) => (
-                    <button
-                      type="button"
-                      key={label}
-                      onClick={() => setTrafficRange(label)}
-                      aria-pressed={trafficRange === label}
-                      title={`显示 ${RANGE_COUNTS[label] || HISTORY_LIMIT} 个点`}
-                      className={rangeButtonClass(trafficRange === label)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
+        <OverviewStatCards
+          downloadSpeed={downloadSpeedValue}
+          uploadSpeed={uploadSpeedValue}
+          connections={connectionCount}
+          downloadTotal={numberValue(data.downloadTotal ?? data.download_total ?? stats.downloadTotal ?? stats.download_total)}
+          uploadTotal={numberValue(data.uploadTotal ?? data.upload_total ?? stats.uploadTotal ?? stats.upload_total)}
+          memory={memoryValue || memory}
+          trafficHistory={trafficHistory}
+          connectionHistory={connectionHistory}
+        />
 
-          <div className="flex flex-col gap-3 lg:h-[380px]">
-            <Card className="flex-none p-2">
-              <h2 className="mb-1 text-sm font-semibold leading-5">运行统计</h2>
-              <div className="space-y-1">
-                <StatRow label="活跃连接" value={connections} bold />
-                <div className="flex items-center gap-4 text-sm leading-5">
-                  <span className="text-muted-foreground">
-                    下载 <span className="font-semibold text-foreground">{downloadTotal}</span>
-                  </span>
-                  <span className="text-muted-foreground">
-                    上传 <span className="font-semibold text-foreground">{uploadTotal}</span>
-                  </span>
-                </div>
-                <StatRow label="CPU 使用率" value={cpu} barClassName="bg-rose-500" barPercent={cpuPercentValue} />
-                <StatRow
-                  label={Number.isFinite(memoryPercentValue) ? "内存使用率" : "内存"}
-                  value={memory}
-                  barClassName={Number.isFinite(memoryPercentValue) ? "bg-sky-500" : undefined}
-                  barPercent={memoryPercentValue}
-                />
-              </div>
-            </Card>
+        <GlassSurface material="thick" className="@container rounded-2xl p-3"><div className="grid items-stretch gap-3 @min-[768px]:grid-cols-2"><FaviconLatencyTester /><NetworkInfoPanel domestic={domesticExit} international={internationalExit} loading={networkQuery.loading} onRefresh={() => void networkQuery.reload()} /></div></GlassSurface>
 
-            <Card className="flex min-h-0 flex-1 flex-col p-2">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-sm font-semibold leading-5">网络信息</h2>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <button
-                    type="button"
-                    onClick={() => setShowPublicIp((value) => !value)}
-                    className="rounded-md p-1 transition-colors hover:bg-muted"
-                    aria-label={showPublicIp ? "隐藏 IP" : "显示 IP"}
-                    aria-pressed={showPublicIp}
-                    title={showPublicIp ? "隐藏 IP" : "显示 IP"}
-                  >
-                    <PublicIpIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void networkQuery.reload()}
-                    disabled={networkQuery.loading}
-                    className="rounded-md p-1 transition-colors hover:bg-muted disabled:cursor-wait disabled:opacity-70"
-                    aria-label="刷新网络信息"
-                    title="刷新网络信息"
-                  >
-                    <RotateCw className={`h-4 w-4 ${networkQuery.loading ? "animate-spin" : ""}`} />
-                  </button>
-                </div>
-              </div>
-              <div className="min-h-0 flex-1 text-sm">
-                <div className="min-w-0 border-b border-border/50 pb-1">
-                  <div className="text-xs text-muted-foreground">内网 IP</div>
-                  <div className="break-all font-mono text-sm leading-5 text-foreground">{localIP}</div>
-                </div>
-                <div className="min-w-0 border-b border-border/50 py-1">
-                  <div className="text-xs text-muted-foreground">国内出口</div>
-                  <div className="break-words font-medium leading-5 text-foreground">{domesticExit.location}</div>
-                  <div className="break-all font-mono text-xs leading-4 text-muted-foreground">{showPublicIp ? domesticExit.ip || "-" : maskAddress(domesticExit.ip)}</div>
-                </div>
-                <div className="min-w-0 pt-1">
-                  <div className="text-xs text-muted-foreground">国际出口</div>
-                  <div className="break-words font-medium leading-5 text-foreground">{internationalExit.location}</div>
-                  <div className="break-all font-mono text-xs leading-4 text-muted-foreground">{showPublicIp ? internationalExit.ip || "-" : maskAddress(internationalExit.ip)}</div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </div>
+        <ConnectionSankey connections={connectionRows} />
+        <ProviderTrafficPanel payload={providerPayload} />
+        <ConnectionHistoryPanel connections={connectionRows} />
+        <RuleHitChart payload={rulePayload} />
 
         <Card>
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <details>
+          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50">
             <div className="flex items-center gap-2">
               <HeaderIcon icon={Settings} tone="blue" />
               <div>
-                <h2 className="font-semibold">运行配置</h2>
-                <p className="text-xs text-muted-foreground">核心参数与网络设置</p>
+                <h2 className="font-semibold">高级运行信息</h2>
+                <p className="text-xs text-muted-foreground">点击展开核心参数、端口与网络设置</p>
               </div>
             </div>
             <div className="flex gap-1.5">
               <StatusPill tone="blue">Rule</StatusPill>
               <StatusPill>Info</StatusPill>
             </div>
-          </div>
+          </summary>
 
           <div className="grid grid-cols-1 gap-4 px-4 pb-4 lg:grid-cols-2">
             <section className="space-y-2">
@@ -616,6 +541,7 @@ export default function MihomoOverviewPage() {
               <ConfigGrid items={tunSettings} columns="grid-cols-2 sm:grid-cols-4 lg:grid-cols-6" />
             </section>
           </div>
+          </details>
         </Card>
       </div>
     </AppShell>

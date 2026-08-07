@@ -481,6 +481,9 @@ func (a *App) handleMihomoControllerProxy(w http.ResponseWriter, r *http.Request
 		req.URL.Host = target.Host
 		req.URL.Path = controllerPath
 		req.URL.RawPath = ""
+		query := req.URL.Query()
+		query.Del("token") // MSF WebSocket authentication; never forward the session JWT upstream.
+		req.URL.RawQuery = query.Encode()
 		req.Host = target.Host
 		if secret := a.mihomoSecret(); secret != "" && req.Header.Get("Authorization") == "" {
 			req.Header.Set("Authorization", "Bearer "+secret)

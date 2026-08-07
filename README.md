@@ -113,6 +113,7 @@ go run ./cmd/msf serve -c ./data -p 7777
 - [`msm9527/msm-wiki`](https://github.com/msm9527/msm-wiki)：作为 MSM 管理体验和功能组织的公开参考。
 - [`baozaodetudou/mssb`](https://github.com/baozaodetudou/mssb)：作为 MosDNS + Mihomo 后端工作流的公开参考。
 - [`yyysuo/mosdns`](https://github.com/yyysuo/mosdns)：感谢为 MosDNS 功能提供开源支持。
+- [`Zephyruso/zashboard`](https://github.com/Zephyruso/zashboard)：感谢为 Mihomo 概览页面提供 UI 借鉴和显示能力参考。
 - [Gzh256](https://github.com/Gzh256)：感谢协助测试和验证多个版本。
 
 本项目与 MSM、mssb 上游项目没有隶属关系。
