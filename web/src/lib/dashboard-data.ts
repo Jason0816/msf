@@ -3,7 +3,6 @@ import {
   Server,
   Box,
   Network,
-  Activity,
   FileText,
   ScrollText,
   Users,
@@ -36,7 +35,6 @@ export const navItems: NavItem[] = [
       { label: "实时日志", href: "/mosdns/logs", icon: FileText },
     ],
   },
-  { label: "代理服务", href: "/proxy", icon: Box },
   {
     label: "Mihomo",
     href: "/mihomo",
@@ -50,7 +48,6 @@ export const navItems: NavItem[] = [
       { label: "日志查看", href: "/mihomo/logs", icon: FileCode },
     ],
   },
-  { label: "进程管理", href: "/process", icon: Activity },
   { label: "配置管理", href: "/config", icon: FileText },
   { label: "日志查看", href: "/logs", icon: ScrollText },
   { label: "用户管理", href: "/users", icon: Users },
