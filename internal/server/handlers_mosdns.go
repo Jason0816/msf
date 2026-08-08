@@ -136,7 +136,7 @@ func (a *App) registerMosDNSRoutes(mux *http.ServeMux) {
 }
 
 func (a *App) handleMosDNSStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": a.Services.Status("mosdns")})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": a.enhancedServiceStatus("mosdns")})
 }
 
 func (a *App) handleMosDNSOverview(w http.ResponseWriter, r *http.Request) {

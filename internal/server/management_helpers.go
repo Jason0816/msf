@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -148,11 +147,8 @@ func (a *App) serviceVersion(name string, st ServiceStatus) string {
 	case "mihomo":
 		return a.mihomoVersion()
 	case "mosdns":
-		out, err := exec.Command(st.BinaryPath, "version").CombinedOutput()
-		if err == nil && strings.TrimSpace(string(out)) != "" {
-			return strings.TrimSpace(string(out))
-		}
-		return "installed"
+		state := a.componentUpdateState("mosdns")
+		return firstNonEmpty(componentStateString(state, "current_version"), "installed")
 	default:
 		return firstNonEmpty(st.Version, "installed")
 	}

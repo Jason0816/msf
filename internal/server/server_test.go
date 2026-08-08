@@ -859,6 +859,28 @@ func TestComponentUpdateStateDisplaysEquivalentMosDNSPackageVersion(t *testing.T
 	}
 }
 
+func TestMosDNSStatusDisplaysEquivalentYYYSuoReleaseVersion(t *testing.T) {
+	app := newTestApp(t)
+	token := tokenForRole(t, app, "admin")
+	bin := filepath.Join(app.DataDir, "data/binaries/mosdns/mosdns")
+	if err := os.MkdirAll(filepath.Dir(bin), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 'dev-20260604-7a2a3f3'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if _, err := app.DB.Exec(`insert into component_update_info(component,current_version,latest_version,has_update,download_url,status,progress,last_check_time,created_at,updated_at)
+		values(?,?,?,?,?,?,?,?,?,?)`, "mosdns", "dev-20260604-7a2a3f3", "ph-yyds-20260515-7a2a3f3", false, "https://github.com/yyysuo/mosdns/releases", "checked", 0, now, now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	status := requestJSON(t, app, http.MethodGet, "/api/v1/mosdns/status", token, nil)
+	if status.Code != http.StatusOK || !strings.Contains(status.Body.String(), `"version":"ph-yyds-20260515-7a2a3f3"`) {
+		t.Fatalf("MosDNS status should expose the matching yyysuo release version: status=%d body=%s", status.Code, status.Body.String())
+	}
+}
+
 func TestComponentUpdateStateExtractsMihomoVersionAndAllowsUncertainOverwrite(t *testing.T) {
 	app := newTestApp(t)
 	bin := filepath.Join(app.DataDir, "data/binaries/mihomo/mihomo")
