@@ -13,6 +13,7 @@ import MosdnsSystemPage from "@/app/mosdns/system/page";
 import MosdnsConfigPage from "@/app/mosdns/service-config/page";
 import MosdnsLogsPage from "@/app/mosdns/logs/page";
 import ProxyPage from "@/app/proxy/page";
+import MihomoPage from "@/app/mihomo/page";
 import MihomoOverviewPage from "@/app/mihomo/overview/page";
 import MihomoProxiesPage from "@/app/mihomo/proxies/page";
 import MihomoRulesPage from "@/app/mihomo/rules/page";
@@ -159,7 +160,7 @@ export function App() {
       <Route path="/proxy/mihomo/logs" element={<Navigate to="/mihomo/logs" replace />} />
       <Route path="/proxy/mihomo/config" element={<Navigate to="/mihomo/config" replace />} />
 
-      <Route path="/mihomo" element={<Navigate to="/mihomo/overview" replace />} />
+      <Route path="/mihomo" element={protectedRoute(<MihomoPage />)} />
       <Route path="/mihomo/overview" element={protectedRoute(<MihomoOverviewPage />)} />
       <Route path="/mihomo/proxies" element={protectedRoute(<MihomoProxiesPage />)} />
       <Route path="/mihomo/rules" element={protectedRoute(<MihomoRulesPage />)} />
