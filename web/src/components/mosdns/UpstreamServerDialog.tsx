@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Check, Globe2, Trash2, X } from "lucide-react";
+import { GlassButton } from "@/components/liquid-glass/GlassButton";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import type { UpstreamGroup, UpstreamServer } from "@/lib/mosdns-system-data";
 
 export type UpstreamServerFormValues = {
@@ -17,7 +20,7 @@ type DialogMode = "add" | "edit";
 const protocolOptions = ["udp", "tcp", "tls", "https", "quic", "h3", "aliapi"];
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/55 outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/40";
+  "gary-field h-10 w-full px-3 text-sm text-foreground placeholder:text-muted-foreground/55";
 
 function displayProtocol(value: string) {
   return value.toUpperCase();
@@ -78,14 +81,13 @@ export function UpstreamServerDialog({
 
   return (
     <ModalViewport onClose={onClose}>
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-[600px] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-lg border border-border bg-background shadow-2xl animate-scale-in">
-        <div className="relative overflow-hidden border-b border-border bg-gradient-to-r from-sky-50 via-background to-cyan-50 px-5 py-5 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
-          <div className="absolute right-0 top-0 h-28 w-28 rounded-bl-full bg-cyan-400/20" />
+      <GlassSurface material="thick" role="dialog" aria-modal="true" className="relative max-h-[calc(100dvh-2rem)] w-full max-w-[600px] animate-scale-in overflow-hidden rounded-2xl">
+        <div className="relative px-5 py-5">
           <button
             type="button"
             aria-label="关闭"
             onClick={onClose}
-            className="absolute right-5 top-5 z-10 rounded-md p-1 text-foreground/80 transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+            className="absolute right-5 top-5 z-20 rounded-md p-1 text-foreground/80 transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
           >
             <X className="h-4 w-4" />
           </button>
@@ -96,7 +98,7 @@ export function UpstreamServerDialog({
         </div>
 
         <div className="max-h-[calc(92vh-168px)] space-y-5 overflow-y-auto px-5 py-5">
-          <label className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
+          <label className="gary-solid-plate gary-solid-plate--subtle flex items-center gap-3 rounded-xl px-4 py-3">
             <input
               type="checkbox"
               checked={enabled}
@@ -141,7 +143,7 @@ export function UpstreamServerDialog({
             </div>
           </div>
 
-          <div className="rounded-lg border border-border bg-muted/10 px-4 py-4">
+          <SolidPlate tone="regular" className="rounded-xl px-4 py-4">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
               <Globe2 className="h-4 w-4 text-primary" />
               上游服务器配置
@@ -161,7 +163,7 @@ export function UpstreamServerDialog({
               />
               <p className="text-xs text-muted-foreground">支持 udp://IP 或直接填写 IP 地址</p>
             </div>
-          </div>
+          </SolidPlate>
 
           {error && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -170,39 +172,41 @@ export function UpstreamServerDialog({
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-border bg-background px-5 py-4">
+        <div className="flex items-center justify-between border-t border-border/25 px-5 py-4">
           {mode === "edit" && onDelete ? (
-            <button
+            <GlassButton
+              variant="danger"
               type="button"
               onClick={onDelete}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-destructive/40 bg-background px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+              className="h-9 text-sm"
             >
               <Trash2 className="h-4 w-4" />
               删除
-            </button>
+            </GlassButton>
           ) : (
             <span />
           )}
           <div className="flex items-center gap-3">
-            <button
+            <GlassButton
               type="button"
               onClick={onClose}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+              className="h-9 px-5 text-sm"
             >
               取消
-            </button>
-            <button
+            </GlassButton>
+            <GlassButton
+              variant="primary"
               type="button"
               aria-disabled={!canSubmit}
               onClick={submit}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-colors hover:bg-primary/90 aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+              className="h-9 px-5 text-sm aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
             >
               <Check className="h-4 w-4" />
               {actionLabel}
-            </button>
+            </GlassButton>
           </div>
         </div>
-      </div>
+      </GlassSurface>
     </ModalViewport>
   );
 }

@@ -11,8 +11,25 @@
   --gary-glass-fill-regular: rgba(252, 252, 252, 0.18);
   --gary-glass-fill-thick: rgba(252, 252, 252, 0.24);
   --gary-glass-fill-strong: rgba(252, 252, 252, 0.34);
-  --gary-solid-fill: rgba(248, 249, 250, 0.78);
-  --gary-solid-fill-strong: rgba(248, 249, 250, 0.90);
+
+  /* Content plates share one neutral RGB base and expose three independent opacities. */
+  --gary-plate-rgb: 248 249 250;
+  --gary-plate-opacity-subtle: 0.56;
+  --gary-plate-opacity-regular: 0.70;
+  --gary-plate-opacity-strong: 0.84;
+  /* Precomputed values keep a usable fill in browsers without rgb() slash-alpha support. */
+  --gary-plate-fill-subtle: rgba(248, 249, 250, 0.56);
+  --gary-plate-fill-regular: rgba(248, 249, 250, 0.70);
+  --gary-plate-fill-strong: rgba(248, 249, 250, 0.84);
+  /* The display layer is overridden for accessibility/quality modes in materials.css. */
+  --gary-plate-display-fill-subtle: var(--gary-plate-fill-subtle);
+  --gary-plate-display-fill-regular: var(--gary-plate-fill-regular);
+  --gary-plate-display-fill-strong: var(--gary-plate-fill-strong);
+
+  /* Legacy aliases retained while existing pages migrate to the three tone tokens. */
+  --gary-solid-fill: var(--gary-plate-fill-regular);
+  --gary-solid-fill-strong: var(--gary-plate-fill-strong);
+  --gary-plate-opacity: var(--gary-plate-opacity-regular);
   --gary-edge-highlight: rgba(255, 255, 255, 0.76);
   --gary-edge-soft: rgba(255, 255, 255, 0.22);
   --gary-edge-dim: rgba(35, 43, 50, 0.14);
@@ -45,6 +62,14 @@
   --gary-z-overlay: 70;
 }
 
+@supports (color: rgb(0 0 0 / 0.5)) {
+  :root {
+    --gary-plate-fill-subtle: rgb(var(--gary-plate-rgb) / var(--gary-plate-opacity-subtle));
+    --gary-plate-fill-regular: rgb(var(--gary-plate-rgb) / var(--gary-plate-opacity-regular));
+    --gary-plate-fill-strong: rgb(var(--gary-plate-rgb) / var(--gary-plate-opacity-strong));
+  }
+}
+
 .dark {
   --gary-scene-base: #0d0f11;
   --gary-scene-ink: rgba(245, 247, 248, 0.94);
@@ -58,8 +83,7 @@
   --gary-glass-fill-regular: rgba(18, 18, 18, 0.16);
   --gary-glass-fill-thick: rgba(18, 18, 18, 0.22);
   --gary-glass-fill-strong: rgba(18, 18, 18, 0.34);
-  --gary-solid-fill: rgba(20, 22, 24, 0.76);
-  --gary-solid-fill-strong: rgba(20, 22, 24, 0.90);
+  --gary-plate-rgb: 20 22 24;
   --gary-edge-highlight: rgba(245, 247, 248, 0.36);
   --gary-edge-soft: rgba(245, 247, 248, 0.10);
   --gary-edge-dim: rgba(0, 0, 0, 0.36);

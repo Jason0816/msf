@@ -208,13 +208,7 @@ func (a *App) structuredSettingsPayload() map[string]any {
 }
 
 func (a *App) structuredAppearanceSettings() map[string]string {
-	return map[string]string{
-		"theme":        a.setting("appearance.theme", a.setting("theme", "system")),
-		"language":     a.setting("appearance.language", a.setting("language", "zh-CN")),
-		"compact":      a.setting("appearance.compact", "false"),
-		"menu_order":   a.setting("appearance.menu_order", ""),
-		"accent_color": a.setting("appearance.accent_color", ""),
-	}
+	return a.appearanceSettingsPayload()
 }
 
 func (a *App) latestSetupConfigForSettings() (SetupConfig, bool, bool) {
@@ -296,6 +290,11 @@ func applySetupStringDefaults(cfg *SetupConfig) {
 }
 
 func (a *App) applyStructuredAppearance(raw map[string]any) error {
+	opacity, hasOpacity, err := validateContentPlateOpacityPayload(raw)
+	if err != nil {
+		return err
+	}
+	updates := make(map[string]string, len(raw))
 	for key, value := range raw {
 		switch key {
 		case "theme":
@@ -303,26 +302,43 @@ func (a *App) applyStructuredAppearance(raw map[string]any) error {
 			if !oneOf(v, "system", "light", "dark") {
 				return fmt.Errorf("invalid theme")
 			}
-			a.setSetting("appearance.theme", v)
+			updates["appearance.theme"] = v
 		case "language":
 			v := strings.TrimSpace(fmtAny(value))
 			if !oneOf(v, "zh-CN", "zh", "en-US", "en") {
 				return fmt.Errorf("invalid language")
 			}
-			a.setSetting("appearance.language", v)
+			updates["appearance.language"] = v
+		case "scene":
+			v := strings.ToLower(strings.TrimSpace(fmtAny(value)))
+			if !oneOf(v, "dynamic", "static", "neutral") {
+				return fmt.Errorf("invalid scene")
+			}
+			updates["appearance.scene"] = v
+		case "quality":
+			v := strings.ToLower(strings.TrimSpace(fmtAny(value)))
+			if !oneOf(v, "full", "balanced", "reduced") {
+				return fmt.Errorf("invalid quality")
+			}
+			updates["appearance.quality"] = v
 		case "compact":
 			v, err := structuredBoolValue(value)
 			if err != nil {
 				return fmt.Errorf("invalid compact")
 			}
-			a.setSetting("appearance.compact", boolSetting(v))
+			updates["appearance.compact"] = boolSetting(v)
 		case "menu_order", "accent_color":
-			a.setSetting("appearance."+key, fmtAny(value))
+			updates["appearance."+key] = fmtAny(value)
+		case contentPlateOpacitySubtleKey, contentPlateOpacityRegularKey, contentPlateOpacityStrongKey:
+			if !hasOpacity {
+				return fmt.Errorf("content plate opacity fields must be provided together")
+			}
+			updates["appearance."+key] = opacity[key]
 		default:
 			return fmt.Errorf("unsupported appearance key %q", key)
 		}
 	}
-	return nil
+	return a.writeSettingsAtomic(updates)
 }
 
 func (a *App) applyStructuredGenericSettings(raw map[string]any) error {

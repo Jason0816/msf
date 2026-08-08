@@ -37,6 +37,24 @@ import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
 import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { api, apiData, apiList, clearSession } from "@/lib/api";
+import {
+  CONTENT_PLATE_SETTINGS_STORAGE_KEY,
+  CONTENT_PLATE_OPACITY_KEYS,
+  CONTENT_PLATE_OPACITY_RANGES,
+  DEFAULT_CONTENT_PLATE_OPACITY,
+  LEGACY_CONTENT_PLATE_OPACITY_STORAGE_KEY,
+  applyContentPlateOpacityCss,
+  applyContentPlateOpacityCssKey,
+  cloneContentPlateOpacity,
+  migrateLegacyContentPlateOpacity,
+  parseContentPlateOpacityApi,
+  parseStoredContentPlateOpacity,
+  serializeContentPlateOpacity,
+  updateContentPlateOpacity,
+  updateOverallContentPlateOpacity,
+  type ContentPlateOpacity,
+  type ContentPlateOpacityKey,
+} from "@/lib/content-plate-opacity";
 import { cn } from "@/lib/utils";
 
 type TabId = "profile" | "system" | "appearance" | "update" | "reset";
@@ -1439,11 +1457,224 @@ function SystemTab({ showToast }: { showToast: (message: string) => void }) {
   );
 }
 
+function readLocalContentPlateOpacity(): ContentPlateOpacity {
+  if (typeof window === "undefined") return DEFAULT_CONTENT_PLATE_OPACITY;
+  try {
+    const cached = parseStoredContentPlateOpacity(window.localStorage.getItem(CONTENT_PLATE_SETTINGS_STORAGE_KEY));
+    if (cached) {
+      applyContentPlateOpacityCss(cached);
+      return cached;
+    }
+    const migrated = migrateLegacyContentPlateOpacity(window.localStorage.getItem(LEGACY_CONTENT_PLATE_OPACITY_STORAGE_KEY));
+    const initial = migrated || DEFAULT_CONTENT_PLATE_OPACITY;
+    window.localStorage.setItem(CONTENT_PLATE_SETTINGS_STORAGE_KEY, JSON.stringify(initial));
+    applyContentPlateOpacityCss(initial);
+    return initial;
+  } catch {
+    return DEFAULT_CONTENT_PLATE_OPACITY;
+  }
+}
+
+function persistLocalContentPlateOpacity(value: ContentPlateOpacity) {
+  try {
+    window.localStorage.setItem(CONTENT_PLATE_SETTINGS_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // A blocked/private storage area should not prevent the in-memory preview.
+  }
+}
+
+function effectiveContentPlateOpacity(
+  value: ContentPlateOpacity,
+  quality: GlassQuality,
+  reducedTransparency: boolean,
+): ContentPlateOpacity {
+  if (reducedTransparency) {
+    return {
+      subtle: Math.max(value.subtle, 82),
+      regular: Math.max(value.regular, 90),
+      strong: Math.max(value.strong, 96),
+    };
+  }
+  if (quality === "reduced") {
+    return {
+      subtle: Math.max(value.subtle, 74),
+      regular: Math.max(value.regular, 84),
+      strong: Math.max(value.strong, 92),
+    };
+  }
+  return value;
+}
+
 function AppearanceTab({ showToast }: { showToast: (message: string) => void }) {
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [language, setLanguage] = useState("简体中文");
   const [scene, setScene] = useState<GlassSceneMode>("dynamic");
   const [quality, setQuality] = useState<GlassQuality>("full");
+  const [saved, setSaved] = useState<ContentPlateOpacity>(() => readLocalContentPlateOpacity());
+  const [draft, setDraft] = useState<ContentPlateOpacity>(() => readLocalContentPlateOpacity());
+  const [snapshot, setSnapshot] = useState<ContentPlateOpacity>(() => readLocalContentPlateOpacity());
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [overallSaving, setOverallSaving] = useState(false);
+  const [editorError, setEditorError] = useState("");
+  const [reducedTransparency, setReducedTransparency] = useState(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const firstSliderRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef(draft);
+  const previewFrameRef = useRef<number | null>(null);
+  const pendingPreviewRef = useRef<ContentPlateOpacity | null>(null);
+  const pendingPreviewKeysRef = useRef<Set<ContentPlateOpacityKey>>(new Set());
+  const pendingExternalOpacityRef = useRef<ContentPlateOpacity | null>(null);
+  const hasOpenedEditorRef = useRef(false);
+  const overallSaveInFlightRef = useRef(false);
+  const lastOverallSavedRef = useRef("");
+
+  const queueOpacityPreview = (value: ContentPlateOpacity, changedKeys: readonly ContentPlateOpacityKey[]) => {
+    pendingPreviewRef.current = cloneContentPlateOpacity(value);
+    changedKeys.forEach((key) => pendingPreviewKeysRef.current.add(key));
+    if (pendingPreviewKeysRef.current.size === 0) return;
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      changedKeys.forEach((key) => applyContentPlateOpacityCssKey(value, key));
+      pendingPreviewRef.current = null;
+      pendingPreviewKeysRef.current.clear();
+      return;
+    }
+    if (previewFrameRef.current !== null) return;
+    previewFrameRef.current = window.requestAnimationFrame(() => {
+      previewFrameRef.current = null;
+      const next = pendingPreviewRef.current;
+      const changed = Array.from(pendingPreviewKeysRef.current);
+      pendingPreviewRef.current = null;
+      pendingPreviewKeysRef.current.clear();
+      if (next) changed.forEach((key) => applyContentPlateOpacityCssKey(next, key));
+    });
+  };
+
+  const cancelQueuedOpacityPreview = () => {
+    if (previewFrameRef.current !== null) {
+      window.cancelAnimationFrame(previewFrameRef.current);
+      previewFrameRef.current = null;
+    }
+    pendingPreviewRef.current = null;
+    pendingPreviewKeysRef.current.clear();
+  };
+
+  const updateDraft = (key: ContentPlateOpacityKey, value: number) => {
+    const current = draftRef.current;
+    const next = updateContentPlateOpacity(current, key, value);
+    if (next[key] === current[key]) return;
+    draftRef.current = next;
+    setDraft(next);
+    queueOpacityPreview(next, [key]);
+  };
+
+  const updateOverallDraft = (value: number) => {
+    const next = updateOverallContentPlateOpacity(value);
+    draftRef.current = next;
+    setDraft(next);
+    lastOverallSavedRef.current = "";
+    queueOpacityPreview(next, CONTENT_PLATE_OPACITY_KEYS);
+  };
+
+  const saveOverallContentPlateOpacity = async () => {
+    const next = cloneContentPlateOpacity(draftRef.current);
+    const signature = `${next.subtle}/${next.regular}/${next.strong}`;
+    if (overallSaveInFlightRef.current || signature === lastOverallSavedRef.current) return;
+    overallSaveInFlightRef.current = true;
+    setOverallSaving(true);
+    try {
+      await api("/api/v1/settings/appearance", {
+        method: "PUT",
+        body: JSON.stringify(serializeContentPlateOpacity(next)),
+      });
+      pendingExternalOpacityRef.current = null;
+      lastOverallSavedRef.current = signature;
+      setSaved(next);
+      setSnapshot(next);
+      draftRef.current = next;
+      setDraft(next);
+      persistLocalContentPlateOpacity(next);
+      cancelQueuedOpacityPreview();
+      applyContentPlateOpacityCss(next);
+      showToast("整体底板透明度已保存");
+    } catch (error) {
+      const rollback = cloneContentPlateOpacity(saved);
+      draftRef.current = rollback;
+      setDraft(rollback);
+      cancelQueuedOpacityPreview();
+      applyContentPlateOpacityCss(rollback);
+      showToast(errorMessage(error));
+    } finally {
+      overallSaveInFlightRef.current = false;
+      setOverallSaving(false);
+    }
+  };
+
+  const openEditor = () => {
+    const current = cloneContentPlateOpacity(saved);
+    pendingExternalOpacityRef.current = null;
+    setSnapshot(current);
+    draftRef.current = current;
+    setDraft(current);
+    setEditorError("");
+    setEditorOpen(true);
+  };
+
+  const cancelEditor = () => {
+    if (saving) return;
+    const restored = cloneContentPlateOpacity(snapshot);
+    const pendingExternal = pendingExternalOpacityRef.current;
+    pendingExternalOpacityRef.current = null;
+    cancelQueuedOpacityPreview();
+    draftRef.current = cloneContentPlateOpacity(saved);
+    setDraft(cloneContentPlateOpacity(saved));
+    applyContentPlateOpacityCss(restored);
+    setEditorError("");
+    setEditorOpen(false);
+
+    // Restore the opening snapshot first to preserve Cancel semantics. If a
+    // different tab changed the cache while editing, reconcile that latest
+    // external value only after the rollback, making all state and CSS agree.
+    if (pendingExternal) {
+      const latest = cloneContentPlateOpacity(pendingExternal);
+      setSaved(latest);
+      setDraft(latest);
+      setSnapshot(latest);
+      draftRef.current = latest;
+      applyContentPlateOpacityCss(latest);
+    }
+  };
+
+  const saveContentPlateOpacity = async () => {
+    if (saving) return;
+    const next = cloneContentPlateOpacity(draftRef.current);
+    setSaving(true);
+    setEditorError("");
+    try {
+      await api("/api/v1/settings/appearance", {
+        method: "PUT",
+        body: JSON.stringify(serializeContentPlateOpacity(next)),
+      });
+      // A successful local save wins over any stale external event received
+      // while this editor was open.
+      pendingExternalOpacityRef.current = null;
+      setSaved(next);
+      setSnapshot(next);
+      draftRef.current = next;
+      setDraft(next);
+      persistLocalContentPlateOpacity(next);
+      cancelQueuedOpacityPreview();
+      applyContentPlateOpacityCss(next);
+      setEditorOpen(false);
+      showToast("内容底板透明度已保存");
+    } catch (error) {
+      const message = errorMessage(error);
+      setEditorError(message);
+      showToast(message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const applyThemeMode = (mode: ThemeMode) => {
     setTheme(mode);
@@ -1468,9 +1699,86 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
         setQuality(nextQuality);
         document.documentElement.dataset.garyScene = nextScene;
         document.documentElement.dataset.garyQuality = nextQuality;
+
+        const serverOpacity = parseContentPlateOpacityApi(data) || parseContentPlateOpacityApi(payload);
+        if (serverOpacity) {
+          setSaved(serverOpacity);
+          setDraft(serverOpacity);
+          setSnapshot(serverOpacity);
+          draftRef.current = serverOpacity;
+          persistLocalContentPlateOpacity(serverOpacity);
+          cancelQueuedOpacityPreview();
+          applyContentPlateOpacityCss(serverOpacity);
+        }
       })
       .catch((error) => showToast(errorMessage(error)));
   }, [showToast]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(prefers-reduced-transparency: reduce)");
+    const update = () => setReducedTransparency(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== CONTENT_PLATE_SETTINGS_STORAGE_KEY || !event.newValue) return;
+      const next = parseStoredContentPlateOpacity(event.newValue);
+      if (!next) return;
+      // Keep the opening snapshot authoritative for an active editor. Applying
+      // an external value halfway through would make saved/draft diverge from
+      // the CSS restored by Cancel; retain only the latest valid event for the
+      // close path to reconcile.
+      if (editorOpen) {
+        pendingExternalOpacityRef.current = next;
+        return;
+      }
+      setSaved(next);
+      setSnapshot(next);
+      draftRef.current = next;
+      setDraft(next);
+      cancelQueuedOpacityPreview();
+      applyContentPlateOpacityCss(next);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [editorOpen]);
+
+  useEffect(() => {
+    if (editorOpen) {
+      hasOpenedEditorRef.current = true;
+      if (typeof window.requestAnimationFrame !== "function") {
+        firstSliderRef.current?.focus();
+        return undefined;
+      }
+      let secondFrame: number | null = null;
+      const firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => firstSliderRef.current?.focus());
+      });
+      return () => {
+        window.cancelAnimationFrame(firstFrame);
+        if (secondFrame !== null) window.cancelAnimationFrame(secondFrame);
+      };
+    }
+    if (hasOpenedEditorRef.current) {
+      if (typeof window.requestAnimationFrame !== "function") {
+        editButtonRef.current?.focus();
+        return undefined;
+      }
+      const frame = window.requestAnimationFrame(() => editButtonRef.current?.focus());
+      return () => window.cancelAnimationFrame(frame);
+    }
+    return undefined;
+  }, [editorOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (previewFrameRef.current !== null) window.cancelAnimationFrame(previewFrameRef.current);
+    };
+  }, []);
 
   const saveAppearance = async (patch: Record<string, string>) => {
     try {
@@ -1502,6 +1810,19 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
     localStorage.setItem("msf-glass-quality", mode);
     void saveAppearance({ quality: mode });
   };
+
+  const plateTiers: Array<{
+    key: ContentPlateOpacityKey;
+    label: string;
+    usage: string;
+    min: number;
+    max: number;
+  }> = [
+    { key: "subtle", label: "辅助底板", usage: "图表画布、弱分区和辅助区域", min: CONTENT_PLATE_OPACITY_RANGES.subtle.min, max: Math.min(CONTENT_PLATE_OPACITY_RANGES.subtle.max, draft.regular) },
+    { key: "regular", label: "常规底板", usage: "数据行、KPI 和普通信息", min: Math.max(CONTENT_PLATE_OPACITY_RANGES.regular.min, draft.subtle), max: Math.min(CONTENT_PLATE_OPACITY_RANGES.regular.max, draft.strong) },
+    { key: "strong", label: "强调底板", usage: "密集表格、表单和关键文字", min: Math.max(CONTENT_PLATE_OPACITY_RANGES.strong.min, draft.regular), max: CONTENT_PLATE_OPACITY_RANGES.strong.max },
+  ];
+  const effectiveOpacity = effectiveContentPlateOpacity(draft, quality, reducedTransparency);
 
   return (
     <div className="space-y-4">
@@ -1570,6 +1891,51 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">设置会一次性应用并保存，不使用会导致白屏的实时物理参数滑条。</p>
       </Card>
 
+      <Card title="内容底板透明度" Icon={Eye}>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between gap-4">
+              <label htmlFor="content-plate-overall" className="text-sm font-semibold text-foreground">整体透明度</label>
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{draft.regular}%</span>
+            </div>
+            <input
+              id="content-plate-overall"
+              type="range"
+              min={CONTENT_PLATE_OPACITY_RANGES.regular.min}
+              max={CONTENT_PLATE_OPACITY_RANGES.regular.max}
+              step={1}
+              value={draft.regular}
+              onChange={(event) => updateOverallDraft(Number(event.target.value))}
+              onPointerUp={() => void saveOverallContentPlateOpacity()}
+              onKeyUp={(event) => {
+                if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+                  void saveOverallContentPlateOpacity();
+                }
+              }}
+              onBlur={() => void saveOverallContentPlateOpacity()}
+              disabled={overallSaving || editorOpen}
+              aria-label="整体内容底板透明度"
+              className="mt-3 h-2 w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <p className="text-xs leading-relaxed text-muted-foreground">统一联动三档并保持 14% 层级差，松开后自动保存。</p>
+              <div className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                辅助 {draft.subtle}% · 常规 {draft.regular}% · 强调 {draft.strong}%
+              </div>
+            </div>
+          </div>
+          <button
+            ref={editButtonRef}
+            type="button"
+            onClick={openEditor}
+            disabled={overallSaving}
+            className="gary-glass-button inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-medium text-foreground"
+          >
+            自定义编辑
+          </button>
+        </div>
+      </Card>
+
       <Card title="语言 / Language" Icon={Languages}>
         <div className="grid max-w-[576px] gap-3 md:grid-cols-2">
           {["简体中文", "English"].map((item) => (
@@ -1600,6 +1966,91 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
           </OutlineButton>
         </div>
       </Card>
+
+      {editorOpen ? (
+        <ModalViewport onClose={cancelEditor}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="content-plate-opacity-title"
+            className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-background text-foreground shadow-2xl animate-scale-in"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-border/50 p-4 sm:p-5">
+              <div>
+                <h3 id="content-plate-opacity-title" className="text-base font-semibold">自定义内容底板</h3>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">分别调整三档透明度，拖动时只预览，不会立即保存。</p>
+              </div>
+              <button type="button" onClick={cancelEditor} disabled={saving} aria-label="关闭" className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+              <div className="space-y-3">
+                {plateTiers.map((tier, index) => (
+                  <div key={tier.key} className="rounded-xl border border-border/60 p-3 sm:p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <label htmlFor={`content-plate-${tier.key}`} className="text-sm font-semibold text-foreground">{tier.label}</label>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{tier.usage}</p>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{draft[tier.key]}%</span>
+                    </div>
+                    <input
+                      ref={index === 0 ? firstSliderRef : undefined}
+                      id={`content-plate-${tier.key}`}
+                      type="range"
+                      min={tier.min}
+                      max={tier.max}
+                      step={1}
+                      value={draft[tier.key]}
+                      onChange={(event) => updateDraft(tier.key, Number(event.target.value))}
+                      disabled={saving}
+                      aria-valuemin={tier.min}
+                      aria-valuemax={tier.max}
+                      aria-valuenow={draft[tier.key]}
+                      aria-label={`${tier.label}透明度`}
+                      className="mt-3 h-2 w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <SolidPlate tone={tier.key} className="mt-3 min-h-16 p-3 text-xs text-foreground">
+                      <div className="font-medium">{tier.label}预览</div>
+                      <div className="mt-1 text-muted-foreground">示例内容 · {effectiveOpacity[tier.key]}% 最终显示</div>
+                    </SolidPlate>
+                  </div>
+                ))}
+              </div>
+              {reducedTransparency ? (
+                <p className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs leading-relaxed text-muted-foreground" role="status">
+                  系统减少透明度设置正在覆盖显示效果；滑轨仍显示你保存的值，当前预览使用最终生效值（辅助 {effectiveOpacity.subtle}% · 常规 {effectiveOpacity.regular}% · 强调 {effectiveOpacity.strong}%）。
+                </p>
+              ) : quality === "reduced" ? (
+                <p className="mt-4 rounded-lg border border-border/50 bg-muted/20 p-3 text-xs leading-relaxed text-muted-foreground" role="status">
+                  当前“减少效果”模式会提高底板最低不透明度，保留三档层级。
+                </p>
+              ) : null}
+              {editorError ? <p className="mt-3 text-xs text-destructive" role="alert">保存失败：{editorError}</p> : null}
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-border/50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <OutlineButton type="button" onClick={() => {
+                const next = cloneContentPlateOpacity(DEFAULT_CONTENT_PLATE_OPACITY);
+                const changedKeys = CONTENT_PLATE_OPACITY_KEYS.filter((key) => next[key] !== draftRef.current[key]);
+                draftRef.current = next;
+                setDraft(next);
+                queueOpacityPreview(next, changedKeys);
+              }} disabled={saving} className="w-full sm:w-auto">
+                <RotateCcw className="h-3.5 w-3.5" />
+                恢复三档默认值
+              </OutlineButton>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <OutlineButton type="button" onClick={cancelEditor} disabled={saving} className="flex-1 sm:flex-none">取消</OutlineButton>
+                <PrimaryButton type="button" onClick={() => void saveContentPlateOpacity()} disabled={saving} className="flex-1 sm:flex-none">
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                  {saving ? "保存中..." : "保存"}
+                </PrimaryButton>
+              </div>
+            </div>
+          </div>
+        </ModalViewport>
+      ) : null}
     </div>
   );
 }

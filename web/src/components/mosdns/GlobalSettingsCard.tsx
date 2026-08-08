@@ -1,5 +1,9 @@
 "use client";
 
+import { BarChart3, Globe2, Info } from "lucide-react";
+import { GlassButton } from "@/components/liquid-glass/GlassButton";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+
 import type { GlobalSettings } from "@/lib/mosdns-system-data";
 
 interface GlobalSettingsCardProps {
@@ -21,10 +25,10 @@ function SettingsInputs({
   onChangeEcsIp: (val: string) => void;
 }) {
   return (
-    <div className="px-4 py-2.5 rounded-lg border border-slate-200/40 bg-slate-50/30 dark:bg-slate-900/20">
+    <GlassSurface material="thick" className="rounded-2xl p-4 sm:p-5">
       <div className="flex gap-3">
-        <span className="text-lg leading-none mt-0.5">🌐</span>
-        <span className="text-sm font-semibold text-foreground mt-0.5">
+        <Globe2 className="mt-0.5 h-4 w-4 text-primary" />
+        <span className="text-sm font-semibold text-foreground">
           全局设置
         </span>
       </div>
@@ -37,7 +41,7 @@ function SettingsInputs({
             type="text"
             value={settings.socks5}
             onChange={(e) => onChangeSocks5(e.target.value)}
-            className="flex-1 rounded border border-border bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            className="gary-field h-9 min-w-0 flex-1 px-3 text-xs"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -48,11 +52,11 @@ function SettingsInputs({
             type="text"
             value={settings.ecsIp}
             onChange={(e) => onChangeEcsIp(e.target.value)}
-            className="flex-1 rounded border border-border bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            className="gary-field h-9 min-w-0 flex-1 px-3 text-xs"
           />
         </div>
       </div>
-    </div>
+    </GlassSurface>
   );
 }
 
@@ -67,10 +71,10 @@ function LogCapacityCard({
   onSave?: () => void;
 }) {
   return (
-    <div className="px-4 py-2.5 rounded-lg border border-orange-200/60 dark:border-orange-900/50 bg-orange-50/40 dark:bg-orange-900/10">
+    <GlassSurface material="thick" className="rounded-2xl p-4 sm:p-5">
       <div className="flex gap-3">
-        <span className="text-lg leading-none mt-0.5">📊</span>
-        <span className="text-sm font-semibold text-foreground mt-0.5">
+        <BarChart3 className="mt-0.5 h-4 w-4 text-primary" />
+        <span className="text-sm font-semibold text-foreground">
           日志容量
         </span>
       </div>
@@ -83,20 +87,21 @@ function LogCapacityCard({
             type="number"
             value={capacity}
             onChange={(e) => onChange(Number(e.target.value))}
-            className="w-32 rounded border border-orange-300 dark:border-orange-700 bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+            className="gary-field h-9 min-w-0 w-full px-3 text-xs sm:w-36"
           />
-          <button
+          <GlassButton
+            variant="primary"
             onClick={onSave}
-            className="px-3 py-1 rounded bg-orange-600 text-white text-xs font-medium hover:bg-orange-700 transition-colors"
+            className="h-9 min-h-9 text-xs"
           >
             设置
-          </button>
+          </GlassButton>
         </div>
-        <p className="text-xs text-muted-foreground">
-          💡 设置新容量将清空日志（最高40万）
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />设置新容量将清空日志（最高40万）
         </p>
       </div>
-    </div>
+    </GlassSurface>
   );
 }
 
@@ -109,7 +114,7 @@ export function GlobalSettingsCard({
   onSaveLogCapacity,
 }: GlobalSettingsCardProps) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <SettingsInputs
         settings={settings}
         onChangeSocks5={onChangeSocks5}

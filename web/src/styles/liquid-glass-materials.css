@@ -87,14 +87,22 @@
   position: relative;
   border: 1px solid color-mix(in srgb, var(--gary-edge-dim) 74%, transparent);
   border-radius: var(--gary-radius-compact);
-  background: var(--gary-solid-fill);
+  background: var(--gary-plate-display-fill-regular);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--gary-edge-soft) 52%, transparent),
     0 1px 2px color-mix(in srgb, var(--gary-edge-shadow) 26%, transparent);
 }
 
+.gary-solid-plate--subtle {
+  background: var(--gary-plate-display-fill-subtle);
+}
+
+.gary-solid-plate--regular {
+  background: var(--gary-plate-display-fill-regular);
+}
+
 .gary-solid-plate--strong {
-  background: var(--gary-solid-fill-strong);
+  background: var(--gary-plate-display-fill-strong);
 }
 
 .gary-glass--flat {
@@ -148,10 +156,26 @@ html[data-gary-quality="balanced"] {
   --gary-blur-thick: 22px;
 }
 
+/* Reduced quality keeps the three content layers distinct while raising their minimum alpha. */
+html[data-gary-quality="reduced"] {
+  --gary-plate-display-fill-subtle: rgb(var(--gary-plate-rgb) / max(var(--gary-plate-opacity-subtle), 0.74));
+  --gary-plate-display-fill-regular: rgb(var(--gary-plate-rgb) / max(var(--gary-plate-opacity-regular), 0.84));
+  --gary-plate-display-fill-strong: rgb(var(--gary-plate-rgb) / max(var(--gary-plate-opacity-strong), 0.92));
+}
+
 html[data-gary-quality="reduced"] .gary-glass,
 html[data-gary-quality="reduced"] .glass-effect,
 html[data-gary-quality="reduced"] .glass-effect-strong {
   background: var(--gary-solid-fill-strong) !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+}
+
+/* System preference takes precedence over quality mode for the final display layer. */
+@media (prefers-reduced-transparency: reduce) {
+  html:root {
+    --gary-plate-display-fill-subtle: rgb(var(--gary-plate-rgb) / max(var(--gary-plate-opacity-subtle), 0.82));
+    --gary-plate-display-fill-regular: rgb(var(--gary-plate-rgb) / max(var(--gary-plate-opacity-regular), 0.90));
+    --gary-plate-display-fill-strong: rgb(var(--gary-plate-rgb) / max(var(--gary-plate-opacity-strong), 0.96));
+  }
 }

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Globe } from "lucide-react";
 import type { UpstreamServer, UpstreamGroup } from "@/lib/mosdns-system-data";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { cn } from "@/lib/utils";
 
 /* ─── Server row using CSS Grid (matching live site grid-cols layout) ─── */
@@ -20,7 +22,7 @@ function ServerRow({
   onDelete: (groupId: string, id: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-[40px_1fr_80px_1fr_80px] items-center px-2 py-2.5 border-b border-border/20 last:border-0 hover:bg-muted/20 transition-colors">
+    <div className="grid grid-cols-[36px_minmax(0,1fr)_auto] items-center px-2 py-2.5 transition-colors hover:bg-foreground/[0.025] md:grid-cols-[40px_minmax(0,1fr)_80px_minmax(0,1fr)_80px]">
       {/* Enable checkbox */}
       <div className="flex justify-center">
         <button
@@ -49,17 +51,21 @@ function ServerRow({
         {server.note && (
           <div className="text-xs text-muted-foreground truncate mt-0.5">{server.note}</div>
         )}
+        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground md:hidden">
+          <span className="shrink-0 font-medium">{server.protocol.toUpperCase()}</span>
+          <span className="truncate font-mono">{server.address}</span>
+        </div>
       </div>
       {/* Protocol */}
       <div
-        className="px-2 text-sm text-foreground cursor-pointer hover:text-primary transition-colors truncate"
+        className="hidden px-2 text-sm text-foreground cursor-pointer hover:text-primary transition-colors truncate md:block"
         onClick={() => onEdit(groupId, server)}
       >
         {server.protocol.toUpperCase()}
       </div>
       {/* Address */}
       <div
-        className="px-2 font-mono text-xs text-foreground truncate cursor-pointer hover:text-primary transition-colors"
+        className="hidden px-2 font-mono text-xs text-foreground truncate cursor-pointer hover:text-primary transition-colors md:block"
         onClick={() => onEdit(groupId, server)}
       >
         {server.address}
@@ -111,12 +117,12 @@ function UpstreamGroupPanel({
   };
 
   return (
-    <div className="rounded-xl border border-border/30 overflow-hidden">
+    <SolidPlate tone="subtle" className="overflow-hidden rounded-2xl">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80"
         >
           {expanded ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -127,10 +133,10 @@ function UpstreamGroupPanel({
             <Globe className="h-3.5 w-3.5" />
           </div>
           <span className="font-semibold text-sm text-foreground">{group.name}</span>
-          <span className="text-xs text-muted-foreground">({group.subtitle})</span>
+          <span className="hidden truncate text-xs text-muted-foreground sm:inline">({group.subtitle})</span>
         </button>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="hidden text-xs text-muted-foreground sm:inline">
             已启用 {enabledCount}/{total}
           </span>
           <button
@@ -152,7 +158,7 @@ function UpstreamGroupPanel({
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onAddServer(group.id); }}
-            className="flex items-center gap-1 text-primary text-sm font-medium hover:underline"
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
           >
             <Plus className="h-3.5 w-3.5" />
             添加
@@ -162,9 +168,9 @@ function UpstreamGroupPanel({
 
       {/* Expanded table */}
       {expanded && (
-        <div>
+        <div className="border-t border-border/20">
           {/* Header row */}
-          <div className="grid grid-cols-[40px_1fr_80px_1fr_80px] items-center px-2 py-2 text-xs font-medium text-muted-foreground border-b border-border/20 bg-muted/10">
+          <div className="hidden grid-cols-[40px_minmax(0,1fr)_80px_minmax(0,1fr)_80px] items-center bg-foreground/[0.025] px-2 py-2 text-xs font-medium text-muted-foreground md:grid">
             <div className="text-center">启用</div>
             <div className="px-2">名称</div>
             <div className="px-2">协议</div>
@@ -183,7 +189,7 @@ function UpstreamGroupPanel({
           ))}
         </div>
       )}
-    </div>
+    </SolidPlate>
   );
 }
 
@@ -204,10 +210,9 @@ function FakeIPSubSection({
   onAddServer: (groupId: string) => void;
 }) {
   return (
-    <div className="mt-6 pt-4 border-t-2 border-purple-200/40">
-      {/* Section title — purple text, no icon container */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+    <div className="mt-5 space-y-3 pt-2">
+      <div className="flex items-center gap-2 px-1">
+        <span className="text-sm font-semibold text-foreground">
           FakeIP 上游
         </span>
         <span className="text-xs text-muted-foreground">分流与路由专用</span>
@@ -215,19 +220,15 @@ function FakeIPSubSection({
       {/* Two-column grid for the sub-groups */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {groups.map((group) => (
-          <div
+          <UpstreamGroupPanel
             key={group.id}
-            className="rounded-lg border-2 border-purple-200/60 bg-gradient-to-br from-purple-50/30 to-transparent dark:from-purple-950/20 shadow-sm"
-          >
-            <UpstreamGroupPanel
-              group={group}
-              onToggleGroup={onToggleGroup}
-              onToggleServer={onToggleServer}
-              onEditServer={onEditServer}
-              onDeleteServer={onDeleteServer}
-              onAddServer={onAddServer}
-            />
-          </div>
+            group={group}
+            onToggleGroup={onToggleGroup}
+            onToggleServer={onToggleServer}
+            onEditServer={onEditServer}
+            onDeleteServer={onDeleteServer}
+            onAddServer={onAddServer}
+          />
         ))}
       </div>
     </div>
@@ -255,21 +256,20 @@ export function UpstreamDNSSection({
   onAddServer,
 }: UpstreamDNSSectionProps) {
   return (
-    <div className="mb-6">
-      <div className="rounded-[12px] border bg-card text-card-foreground !border-border/20 !shadow-none transition-shadow duration-300 hover:!shadow-sm border-cyan-200/40 shadow-sm">
+    <GlassSurface material="thick" className="rounded-2xl">
         {/* Section header */}
-        <div className="flex flex-col space-y-1.5 p-6 pb-3">
+        <div className="flex flex-col space-y-1.5 p-5 pb-3 sm:p-6 sm:pb-3">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-cyan-100 dark:bg-cyan-900/30">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(0.6 0.12 190)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <SolidPlate tone="subtle" className="flex h-8 w-8 items-center justify-center rounded-lg text-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.5a.5.5 0 0 1 .86.44L11 12h-2a1 1 0 0 0-.78 1.63l4.5 5.5a.5.5 0 0 0 .86-.44L12 14h-2Z" />
               </svg>
-            </div>
+            </SolidPlate>
             <h3 className="text-base font-semibold tracking-tight">上游 DNS 设置</h3>
           </div>
           <p className="text-xs text-muted-foreground">直接编辑 upstream_overrides.json</p>
         </div>
-        <div className="p-6 pt-0 space-y-3">
+        <div className="space-y-3 p-5 pt-0 sm:p-6 sm:pt-0">
           {/* Regular upstream groups */}
           {regularGroups.map((group) => (
             <UpstreamGroupPanel
@@ -293,7 +293,6 @@ export function UpstreamDNSSection({
             onAddServer={onAddServer}
           />
         </div>
-      </div>
-    </div>
+    </GlassSurface>
   );
 }

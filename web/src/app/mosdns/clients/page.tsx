@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { cn } from "@/lib/utils";
 import { ToastStack, type ToastItem } from "@/components/rules/RuleDialogs";
 import { api, apiData, apiList } from "@/lib/api";
@@ -179,10 +180,11 @@ function ClientCard({
 
   return (
     <div className="relative group">
-      <div
+      <SolidPlate
+        tone="subtle"
         onClick={multiSelect ? onSelect : undefined}
         className={cn(
-          "bg-card rounded-md border border-foreground/80 px-2 py-1.5 transition-all hover:shadow-sm hover:border-primary cursor-pointer",
+          "rounded-md px-2 py-1.5 transition-[border-color,box-shadow] hover:border-primary hover:shadow-sm cursor-pointer",
           selected && "ring-2 ring-primary border-primary"
         )}
       >
@@ -237,7 +239,7 @@ function ClientCard({
             </div>
           )}
         </div>
-      </div>
+      </SolidPlate>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import type { FilterSettings } from "@/lib/mosdns-system-data";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { cn } from "@/lib/utils";
 
 interface FilterToggleProps {
@@ -15,7 +17,7 @@ interface FilterToggleProps {
 
 function FilterToggle({ label, description, icon, checked, onToggle, tooltip }: FilterToggleProps) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border border-foreground bg-muted/30">
+    <SolidPlate tone="subtle" className="flex items-center justify-between gap-3 rounded-xl p-3">
       <div className="flex items-start gap-3 min-w-0">
         <span className="text-lg leading-none mt-0.5 shrink-0">{icon}</span>
         <div className="min-w-0">
@@ -50,7 +52,7 @@ function FilterToggle({ label, description, icon, checked, onToggle, tooltip }: 
           )}
         />
       </button>
-    </div>
+    </SolidPlate>
   );
 }
 
@@ -70,20 +72,20 @@ export function RequestFilterSection({
   onToggleIpv6Block,
 }: RequestFilterSectionProps) {
   return (
-    <div className="rounded-[12px] border bg-card text-card-foreground !border-border/20 !shadow-none transition-shadow duration-300 hover:!shadow-sm border-red-200/40 shadow-sm">
-      <div className="flex flex-col space-y-1.5 p-6 pb-3">
+    <GlassSurface material="thick" className="rounded-2xl">
+      <div className="flex flex-col space-y-1.5 p-5 pb-3 sm:p-6 sm:pb-3">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(0.6 0.15 45)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <SolidPlate tone="subtle" className="flex h-8 w-8 items-center justify-center rounded-lg text-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 20h9" />
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
             </svg>
-          </div>
+          </SolidPlate>
           <h3 className="text-base font-semibold tracking-tight">请求过滤层</h3>
         </div>
         <p className="text-xs text-muted-foreground">控制哪些 DNS 请求被处理或拦截</p>
       </div>
-      <div className="p-6 pt-0 space-y-1">
+      <div className="space-y-2 p-5 pt-0 sm:p-6 sm:pt-0">
         {/* Ad block */}
         <FilterToggle
           icon="📛"
@@ -95,8 +97,8 @@ export function RequestFilterSection({
         />
 
         {/* Request type filtering group */}
-        <div className="pl-8 space-y-1 border-l-2 border-muted/60">
-          <div className="text-xs text-muted-foreground font-medium pt-1 pb-1 flex items-center gap-1.5">
+        <div className="space-y-2 pt-1 sm:pl-4">
+          <div className="flex items-center gap-1.5 px-1 pb-1 pt-1 text-xs font-medium text-muted-foreground">
             <span>🚫</span> 请求类型过滤
           </div>
           <FilterToggle
@@ -125,6 +127,6 @@ export function RequestFilterSection({
           />
         </div>
       </div>
-    </div>
+    </GlassSurface>
   );
 }

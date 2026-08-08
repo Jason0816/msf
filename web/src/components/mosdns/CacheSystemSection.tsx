@@ -11,6 +11,9 @@ import type {
   TaskStatus,
 } from "@/lib/mosdns-system-data";
 import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
+import { GlassButton } from "@/components/liquid-glass/GlassButton";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { cn } from "@/lib/utils";
 
 type CacheStatKey = Exclude<keyof CacheStats, "totalDomains">;
@@ -39,27 +42,11 @@ function SwitchToggle({ checked, onToggle }: { checked: boolean; onToggle: () =>
 }
 
 /* ─── Cache stat cards ─── */
-const statCards: { key: CacheStatKey; label: string; icon: string; borderClass: string; bgClass: string }[] = [
-  {
-    key: "realIp", label: "RealIP", icon: "📦",
-    borderClass: "border-blue-200 dark:border-blue-800",
-    bgClass: "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/20",
-  },
-  {
-    key: "fakeIp", label: "FakeIP", icon: "🎭",
-    borderClass: "border-emerald-200 dark:border-emerald-800",
-    bgClass: "bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/30 dark:to-emerald-900/20",
-  },
-  {
-    key: "noV4", label: "无 V4", icon: "🚫",
-    borderClass: "border-orange-200 dark:border-orange-800",
-    bgClass: "bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950/30 dark:to-orange-900/20",
-  },
-  {
-    key: "noV6", label: "无 V6", icon: "🔮",
-    borderClass: "border-purple-200 dark:border-purple-800",
-    bgClass: "bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/20",
-  },
+const statCards: { key: CacheStatKey; label: string; icon: string }[] = [
+  { key: "realIp", label: "RealIP", icon: "📦" },
+  { key: "fakeIp", label: "FakeIP", icon: "🎭" },
+  { key: "noV4", label: "无 V4", icon: "🚫" },
+  { key: "noV6", label: "无 V6", icon: "🔮" },
 ];
 
 function CacheStatCards({ stats, onOpen }: { stats: CacheStats; onOpen: (key: CacheStatKey) => void }) {
@@ -71,11 +58,7 @@ function CacheStatCards({ stats, onOpen }: { stats: CacheStats; onOpen: (key: Ca
             key={card.key}
             type="button"
             onClick={() => onOpen(card.key)}
-            className={cn(
-              "p-2.5 rounded-lg border text-left transition-all hover:shadow-sm cursor-pointer",
-              card.borderClass,
-              card.bgClass
-            )}
+            className="gary-solid-plate gary-solid-plate--subtle cursor-pointer rounded-xl p-3 text-left transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md"
           >
             <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
               <span>{card.icon}</span>
@@ -84,7 +67,7 @@ function CacheStatCards({ stats, onOpen }: { stats: CacheStats; onOpen: (key: Ca
                 <path d="m9 18 6-6-6-6" />
               </svg>
             </div>
-            <div className="text-xl font-bold text-foreground">{stats[card.key]}</div>
+            <div className="text-xl font-bold tabular-nums text-foreground">{stats[card.key]}</div>
           </button>
         ))}
       </div>
@@ -131,8 +114,8 @@ function CacheDomainModal({
 
   return (
     <ModalViewport onClose={onClose}>
-      <div role="dialog" aria-modal="true" className="relative flex h-[min(78dvh,780px)] w-full max-w-[680px] flex-col rounded-xl border border-border/40 bg-card text-card-foreground shadow-apple-xl">
-        <div className="flex items-center justify-between border-b border-border/50 px-4 py-4">
+      <GlassSurface material="thick" role="dialog" aria-modal="true" className="relative flex h-[min(78dvh,780px)] w-full max-w-[680px] flex-col rounded-2xl text-card-foreground">
+        <div className="flex items-center justify-between border-b border-border/25 px-4 py-4">
           <div className="flex items-center gap-3">
             <span className="rounded-lg bg-primary/10 p-2 text-primary">
               <Database className="h-5 w-5" />
@@ -152,19 +135,19 @@ function CacheDomainModal({
           </button>
         </div>
 
-        <div className="border-b border-border/50 px-4 py-3">
+        <div className="border-b border-border/25 px-4 py-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="输入关键词搜索域名..."
-              className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-primary/60 focus:ring-2 focus:ring-primary/15"
+              className="gary-field h-10 w-full pl-9 pr-3 text-sm"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-[96px_1fr_96px] border-b border-border/50 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
+        <div className="grid grid-cols-[72px_1fr_80px] bg-foreground/[0.035] px-4 py-2 text-xs font-medium text-muted-foreground sm:grid-cols-[96px_1fr_96px]">
           <span>ID</span>
           <span>域名</span>
           <span className="text-right">操作</span>
@@ -176,7 +159,7 @@ function CacheDomainModal({
             return (
               <div
                 key={`${row.id || index}:${row.domain}`}
-                className="grid grid-cols-[96px_1fr_96px] items-center border-b border-border/50 px-4 py-3 text-sm last:border-0 hover:bg-muted/30"
+                className="grid grid-cols-[72px_1fr_80px] items-center border-b border-border/20 px-4 py-3 text-sm last:border-0 hover:bg-foreground/[0.025] sm:grid-cols-[96px_1fr_96px]"
               >
                 <span className="font-mono text-xs text-muted-foreground">{row.id || String(index + 1).padStart(10, "0")}</span>
                 <span className="min-w-0 truncate font-mono text-foreground" title={displayDomain}>
@@ -208,16 +191,17 @@ function CacheDomainModal({
           )}
         </div>
 
-        <div className="flex justify-end border-t border-border/50 px-4 py-3">
-          <button
+        <div className="flex justify-end border-t border-border/25 px-4 py-3">
+          <GlassButton
+            variant="primary"
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="text-sm"
           >
             关闭
-          </button>
+          </GlassButton>
         </div>
-      </div>
+      </GlassSurface>
     </ModalViewport>
   );
 }
@@ -252,8 +236,8 @@ function CacheStrategyPanel({
       <div className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
         <span>⚙️</span> 缓存策略
       </div>
-      <div className="flex flex-col justify-between space-y-2 flex-1 p-2.5 rounded-lg border border-foreground bg-muted/30">
-        <div className="flex items-center justify-between gap-2 p-3 rounded-lg border border-foreground bg-muted/30">
+      <SolidPlate tone="regular" className="flex flex-1 flex-col justify-between space-y-2 rounded-xl p-3">
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-foreground/[0.03] p-3">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-sm text-foreground">
               过期缓存1
@@ -267,7 +251,7 @@ function CacheStrategyPanel({
           </div>
           <SwitchToggle checked={strategy.expiredCache1} onToggle={onToggleCache1} />
         </div>
-        <div className="flex items-center justify-between gap-2 p-3 rounded-lg border border-foreground bg-muted/30">
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-foreground/[0.03] p-3">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-sm text-foreground">
               过期缓存2
@@ -281,7 +265,7 @@ function CacheStrategyPanel({
           </div>
           <SwitchToggle checked={strategy.expiredCache2} onToggle={onToggleCache2} />
         </div>
-      </div>
+      </SolidPlate>
     </div>
   );
 }
@@ -310,7 +294,7 @@ function ScheduledTaskPanel({
       <div className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
         <span>⏰</span> 定时任务
       </div>
-      <div className="space-y-2 flex-1 p-2.5 rounded-lg border border-foreground bg-muted/30">
+      <SolidPlate tone="regular" className="flex-1 space-y-2 rounded-xl p-3">
         <div className="flex items-center justify-between">
           <span className="text-sm text-foreground">启用定时任务</span>
           <SwitchToggle
@@ -324,7 +308,7 @@ function ScheduledTaskPanel({
             type="datetime-local"
             value={toDateTimeLocal(task.firstRunTime)}
             onChange={(e) => onChangeTask({ ...task, firstRunTime: fromDateTimeLocal(e.target.value) })}
-            className="w-full rounded border border-foreground bg-background px-2 py-1.5 text-sm hover:bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary"
+            className="gary-field h-9 w-full px-3 text-sm"
           />
         </div>
         <div>
@@ -334,7 +318,7 @@ function ScheduledTaskPanel({
             value={task.intervalMinutes}
             min={1}
             onChange={(e) => changeInterval(Number(e.target.value))}
-            className="w-full rounded border border-foreground bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            className="gary-field h-9 w-full px-3 text-sm"
           />
         </div>
         <div>
@@ -344,20 +328,21 @@ function ScheduledTaskPanel({
             value={task.refreshDays}
             min={1}
             onChange={(e) => changeRefreshDays(Number(e.target.value))}
-            className="w-full rounded border border-foreground bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            className="gary-field h-9 w-full px-3 text-sm"
           />
         </div>
-        <button
+        <GlassButton
+          variant="primary"
           onClick={onSaveTask}
-          className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-medium"
+          className="w-full text-xs"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
             <polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
           </svg>
           保存配置
-        </button>
-      </div>
+        </GlassButton>
+      </SolidPlate>
     </div>
   );
 }
@@ -369,7 +354,7 @@ function TaskStatusPanel({ status }: { status: TaskStatus }) {
       <div className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
         <span>📈</span> 任务状态
       </div>
-      <div className="space-y-2 flex-1 p-2.5 rounded-lg border border-foreground bg-muted/30">
+      <SolidPlate tone="regular" className="flex-1 space-y-2 rounded-xl p-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">当前状态</span>
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
@@ -388,7 +373,7 @@ function TaskStatusPanel({ status }: { status: TaskStatus }) {
           <div className="mt-1 max-h-20 space-y-1 overflow-y-auto pr-1">
             {(status.records || []).length > 0 ? (
               (status.records || []).slice(-4).reverse().map((record, index) => (
-                <div key={`${record}:${index}`} className="truncate rounded bg-background/70 px-2 py-1 text-xs text-foreground" title={record}>
+                <div key={`${record}:${index}`} className="truncate rounded-lg bg-foreground/[0.035] px-2 py-1 text-xs text-foreground" title={record}>
                   {record}
                 </div>
               ))
@@ -397,7 +382,7 @@ function TaskStatusPanel({ status }: { status: TaskStatus }) {
             )}
           </div>
         </div>
-      </div>
+      </SolidPlate>
     </div>
   );
 }
@@ -413,54 +398,56 @@ function OperationsBar({
   onClearBackup: () => void;
 }) {
   return (
-    <div>
+    <SolidPlate tone="subtle" className="rounded-xl p-4">
       <div className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
         <span>🔧</span> 操作
       </div>
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
-          <button
+          <GlassButton
+            variant="primary"
             onClick={onHotReload}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors shadow-sm"
+            className="text-sm"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="23 4 23 10 17 10" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
             开始热更新
-          </button>
-          <button
+          </GlassButton>
+          <GlassButton
             onClick={onSaveRules}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border bg-background hover:bg-muted/30 text-sm font-medium transition-colors"
+            className="text-sm"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
               <polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
             </svg>
             保存规则
-          </button>
-          <button
+          </GlassButton>
+          <GlassButton
+            variant="danger"
             onClick={onClearBackup}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 text-sm font-medium transition-colors"
+            className="text-sm"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6" />
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             </svg>
             清空备份
-          </button>
+          </GlassButton>
         </div>
-        <div className="mt-2 flex items-start gap-1.5 p-2 rounded-lg bg-blue-50/50 dark:bg-blue-950/10 border border-blue-200/40 dark:border-blue-800/40">
+        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-foreground/[0.03] p-2">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 mt-0.5 shrink-0">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4" /><path d="M12 8h.01" />
           </svg>
-          <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+          <p className="text-xs leading-relaxed text-muted-foreground">
             提示：热更新会重新分析所有域名的分流规则并更新缓存；保存规则将当前分流规则持久化保存；清空备份会删除全量备份数据以释放存储空间
           </p>
         </div>
       </div>
-    </div>
+    </SolidPlate>
   );
 }
 
@@ -493,12 +480,12 @@ export function CacheSystemSection({
   const activeRows = activeCache ? cacheDomains[activeCache] || [] : [];
 
   return (
-    <div className="mb-6 rounded-[12px] border bg-card text-card-foreground !border-border/20 !shadow-none transition-shadow duration-300 hover:!shadow-sm border-cyan-200/40 shadow-sm">
+    <GlassSurface material="thick" className="rounded-2xl">
       {/* Header */}
-      <div className="flex flex-col space-y-1.5 p-6 pb-3">
+      <div className="flex flex-col space-y-1.5 p-5 pb-3 sm:p-6 sm:pb-3">
         <h3 className="text-base font-semibold tracking-tight flex items-center gap-2">
-          <span className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(0.55 0.18 280)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <span className="gary-solid-plate gary-solid-plate--subtle flex h-8 w-8 items-center justify-center rounded-lg text-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12a9 9 0 1 1-6.219-8.56" />
             </svg>
           </span>
@@ -508,7 +495,7 @@ export function CacheSystemSection({
       </div>
 
       {/* Body */}
-      <div className="p-6 pt-0 space-y-6">
+      <div className="space-y-6 p-5 pt-0 sm:p-6 sm:pt-0">
         {/* Stats block — vertical: label on top */}
         <div>
           <div className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
@@ -538,6 +525,6 @@ export function CacheSystemSection({
       {activeCache && activeCard && (
         <CacheDomainModal title={activeCard.label} rows={activeRows} onClose={() => setActiveCache(null)} />
       )}
-    </div>
+    </GlassSurface>
   );
 }

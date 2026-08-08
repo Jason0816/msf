@@ -21,6 +21,8 @@ import { useApiPath } from "@/lib/use-api";
 import { DashboardCard } from "./DashboardCard";
 import { RateChart, TrendChart, type ChartPoint } from "./charts";
 import { useToaster, ToastStack } from "@/components/Toaster";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import {
   DASHBOARD_SETTINGS_EVENT,
   loadDashboardSettings,
@@ -42,10 +44,10 @@ const RANGE_COUNTS: Record<string, number> = {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="gary-solid-plate flex items-center justify-between gap-3 px-3 py-2.5">
+    <SolidPlate tone="regular" className="flex items-center justify-between gap-3 px-3 py-2.5">
       <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
       <span className="min-w-0 break-words text-right text-sm font-medium tabular-nums">{value}</span>
-    </div>
+    </SolidPlate>
   );
 }
 
@@ -68,7 +70,7 @@ function TimePills({
   onChange: (option: string) => void;
 }) {
   return (
-    <div className="gary-solid-plate flex items-center gap-1 overflow-x-auto p-1">
+    <GlassSurface material="regular" flat className="gary-segmented flex items-center gap-1 overflow-x-auto p-1">
       {options.map((option) => (
         <button
           type="button"
@@ -86,7 +88,7 @@ function TimePills({
           {option}
         </button>
       ))}
-    </div>
+    </GlassSurface>
   );
 }
 
@@ -221,9 +223,9 @@ function ServiceCard({
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-8 space-y-3">
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+          <SolidPlate tone="subtle" className="flex h-12 w-12 items-center justify-center rounded-full">
             <Icon className="h-6 w-6 text-muted-foreground" />
-          </div>
+          </SolidPlate>
           <div className="text-center space-y-1">
             <div className="text-sm font-medium text-foreground">服务未配置</div>
             <div className="text-xs text-muted-foreground">该服务尚未在系统中配置</div>
@@ -344,7 +346,7 @@ export function Dashboard() {
         <DashboardCard title="硬件信息" icon={Cpu} compact={compact}>
           <div className="space-y-2">
             {rows.hardware.map((row) => <InfoLine key={row.label} {...row} />)}
-            <div className="gary-solid-plate px-3 py-2.5">
+            <SolidPlate tone="regular" className="px-3 py-2.5">
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-sm text-muted-foreground">硬盘使用率</span>
                 <span className="text-sm font-medium">{formatPercent(resource.disk_percent)}</span>
@@ -352,7 +354,7 @@ export function Dashboard() {
               <div className="w-full h-2 rounded-full bg-muted/50 overflow-hidden">
                 <div className="h-2 rounded-full bg-gradient-to-r from-primary to-primary/70" style={{ width: `${Math.min(Number(resource.disk_percent || 0), 100)}%` }} />
               </div>
-            </div>
+            </SolidPlate>
           </div>
         </DashboardCard>
       </div>}
@@ -369,12 +371,12 @@ export function Dashboard() {
           }
         >
           <div className="flex flex-col h-full">
-            <div className="gary-solid-plate flex min-h-[150px] flex-1 gap-2 overflow-hidden p-3">
+            <SolidPlate tone="subtle" className="flex min-h-[150px] flex-1 gap-2 overflow-hidden p-3">
               <div className="flex flex-col justify-between text-[10px] text-muted-foreground py-1">
                 <span>{trendScaleMax}%</span><span>{Math.round(trendScaleMax / 2)}%</span><span>0%</span>
               </div>
               <div className="flex-1"><TrendChart points={visibleResourceHistory} cpuPercent={cpuPercent} memoryPercent={memoryPercent} scaleMax={trendScaleMax} /></div>
-            </div>
+            </SolidPlate>
             <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
               <div className="flex items-center gap-3">
                 <LegendDot color={CPU_COLOR} label="CPU" icon={Cpu} />
@@ -410,12 +412,12 @@ export function Dashboard() {
           }
         >
           <div className="flex flex-col h-full">
-            <div className="gary-solid-plate flex min-h-[200px] flex-1 gap-2 overflow-hidden p-3">
+            <SolidPlate tone="subtle" className="flex min-h-[200px] flex-1 gap-2 overflow-hidden p-3">
               <div className="flex flex-col justify-between text-[10px] text-muted-foreground py-1">
                 <span>512K</span><span>256K</span><span>0</span>
               </div>
               <div className="flex-1"><RateChart points={visibleRateHistory} downloadSpeed={downloadSpeed} uploadSpeed={uploadSpeed} connections={connectionCount} /></div>
-            </div>
+            </SolidPlate>
             <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
               <div className="flex items-center gap-3">
                 <LegendDot color={CONN_COLOR} label="连接数" />
@@ -431,12 +433,12 @@ export function Dashboard() {
         <DashboardCard title="统计信息" icon={Activity} compact={compact}>
           <div className="space-y-2">
             {rows.stats.map((row) => (
-              <div key={row.label} className="gary-solid-plate p-3">
+              <SolidPlate key={row.label} tone="regular" className="p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{row.label}</span>
                   <span className="text-sm font-medium">{row.value}</span>
                 </div>
-              </div>
+              </SolidPlate>
             ))}
           </div>
         </DashboardCard>

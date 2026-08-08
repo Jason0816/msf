@@ -797,13 +797,7 @@ func (a *App) handleSettingsProfilePut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleSettingsAppearanceGet(w http.ResponseWriter, r *http.Request) {
-	appearance := map[string]string{
-		"theme":        a.setting("appearance.theme", a.setting("theme", "system")),
-		"language":     a.setting("appearance.language", a.setting("language", "zh-CN")),
-		"compact":      a.setting("appearance.compact", "false"),
-		"menu_order":   a.setting("appearance.menu_order", ""),
-		"accent_color": a.setting("appearance.accent_color", ""),
-	}
+	appearance := a.appearanceSettingsPayload()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": appearance, "appearance": appearance})
 }
 
@@ -813,14 +807,205 @@ func (a *App) handleSettingsAppearancePut(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	opacity, hasOpacity, err := validateContentPlateOpacityPayload(req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	updates := make(map[string]string, len(req))
 	for key, value := range req {
 		if key == "" {
 			continue
 		}
-		a.setSetting("appearance."+key, fmtAny(value))
+		// The legacy single-value key is read-only migration input. Keep
+		// accepting it from older clients, but never create or update it.
+		if key == contentPlateOpacityLegacyKey {
+			continue
+		}
+		if hasOpacity {
+			if normalized, ok := opacity[key]; ok {
+				updates["appearance."+key] = normalized
+				continue
+			}
+		}
+		updates["appearance."+key] = fmtAny(value)
+	}
+	if err := a.writeSettingsAtomic(updates); err != nil {
+		writeError(w, http.StatusInternalServerError, "settings_error", err.Error())
+		return
 	}
 	a.audit(currentUser(r), "settings.appearance.update", "settings", "", true, "")
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": req})
+}
+
+const (
+	contentPlateOpacitySubtleKey  = "content_plate_opacity_subtle"
+	contentPlateOpacityRegularKey = "content_plate_opacity_regular"
+	contentPlateOpacityStrongKey  = "content_plate_opacity_strong"
+	contentPlateOpacityLegacyKey  = "content_plate_opacity"
+)
+
+var contentPlateOpacityIntegerPattern = regexp.MustCompile(`^[0-9]+$`)
+
+type contentPlateOpacityRange struct {
+	min int
+	max int
+}
+
+var contentPlateOpacityRanges = map[string]contentPlateOpacityRange{
+	contentPlateOpacitySubtleKey:  {min: 20, max: 80},
+	contentPlateOpacityRegularKey: {min: 30, max: 90},
+	contentPlateOpacityStrongKey:  {min: 40, max: 96},
+}
+
+var contentPlateOpacityKeys = []string{
+	contentPlateOpacitySubtleKey,
+	contentPlateOpacityRegularKey,
+	contentPlateOpacityStrongKey,
+}
+
+func (a *App) appearanceSettingsPayload() map[string]string {
+	opacity := a.appearanceContentPlateOpacity()
+	return map[string]string{
+		"theme":                       a.setting("appearance.theme", a.setting("theme", "system")),
+		"language":                    a.setting("appearance.language", a.setting("language", "zh-CN")),
+		"scene":                       a.setting("appearance.scene", a.setting("scene", "dynamic")),
+		"quality":                     a.setting("appearance.quality", a.setting("quality", "full")),
+		"compact":                     a.setting("appearance.compact", "false"),
+		"menu_order":                  a.setting("appearance.menu_order", ""),
+		"accent_color":                a.setting("appearance.accent_color", ""),
+		contentPlateOpacitySubtleKey:  opacity[contentPlateOpacitySubtleKey],
+		contentPlateOpacityRegularKey: opacity[contentPlateOpacityRegularKey],
+		contentPlateOpacityStrongKey:  opacity[contentPlateOpacityStrongKey],
+	}
+}
+
+// validateContentPlateOpacityPayload validates the API-level opacity snapshot.
+// The fields are intentionally accepted only as integer percentage strings. If
+// any field is present, all three fields must be present and valid before a
+// caller writes any setting.
+func validateContentPlateOpacityPayload(raw map[string]any) (map[string]string, bool, error) {
+	present := make(map[string]any, len(contentPlateOpacityKeys))
+	for _, key := range contentPlateOpacityKeys {
+		if value, ok := raw[key]; ok {
+			present[key] = value
+		}
+	}
+	if len(present) == 0 {
+		return nil, false, nil
+	}
+	if len(present) != len(contentPlateOpacityKeys) {
+		missing := make([]string, 0, len(contentPlateOpacityKeys)-len(present))
+		for _, key := range contentPlateOpacityKeys {
+			if _, ok := present[key]; !ok {
+				missing = append(missing, key)
+			}
+		}
+		return nil, true, fmt.Errorf("content plate opacity fields must be provided together; missing %s", strings.Join(missing, ", "))
+	}
+
+	values := make(map[string]string, len(contentPlateOpacityKeys))
+	numbers := make(map[string]int, len(contentPlateOpacityKeys))
+	for _, key := range contentPlateOpacityKeys {
+		value, ok := present[key].(string)
+		if !ok || !contentPlateOpacityIntegerPattern.MatchString(value) {
+			return nil, true, fmt.Errorf("%s must be an integer percentage string", key)
+		}
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return nil, true, fmt.Errorf("%s must be an integer percentage string", key)
+		}
+		rangeForKey := contentPlateOpacityRanges[key]
+		if n < rangeForKey.min || n > rangeForKey.max {
+			return nil, true, fmt.Errorf("%s must be between %d and %d", key, rangeForKey.min, rangeForKey.max)
+		}
+		numbers[key] = n
+		values[key] = strconv.Itoa(n)
+	}
+	if numbers[contentPlateOpacitySubtleKey] > numbers[contentPlateOpacityRegularKey] || numbers[contentPlateOpacityRegularKey] > numbers[contentPlateOpacityStrongKey] {
+		return nil, true, fmt.Errorf("content plate opacity must satisfy %s <= %s <= %s", contentPlateOpacitySubtleKey, contentPlateOpacityRegularKey, contentPlateOpacityStrongKey)
+	}
+	return values, true, nil
+}
+
+func (a *App) appearanceContentPlateOpacity() map[string]string {
+	raw := make(map[string]any, len(contentPlateOpacityKeys))
+	present := 0
+	for _, key := range contentPlateOpacityKeys {
+		value, ok := a.settingValue("appearance." + key)
+		if ok {
+			present++
+			raw[key] = value
+		}
+	}
+	if present == len(contentPlateOpacityKeys) {
+		if values, _, err := validateContentPlateOpacityPayload(raw); err == nil {
+			return values
+		}
+		return defaultContentPlateOpacity()
+	}
+	if present == 0 {
+		if legacy, ok := a.settingValue("appearance." + contentPlateOpacityLegacyKey); ok {
+			if regular, err := strconv.Atoi(strings.TrimSpace(legacy)); err == nil {
+				return migrateLegacyContentPlateOpacity(regular)
+			}
+		}
+	}
+	return defaultContentPlateOpacity()
+}
+
+func defaultContentPlateOpacity() map[string]string {
+	return map[string]string{
+		contentPlateOpacitySubtleKey:  "56",
+		contentPlateOpacityRegularKey: "70",
+		contentPlateOpacityStrongKey:  "84",
+	}
+}
+
+func migrateLegacyContentPlateOpacity(regular int) map[string]string {
+	// Preserve the raw legacy value as the center of the migration: derive
+	// subtle/strong with -14/+14 first, then clamp each tier independently.
+	return map[string]string{
+		contentPlateOpacitySubtleKey:  strconv.Itoa(clampInt(regular-14, 20, 80)),
+		contentPlateOpacityRegularKey: strconv.Itoa(clampInt(regular, 30, 90)),
+		contentPlateOpacityStrongKey:  strconv.Itoa(clampInt(regular+14, 40, 96)),
+	}
+}
+
+func clampInt(value, min, max int) int {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
+
+func (a *App) settingValue(key string) (string, bool) {
+	var value string
+	if err := a.DB.QueryRow(`select value from settings where key=?`, key).Scan(&value); err != nil {
+		return "", false
+	}
+	return value, true
+}
+
+func (a *App) writeSettingsAtomic(updates map[string]string) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	tx, err := a.DB.Begin()
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	for key, value := range updates {
+		if _, err := tx.Exec(`insert or replace into settings(key,value,updated_at) values(?,?,?)`, key, value, now); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (a *App) handleLicenseStatus(w http.ResponseWriter, r *http.Request) {
