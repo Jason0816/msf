@@ -24,7 +24,7 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="gary-app-shell">
+    <div className={cn("gary-app-shell", collapsed && "gary-app-shell--sidebar-collapsed")}>
       <SceneBackdrop />
       <GlassFilterDefs />
       <a

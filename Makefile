@@ -64,6 +64,7 @@ package: frontend
 	cp packaging/install.sh packaging/uninstall.sh $(PACKAGE_DIR)/
 	cp packaging/systemd/$(APP_NAME).service $(PACKAGE_DIR)/systemd/
 	cp packaging/README-linux-amd64.md $(PACKAGE_DIR)/README.md
+	cp THIRD_PARTY_NOTICES.md $(PACKAGE_DIR)/
 	chmod 0755 $(PACKAGE_DIR)/$(APP_NAME) $(PACKAGE_DIR)/install.sh $(PACKAGE_DIR)/uninstall.sh
 	cd $(PACKAGE_DIR) && if command -v sha256sum >/dev/null 2>&1; then find . -type f ! -name SHA256SUMS -print | LC_ALL=C sort | xargs sha256sum > SHA256SUMS; else find . -type f ! -name SHA256SUMS -print | LC_ALL=C sort | xargs shasum -a 256 > SHA256SUMS; fi
 	cd $(DIST) && tar -czf $(APP_NAME)-$(GOOS)-$(GOARCH).tar.gz $(notdir $(PACKAGE_DIR))

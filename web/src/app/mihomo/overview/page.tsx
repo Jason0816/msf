@@ -25,6 +25,7 @@ import {
   type OverviewTrafficHistoryPoint,
 } from "@/components/mihomo/overview/OverviewWidgets";
 import { useMihomoTrafficStream } from "@/components/mihomo/overview/trafficStream";
+import { EarthGlobeCard } from "@/components/mihomo/overview/EarthGlobeCard";
 import { apiData, formatBytes, formatPercent } from "@/lib/api";
 import { useApiPath } from "@/lib/use-api";
 
@@ -471,6 +472,7 @@ export default function MihomoOverviewPage() {
 
         <GlassSurface material="thick" className="@container rounded-2xl p-3"><div className="grid items-stretch gap-3 @min-[768px]:grid-cols-2"><FaviconLatencyTester /><NetworkInfoPanel domestic={domesticExit} international={internationalExit} loading={networkQuery.loading} onRefresh={() => void networkQuery.reload()} /></div></GlassSurface>
 
+        <EarthGlobeCard connections={connectionRows} />
         <ConnectionSankey connections={connectionRows} />
         <ProviderTrafficPanel payload={providerPayload} />
         <ConnectionHistoryPanel connections={connectionRows} />

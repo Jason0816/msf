@@ -19,6 +19,9 @@ export default defineConfig({
     outDir: path.resolve(__dirname, "../internal/server/web/dist"),
     emptyOutDir: true
   },
+  worker: {
+    format: "es"
+  },
   server: {
     proxy: {
       "/api": "http://127.0.0.1:7777"
