@@ -289,4 +289,20 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
   }
+  /* Data grids scroll vertically without reserving a right-side gutter. Keep only
+     the bottom horizontal drag bar for wide tables. */
+  .scrollbar-x-only::-webkit-scrollbar {
+    width: 0;
+    height: 6px;
+  }
+  .scrollbar-x-only::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-x-only::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--border) 80%, transparent);
+    border-radius: 9999px;
+  }
+  .scrollbar-x-only::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
+  }
 }

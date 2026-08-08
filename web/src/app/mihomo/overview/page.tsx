@@ -445,8 +445,8 @@ export default function MihomoOverviewPage() {
   }, [overview.data, overviewDownloadSpeedValue, overviewUploadSpeedValue, trafficStream.connected, trafficStream.sample]);
 
   return (
-    <AppShell fillViewport>
-      <div className="scrollbar-thin h-full min-h-0 space-y-6 overflow-y-auto pr-1 animate-fade-in">
+    <AppShell fillViewport contentUnderHeader>
+      <div className="space-y-6 pb-4 pt-20 pr-1 animate-fade-in md:pt-24">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold leading-8 text-foreground">Mihomo 概览</h1>
           <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-primary/25">

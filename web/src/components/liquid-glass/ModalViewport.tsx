@@ -71,8 +71,8 @@ export function ModalViewport({
       <div
         aria-hidden="true"
         className={cn(
-          "absolute inset-0 z-0 bg-slate-950/25 dark:bg-black/50 animate-fade-in",
-          overlayClassName,
+          "absolute inset-0 z-0 animate-fade-in",
+          overlayClassName ?? "bg-slate-950/25 dark:bg-black/50",
         )}
         onClick={onClose}
       />
