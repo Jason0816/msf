@@ -339,29 +339,57 @@ function rankRules(rows: any[], total: number): RuleRow[] {
 
 function RankList({ rows, accent }: { rows: RankRow[]; accent: string }) {
   return (
-    <div className="flex-1 space-y-3 overflow-y-auto p-4 scrollbar-thin">
+    <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
       {rows.length === 0 ? (
         <SolidPlate className="p-6 text-center text-sm text-muted-foreground">暂无数据</SolidPlate>
-      ) : rows.map((r, i) => (
-        <SolidPlate key={`${r.name}-${i}`} className="space-y-2 px-3 py-2.5">
-          <div className="flex items-center gap-2">
-            <span className="flex-shrink-0 w-5 h-5 rounded text-[11px] font-semibold flex items-center justify-center bg-muted text-muted-foreground">
-              {i + 1}
-            </span>
-            <span className="flex-1 text-xs font-medium text-foreground truncate">{r.name}</span>
-            <span className={cn("text-xs font-medium", r.danger ? "text-red-500" : "text-muted-foreground")}>
-              {r.value}
-              {r.pct !== undefined && !r.danger && (
-                <span className="text-muted-foreground"> ({r.pct}%)</span>
-              )}
-            </span>
-          </div>
-          <div className="h-1 w-full rounded-full bg-muted overflow-hidden ml-7" style={{ width: "calc(100% - 1.75rem)" }}>
-            <div className={cn("h-full rounded-full", r.danger ? "bg-red-500" : accent)} style={{ width: `${Math.min((r.pct ?? 0) * (r.danger ? 1 : 4), 100)}%` }} />
-          </div>
+      ) : (
+        <SolidPlate tone="regular" className="overflow-hidden p-0">
+          {rows.map((r, i) => (
+            <div key={`${r.name}-${i}`} className="space-y-2 border-b border-border/40 px-3 py-3 transition-colors last:border-b-0 hover:bg-muted/25">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-[11px] font-semibold text-muted-foreground">
+                  {i + 1}
+                </span>
+                <span className="flex-1 truncate text-xs font-medium text-foreground">{r.name}</span>
+                <span className={cn("text-xs font-medium", r.danger ? "text-red-500" : "text-muted-foreground")}>
+                  {r.value}
+                  {r.pct !== undefined && !r.danger && <span className="text-muted-foreground"> ({r.pct}%)</span>}
+                </span>
+              </div>
+              <div className="ml-7 h-1 overflow-hidden rounded-full bg-muted" style={{ width: "calc(100% - 1.75rem)" }}>
+                <div className={cn("h-full rounded-full", r.danger ? "bg-red-500" : accent)} style={{ width: `${Math.min((r.pct ?? 0) * (r.danger ? 1 : 4), 100)}%` }} />
+              </div>
+            </div>
+          ))}
         </SolidPlate>
-      ))}
+      )}
     </div>
+  );
+}
+
+function RuleTable({ rows }: { rows: RuleRow[] }) {
+  if (rows.length === 0) {
+    return <SolidPlate className="p-6 text-center text-sm text-muted-foreground">暂无分流统计</SolidPlate>;
+  }
+  return (
+    <SolidPlate tone="regular" className="overflow-hidden p-0">
+      {rows.map((row) => (
+        <div key={row.key} className="space-y-2 border-b border-border/40 px-3 py-3 transition-colors last:border-b-0 hover:bg-muted/25">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate text-foreground">
+              <span className="font-medium">{row.name}</span>{" "}
+              <span className="text-xs text-muted-foreground">({row.key})</span>
+            </span>
+            <span className="shrink-0 text-muted-foreground">
+              {row.count} <span className="text-xs">({row.pct}%)</span>
+            </span>
+          </div>
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div className={cn("h-full rounded-full", row.color)} style={{ width: `${row.pct}%` }} />
+          </div>
+        </div>
+      ))}
+    </SolidPlate>
   );
 }
 
@@ -632,25 +660,8 @@ export default function MosdnsOverviewPage() {
                 </div>
               }
             />
-            <div className="scrollbar-thin min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-              {splitStats.length === 0 ? (
-                <SolidPlate className="p-6 text-center text-sm text-muted-foreground">暂无分流统计</SolidPlate>
-              ) : splitStats.map((r) => (
-                <SolidPlate key={r.key} className="space-y-2 px-3 py-2.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-foreground">
-                      <span className="font-medium">{r.name}</span>{" "}
-                      <span className="text-xs text-muted-foreground">({r.key})</span>
-                    </span>
-                    <span className="text-muted-foreground">
-                      {r.count} <span className="text-xs">({r.pct}%)</span>
-                    </span>
-                  </div>
-                  <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-                    <div className={cn("h-full rounded-full", r.color)} style={{ width: `${r.pct}%` }} />
-                  </div>
-                </SolidPlate>
-              ))}
+            <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-4">
+              <RuleTable rows={splitStats} />
             </div>
           </Card>
         </div>
