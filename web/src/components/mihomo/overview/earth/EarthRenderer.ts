@@ -28,6 +28,7 @@ import {
 } from 'three/tsl'
 import * as THREE from 'three/webgpu'
 import type { EarthEndpointInfo, EarthHostTraffic, EarthLocation, EarthRoute } from './types'
+import { MIHOMO_DOWNLOAD_COLOR, MIHOMO_UPLOAD_COLOR } from '../visualColors'
 
 const EARTH_RADIUS = 1
 // The bead sits partly below the surface so it reads as planted on the globe
@@ -40,9 +41,8 @@ const MAX_INITIAL_LATITUDE = 15
 const FLOW_DURATION_SECONDS = 0.85
 const FLOW_STREAK_LENGTH = 0.14
 const FLOW_STREAK_SEGMENTS = 14
-const UPLOAD_COLOR = new THREE.Color('#ffdc5e')
-const DOWNLOAD_COLOR = new THREE.Color('#3235ee')
-const FLOW_TAIL_COLOR = new THREE.Color('#5fcaff')
+const UPLOAD_COLOR = new THREE.Color(MIHOMO_UPLOAD_COLOR)
+const DOWNLOAD_COLOR = new THREE.Color(MIHOMO_DOWNLOAD_COLOR)
 const LINE_ORIGIN_COLOR = new THREE.Color('#b8f7ff')
 const LINE_DESTINATION_COLOR = new THREE.Color('#4f9dff')
 const ROLE_COLORS = {
@@ -536,6 +536,7 @@ export const createEarthRenderer = async (
           Math.ceil((visibleLength / FLOW_STREAK_LENGTH) * FLOW_STREAK_SEGMENTS),
         )
         const color = direction === 'upload' ? UPLOAD_COLOR : DOWNLOAD_COLOR
+        const tailColor = color.clone().multiplyScalar(0.32)
 
         for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
           const startRatio = segmentIndex / segmentCount
@@ -562,12 +563,12 @@ export const createEarthRenderer = async (
           flowPositions[offset + 5] = flowEnd.z
           const startStrength = 0.06 + Math.pow(startRatio, 1.7) * 0.94
           const endStrength = 0.06 + Math.pow(endRatio, 1.7) * 0.94
-          flowColors[offset] = THREE.MathUtils.lerp(FLOW_TAIL_COLOR.r, color.r, startStrength)
-          flowColors[offset + 1] = THREE.MathUtils.lerp(FLOW_TAIL_COLOR.g, color.g, startStrength)
-          flowColors[offset + 2] = THREE.MathUtils.lerp(FLOW_TAIL_COLOR.b, color.b, startStrength)
-          flowColors[offset + 3] = THREE.MathUtils.lerp(FLOW_TAIL_COLOR.r, color.r, endStrength)
-          flowColors[offset + 4] = THREE.MathUtils.lerp(FLOW_TAIL_COLOR.g, color.g, endStrength)
-          flowColors[offset + 5] = THREE.MathUtils.lerp(FLOW_TAIL_COLOR.b, color.b, endStrength)
+          flowColors[offset] = THREE.MathUtils.lerp(tailColor.r, color.r, startStrength)
+          flowColors[offset + 1] = THREE.MathUtils.lerp(tailColor.g, color.g, startStrength)
+          flowColors[offset + 2] = THREE.MathUtils.lerp(tailColor.b, color.b, startStrength)
+          flowColors[offset + 3] = THREE.MathUtils.lerp(tailColor.r, color.r, endStrength)
+          flowColors[offset + 4] = THREE.MathUtils.lerp(tailColor.g, color.g, endStrength)
+          flowColors[offset + 5] = THREE.MathUtils.lerp(tailColor.b, color.b, endStrength)
           flowSegmentIndex += 1
         }
       }

@@ -16,12 +16,13 @@ import {
   Play,
   type LucideIcon,
 } from "lucide-react";
-import { api, apiData, apiList, formatBytes, formatPercent } from "@/lib/api";
+import { api, apiData, apiList, formatBytes, formatPercent, getToken } from "@/lib/api";
 import { useApiPath } from "@/lib/use-api";
 import { DashboardCard } from "./DashboardCard";
 import { RateChart, TrendChart, type ChartPoint } from "./charts";
+import { TimeWindowSelector } from "@/components/charts/TimeWindowSelector";
+import { mergeFrozenTimePoints, withinTimeWindow, type TimeWindowSeconds } from "@/components/charts/timeSeries";
 import { useToaster, ToastStack } from "@/components/Toaster";
-import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import {
   DASHBOARD_SETTINGS_EVENT,
@@ -33,14 +34,8 @@ const CPU_COLOR = "oklch(60% 0.21 235)";
 const MEM_COLOR = "oklch(58% 0.25 293)";
 const UP_COLOR = "oklch(60% 0.17 152)";
 const CONN_COLOR = "oklch(75% 0.15 75)";
-const HISTORY_LIMIT = 200;
-const RANGE_COUNTS: Record<string, number> = {
-  全部: HISTORY_LIMIT,
-  "1/2": 100,
-  "1/4": 50,
-  "1/5": 40,
-  "1/10": 20,
-};
+const HISTORY_RETENTION_SECONDS = 360;
+let dashboardHistoryCache: Array<ChartPoint & { timestamp?: unknown }> = [];
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
@@ -60,38 +55,6 @@ function LegendDot({ color, label, icon: Icon }: { color: string; label: string;
   );
 }
 
-function TimePills({
-  options,
-  active,
-  onChange,
-}: {
-  options: string[];
-  active: string;
-  onChange: (option: string) => void;
-}) {
-  return (
-    <GlassSurface material="regular" flat className="gary-segmented flex items-center gap-1 overflow-x-auto p-1">
-      {options.map((option) => (
-        <button
-          type="button"
-          key={option}
-          onClick={() => onChange(option)}
-          aria-pressed={option === active}
-          title={`显示 ${RANGE_COUNTS[option] || HISTORY_LIMIT} 个点`}
-          className={
-            "gary-segmented__item flex-shrink-0 px-2.5 py-1.5 text-[10px] font-medium " +
-            (option === active
-              ? "gary-segmented__item--active text-primary"
-              : "text-muted-foreground")
-          }
-        >
-          {option}
-        </button>
-      ))}
-    </GlassSurface>
-  );
-}
-
 function scaleButtonClass(active: boolean) {
   return (
     "gary-segmented__item flex-shrink-0 px-2.5 py-1.5 text-[10px] font-medium " +
@@ -99,14 +62,6 @@ function scaleButtonClass(active: boolean) {
       ? "gary-segmented__item--active text-primary"
       : "text-muted-foreground")
   );
-}
-
-function historyCount(range: string) {
-  return RANGE_COUNTS[range] || HISTORY_LIMIT;
-}
-
-function visibleHistory(points: ChartPoint[], range: string) {
-  return points.slice(-historyCount(range));
 }
 
 function numberValue(value: unknown) {
@@ -238,16 +193,15 @@ function ServiceCard({
 
 export function Dashboard() {
   const { toasts, showToast } = useToaster();
-  const [trendRange, setTrendRange] = useState("1/4");
-  const [rateRange, setRateRange] = useState("1/5");
+  const [trendRange, setTrendRange] = useState<TimeWindowSeconds>(180);
+  const [rateRange, setRateRange] = useState<TimeWindowSeconds>(60);
   const [trendAutoScale, setTrendAutoScale] = useState(false);
   const [dashboardSettings, setDashboardSettings] = useState(() => loadDashboardSettings());
-  const [resourceHistory, setResourceHistory] = useState<Array<ChartPoint & { timestamp?: unknown }>>([]);
-  const [rateHistory, setRateHistory] = useState<ChartPoint[]>([]);
+  const [resourceHistory, setResourceHistory] = useState<Array<ChartPoint & { timestamp?: unknown }>>(() => dashboardHistoryCache);
   const monitor = useApiPath<any>("/api/v1/monitor/system", [], 3000);
   const resources = useApiPath<any>("/api/v1/monitor/resources", [], 3000);
   const network = useApiPath<any>("/api/v1/monitor/network", [], 3000);
-  const historyQuery = useApiPath<any>("/api/v1/monitor/history", [], 3000);
+  const historyQuery = useApiPath<any>("/api/v1/monitor/history", [], 30000);
   const servicesQuery = useApiPath<any>("/api/v1/services", [], 3000);
 
   const system = apiData<any>(monitor.data, {});
@@ -276,38 +230,75 @@ export function Dashboard() {
     const nextSamples = apiList<any>(historyQuery.data, ["data", "history", "items"]).map(normalizeMonitorPoint);
     if (nextSamples.length === 0) return;
     setResourceHistory((prev) => {
-      const seen = new Set(prev.map((point) => String(point.timestamp || "")));
-      const merged = [...prev];
-      for (const sample of nextSamples) {
-        const key = String(sample.timestamp || "");
-        if (key && seen.has(key)) continue;
-        merged.push(sample);
-        if (key) seen.add(key);
-      }
-      return merged.slice(-HISTORY_LIMIT);
+      const next = mergeFrozenTimePoints(prev, nextSamples, HISTORY_RETENTION_SECONDS);
+      dashboardHistoryCache = next;
+      return next;
     });
   }, [historyQuery.data]);
 
   useEffect(() => {
-    if (!network.data) return;
-    setRateHistory((prev) => [
-      ...prev,
-      {
-        timestamp: Date.now(),
-        downloadSpeed,
-        uploadSpeed,
-        connections: connectionCount,
-      },
-    ].slice(-HISTORY_LIMIT));
-  }, [network.data, downloadSpeed, uploadSpeed, connectionCount]);
+    let stopped = false;
+    let controller: AbortController | null = null;
+    const receive = (payload: string) => {
+      try {
+        const point = normalizeMonitorPoint(JSON.parse(payload));
+        setResourceHistory((previous) => {
+          const next = mergeFrozenTimePoints(previous, [point], HISTORY_RETENTION_SECONDS);
+          dashboardHistoryCache = next;
+          return next;
+        });
+      } catch {
+        // Ignore malformed/partial events; the next complete monitor event will replace them.
+      }
+    };
+
+    const connect = async () => {
+      while (!stopped) {
+        controller = new AbortController();
+        try {
+          const token = getToken();
+          const response = await fetch("/api/v1/events/monitor", {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            signal: controller.signal,
+          });
+          if (!response.ok || !response.body) throw new Error(`monitor stream ${response.status}`);
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (!stopped) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+            let boundary = buffer.indexOf("\n\n");
+            while (boundary >= 0) {
+              const block = buffer.slice(0, boundary);
+              buffer = buffer.slice(boundary + 2);
+              const eventName = block.split("\n").find((line) => line.startsWith("event:"))?.slice(6).trim();
+              const data = block.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
+              if ((!eventName || eventName === "monitor") && data) receive(data);
+              boundary = buffer.indexOf("\n\n");
+            }
+          }
+        } catch (error) {
+          if (stopped || (error instanceof DOMException && error.name === "AbortError")) return;
+        }
+        if (!stopped) await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      }
+    };
+    void connect();
+    return () => {
+      stopped = true;
+      controller?.abort();
+    };
+  }, []);
 
   const visibleResourceHistory = useMemo(
-    () => visibleHistory(resourceHistory, trendRange),
+    () => withinTimeWindow(resourceHistory, trendRange),
     [resourceHistory, trendRange]
   );
   const visibleRateHistory = useMemo(
-    () => visibleHistory(rateHistory, rateRange),
-    [rateHistory, rateRange]
+    () => withinTimeWindow(resourceHistory, rateRange),
+    [resourceHistory, rateRange]
   );
   const trendScaleMax = trendAutoScale
     ? autoPercentScale(visibleResourceHistory, cpuPercent, memoryPercent)
@@ -371,19 +362,19 @@ export function Dashboard() {
           }
         >
           <div className="flex flex-col h-full">
-            <SolidPlate tone="subtle" className="flex min-h-[150px] flex-1 gap-2 overflow-hidden p-3">
+            <div className="flex min-h-[150px] flex-1 gap-2 overflow-hidden px-1 py-3">
               <div className="flex flex-col justify-between text-[10px] text-muted-foreground py-1">
                 <span>{trendScaleMax}%</span><span>{Math.round(trendScaleMax / 2)}%</span><span>0%</span>
               </div>
-              <div className="flex-1"><TrendChart points={visibleResourceHistory} cpuPercent={cpuPercent} memoryPercent={memoryPercent} scaleMax={trendScaleMax} /></div>
-            </SolidPlate>
+              <div className="flex-1"><TrendChart points={visibleResourceHistory} cpuPercent={cpuPercent} memoryPercent={memoryPercent} scaleMax={trendScaleMax} windowSeconds={trendRange} /></div>
+            </div>
             <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
               <div className="flex items-center gap-3">
                 <LegendDot color={CPU_COLOR} label="CPU" icon={Cpu} />
                 <LegendDot color={MEM_COLOR} label="内存" icon={MemoryStick} />
               </div>
               <div className="flex items-center gap-1 overflow-x-auto">
-                <TimePills options={["全部", "1/2", "1/4", "1/5", "1/10"]} active={trendRange} onChange={setTrendRange} />
+                <TimeWindowSelector value={trendRange} onChange={setTrendRange} />
                 <button
                   type="button"
                   onClick={() => setTrendAutoScale((value) => !value)}
@@ -412,19 +403,19 @@ export function Dashboard() {
           }
         >
           <div className="flex flex-col h-full">
-            <SolidPlate tone="subtle" className="flex min-h-[200px] flex-1 gap-2 overflow-hidden p-3">
+            <div className="flex min-h-[200px] flex-1 gap-2 overflow-hidden px-1 py-3">
               <div className="flex flex-col justify-between text-[10px] text-muted-foreground py-1">
                 <span>512K</span><span>256K</span><span>0</span>
               </div>
-              <div className="flex-1"><RateChart points={visibleRateHistory} downloadSpeed={downloadSpeed} uploadSpeed={uploadSpeed} connections={connectionCount} /></div>
-            </SolidPlate>
+              <div className="flex-1"><RateChart points={visibleRateHistory} downloadSpeed={downloadSpeed} uploadSpeed={uploadSpeed} connections={connectionCount} windowSeconds={rateRange} /></div>
+            </div>
             <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
               <div className="flex items-center gap-3">
                 <LegendDot color={CONN_COLOR} label="连接数" />
                 <LegendDot color={UP_COLOR} label="上传速度" />
                 <LegendDot color={CPU_COLOR} label="下载速度" />
               </div>
-              <TimePills options={["全部", "1/2", "1/4", "1/5", "1/10"]} active={rateRange} onChange={setRateRange} />
+              <TimeWindowSelector value={rateRange} onChange={setRateRange} />
             </div>
           </div>
         </DashboardCard>

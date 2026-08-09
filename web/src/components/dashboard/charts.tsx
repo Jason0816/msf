@@ -1,8 +1,9 @@
-import { useId, useMemo, useState } from "react";
+"use client";
 
-/**
- * Hand-rolled SVG charts matching the live site (viewBox 0 0 300 100, 5 gridlines).
- */
+import { useEffect, useMemo, useRef, useState } from "react";
+import { EChartCanvas, echarts, type EChartsOption } from "@/components/charts/EChartCanvas";
+import { latestTimestamp, timestampMs } from "@/components/charts/timeSeries";
+import { namedTimeValue, nextStableScale, type StableScaleState } from "@/components/charts/chartStability";
 
 export type ChartPoint = {
   timestamp?: unknown;
@@ -14,120 +15,105 @@ export type ChartPoint = {
   connections?: unknown;
 };
 
-const GRID_Y = [0, 25, 50, 75, 100];
-
-function Gridlines() {
-  return (
-    <>
-      {GRID_Y.map((y) => (
-        <line
-          key={y}
-          x1="0"
-          y1={y}
-          x2="300"
-          y2={y}
-          stroke="currentColor"
-          strokeWidth="0.3"
-          className="text-muted-foreground/10"
-        />
-      ))}
-    </>
-  );
+function initialRatePoints(end: number, windowSeconds: number): ChartPoint[] {
+  const count = Math.max(3, Math.round(windowSeconds) + 2);
+  return Array.from({ length: count }, (_, index) => ({
+    timestamp: end - (count - 1 - index) * 1000,
+    downloadSpeed: 0,
+    uploadSpeed: 0,
+    connections: 0,
+  }));
 }
 
-function linePath(values: number[]): string {
-  const ys = values.length === 1 ? [values[0], values[0]] : values;
-  if (ys.length === 0) return "";
-  const step = ys.length > 1 ? 300 / (ys.length - 1) : 300;
-  return ys.map((y, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${y.toFixed(1)}`).join(" ");
-}
-
-/**
- * Quadratic-midpoint smoothing, identical to the live site: each data point is
- * a control point and the curve passes through the midpoints between them.
- * Produces `M p0 Q p0,mid01 Q p1,mid12 … L pLast`.
- */
-function smoothLinePath(values: number[]): string {
-  const ys = values.length === 1 ? [values[0], values[0]] : values;
-  const n = ys.length;
-  if (n === 0) return "";
-  const step = n > 1 ? 300 / (n - 1) : 300;
-  const x = (i: number) => i * step;
-  let path = `M ${x(0).toFixed(2)},${ys[0].toFixed(2)}`;
-  if (n === 1) return path;
-  for (let i = 1; i < n; i += 1) {
-    const cx = x(i - 1);
-    const cy = ys[i - 1];
-    const mx = (x(i - 1) + x(i)) / 2;
-    const my = (ys[i - 1] + ys[i]) / 2;
-    path += ` Q ${cx.toFixed(2)},${cy.toFixed(2)} ${mx.toFixed(2)},${my.toFixed(2)}`;
+function mergeRatePoints(placeholders: ChartPoint[], samples: ChartPoint[], latest: number, windowSeconds: number) {
+  const byTimestamp = new Map<number, ChartPoint>();
+  for (const point of [...placeholders, ...samples]) {
+    const time = timestampMs(point.timestamp ?? point.time);
+    if (time > 0) byTimestamp.set(time, point);
   }
-  path += ` L ${x(n - 1).toFixed(2)},${ys[n - 1].toFixed(2)}`;
-  return path;
+  const cutoff = latest - (windowSeconds + 2) * 1000;
+  return Array.from(byTimestamp.entries())
+    .filter(([time]) => time >= cutoff)
+    .sort(([left], [right]) => left - right)
+    .map(([, point]) => point);
 }
 
-function areaPath(values: number[], smooth = false): string {
-  const path = smooth ? smoothLinePath(values) : linePath(values);
-  return path ? `${path} L300,100 L0,100 Z` : "";
-}
+const CPU_COLOR = "oklch(60% 0.21 235)";
+const MEMORY_COLOR = "rgb(147, 51, 234)";
+const UPLOAD_COLOR = "rgb(22, 163, 74)";
+const CONNECTION_COLOR = "rgb(234, 179, 8)";
 
 function numberValue(value: unknown) {
   const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric)) return 0;
-  return numeric;
-}
-
-function clampPercent(value: unknown, scaleMax = 100) {
-  const scale = Math.max(1, Number(scaleMax) || 100);
-  return Math.max(0, Math.min(numberValue(value), scale));
-}
-
-function valuesOrCurrent(points: ChartPoint[], key: keyof ChartPoint, fallback: unknown) {
-  if (points.length > 0) {
-    return points.map((point) => point[key]);
-  }
-  return [fallback];
-}
-
-function percentLine(values: unknown[], scaleMax = 100) {
-  const scale = Math.max(1, Number(scaleMax) || 100);
-  return values.map((value) => 100 - (clampPercent(value, scale) / scale) * 100);
-}
-
-function rateLine(values: unknown[], max: number) {
-  return values.map((value) => {
-    const numeric = numberValue(value);
-    return max > 0 ? 100 - Math.max(0, Math.min(numeric / max, 1)) * 88 : 100;
-  });
-}
-
-function chartPointX(index: number, total: number) {
-  if (total <= 1) return 150;
-  return (index / (total - 1)) * 300;
+  return Number.isFinite(numeric) ? numeric : 0;
 }
 
 function formatByteRate(value: unknown) {
   const bytes = Math.max(0, numberValue(value));
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB/s`;
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB/s`;
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB/s`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(2)} MB/s`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB/s`;
   return `${bytes.toFixed(0)} B/s`;
 }
 
 function formatTooltipTime(value: unknown) {
-  let date: Date;
-  if (value instanceof Date) {
-    date = value;
-  } else if (typeof value === "number" && Number.isFinite(value)) {
-    date = new Date(value > 10_000_000_000 ? value : value * 1000);
-  } else if (typeof value === "string" && value.trim()) {
-    date = new Date(value);
-  } else {
-    date = new Date();
-  }
-  if (Number.isNaN(date.getTime())) date = new Date();
+  const date = new Date(timestampMs(value) || Date.now());
   const pad = (part: number) => String(part).padStart(2, "0");
   return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function useDarkTheme() {
+  const [dark, setDark] = useState(() => typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
+  useEffect(() => {
+    const observer = new MutationObserver(() => setDark(document.documentElement.classList.contains("dark")));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  return dark;
+}
+
+function stableTimePoint(point: ChartPoint, value: unknown) {
+  return namedTimeValue(point.timestamp ?? point.time, value);
+}
+
+function timePair(point: ChartPoint, value: unknown): [number, number] {
+  return [timestampMs(point.timestamp ?? point.time) || Date.now(), numberValue(value)];
+}
+
+function baseOption(dark: boolean, start: number, end: number): EChartsOption {
+  const reducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return {
+    backgroundColor: "transparent",
+    animationDurationUpdate: reducedMotion ? 0 : 1000,
+    animationEasingUpdate: "linear",
+    grid: { left: 0, top: 0, right: 0, bottom: 0, containLabel: false },
+    xAxis: {
+      type: "time",
+      show: false,
+      min: start,
+      max: end,
+    },
+    tooltip: {
+      show: true,
+      trigger: "axis",
+      confine: true,
+      axisPointer: {
+        type: "line",
+        lineStyle: { color: "oklch(70% 0.03 250)", width: 1.2, type: "dashed" },
+      },
+      backgroundColor: dark ? "rgba(20,20,23,.94)" : "rgba(255,255,255,.96)",
+      borderColor: dark ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.08)",
+      padding: [8, 10],
+      textStyle: { color: dark ? "#f4f4f5" : "#27272a", fontSize: 11 },
+    },
+  };
+}
+
+function areaGradient(color: string, bottom: string) {
+  return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    { offset: 0, color },
+    { offset: 1, color: bottom },
+  ]);
 }
 
 export function TrendChart({
@@ -135,51 +121,66 @@ export function TrendChart({
   cpuPercent = 0,
   memoryPercent = 0,
   scaleMax = 100,
+  windowSeconds = 180,
 }: {
   points?: ChartPoint[];
   cpuPercent?: unknown;
   memoryPercent?: unknown;
   scaleMax?: number;
+  windowSeconds?: number;
 }) {
-  const cpuYs = percentLine(valuesOrCurrent(points, "cpuPercent", cpuPercent), scaleMax);
-  const memoryYs = percentLine(valuesOrCurrent(points, "memoryPercent", memoryPercent), scaleMax);
-  return (
-    <svg
-      viewBox="0 0 300 100"
-      className="w-full h-full"
-      preserveAspectRatio="none"
-    >
-      <Gridlines />
-      <defs>
-        <linearGradient id="cpuGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="oklch(60% 0.21 235)" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="oklch(60% 0.21 235)" stopOpacity="0.05" />
-        </linearGradient>
-        <linearGradient id="memoryGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="rgb(147, 51, 234)" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="rgb(147, 51, 234)" stopOpacity="0.05" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath(memoryYs, true)} fill="url(#memoryGradient)" />
-      <path
-        d={smoothLinePath(memoryYs)}
-        fill="none"
-        stroke="rgb(147, 51, 234)"
-        strokeWidth="1"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d={areaPath(cpuYs, true)} fill="url(#cpuGradient)" />
-      <path
-        d={smoothLinePath(cpuYs)}
-        fill="none"
-        stroke="oklch(60% 0.21 235)"
-        strokeWidth="1"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+  const dark = useDarkTheme();
+  const chartPoints = useMemo<ChartPoint[]>(
+    () => points.length ? points : [{ timestamp: Date.now(), cpuPercent, memoryPercent }],
+    [cpuPercent, memoryPercent, points],
   );
+  const latest = latestTimestamp(chartPoints);
+  const option = useMemo<EChartsOption>(() => ({
+    ...baseOption(dark, latest - windowSeconds * 1000, latest),
+    tooltip: {
+      ...(baseOption(dark, latest - windowSeconds * 1000, latest).tooltip as object),
+      formatter: (params: any) => {
+        const rows = Array.isArray(params) ? params : [params];
+        const time = rows[0]?.value?.[0];
+        const values = new Map(rows.map((row: any) => [row.seriesName, numberValue(row.value?.[1])]));
+        return `<div style="font-weight:600;margin-bottom:6px">${formatTooltipTime(time)}</div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${CPU_COLOR}">CPU</span><b>${(values.get("CPU") ?? 0).toFixed(1)}%</b></div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${MEMORY_COLOR}">内存</span><b>${(values.get("内存") ?? 0).toFixed(1)}%</b></div>`;
+      },
+    },
+    yAxis: {
+      type: "value",
+      show: false,
+      min: 0,
+      max: Math.max(1, scaleMax),
+      splitNumber: 4,
+      splitLine: { show: true, lineStyle: { color: dark ? "rgba(255,255,255,.06)" : "rgba(35,38,45,.06)", width: 0.3 } },
+    },
+    series: [
+      {
+        type: "line",
+        name: "内存",
+        symbol: "none",
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1, color: MEMORY_COLOR, cap: "round", join: "round" },
+        areaStyle: { color: areaGradient("rgba(147,51,234,.30)", "rgba(147,51,234,.05)") },
+        data: chartPoints.map((point) => timePair(point, point.memoryPercent)),
+        emphasis: { disabled: true },
+      },
+      {
+        type: "line",
+        name: "CPU",
+        symbol: "none",
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1, color: CPU_COLOR, cap: "round", join: "round" },
+        areaStyle: { color: areaGradient("oklch(60% 0.21 235 / .30)", "oklch(60% 0.21 235 / .05)") },
+        data: chartPoints.map((point) => timePair(point, point.cpuPercent)),
+        emphasis: { disabled: true },
+      },
+    ],
+  }), [chartPoints, dark, latest, scaleMax, windowSeconds]);
+
+  return <EChartCanvas option={option} className="cursor-crosshair" />;
 }
 
 export function RateChart({
@@ -187,127 +188,91 @@ export function RateChart({
   downloadSpeed = 0,
   uploadSpeed = 0,
   connections = 0,
+  windowSeconds = 60,
 }: {
   points?: ChartPoint[];
   downloadSpeed?: unknown;
   uploadSpeed?: unknown;
   connections?: unknown;
+  windowSeconds?: number;
 }) {
-  const id = useId().replace(/:/g, "");
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const dark = useDarkTheme();
   const chartPoints = useMemo<ChartPoint[]>(
-    () => points.length > 0 ? points : [{ downloadSpeed, uploadSpeed, connections, timestamp: Date.now() }],
-    [connections, downloadSpeed, points, uploadSpeed]
+    () => points.length ? points : [{ timestamp: Date.now(), downloadSpeed, uploadSpeed, connections }],
+    [connections, downloadSpeed, points, uploadSpeed],
   );
-  const dlValues = valuesOrCurrent(chartPoints, "downloadSpeed", downloadSpeed);
-  const ulValues = valuesOrCurrent(chartPoints, "uploadSpeed", uploadSpeed);
-  const connValues = valuesOrCurrent(chartPoints, "connections", connections);
-  const maxRate = Math.max(...dlValues.map(numberValue), ...ulValues.map(numberValue), 1);
-  const maxConnections = Math.max(...connValues.map(numberValue), 100);
-  const dlYs = rateLine(dlValues, maxRate);
-  const ulYs = rateLine(ulValues, maxRate);
-  const connYs = rateLine(connValues, maxConnections);
-  const activeIndex = hoverIndex == null ? null : Math.max(0, Math.min(hoverIndex, chartPoints.length - 1));
-  const activePoint = activeIndex == null ? null : chartPoints[activeIndex];
-  const hoverX = activeIndex == null ? 0 : chartPointX(activeIndex, chartPoints.length);
-  const tooltipX = Math.max(0, Math.min(100, (hoverX / 300) * 100));
+  const latest = latestTimestamp(chartPoints);
+  const placeholderRef = useRef<{ range: number; points: ChartPoint[] }>({
+    range: windowSeconds,
+    points: initialRatePoints(latest, windowSeconds),
+  });
+  if (placeholderRef.current.range !== windowSeconds) {
+    placeholderRef.current = { range: windowSeconds, points: initialRatePoints(latest, windowSeconds) };
+  }
+  const bufferedPoints = useMemo(
+    () => mergeRatePoints(placeholderRef.current.points, chartPoints, latest, windowSeconds),
+    [chartPoints, latest, windowSeconds],
+  );
+  const axisEnd = latest - 1000;
+  const scaleKey = latest;
+  const rateScaleRef = useRef<{ range: number; key: number; state?: StableScaleState }>({ range: windowSeconds, key: 0 });
+  const connectionScaleRef = useRef<{ range: number; key: number; state?: StableScaleState }>({ range: windowSeconds, key: 0 });
+  if (rateScaleRef.current.range !== windowSeconds) rateScaleRef.current = { range: windowSeconds, key: 0 };
+  if (connectionScaleRef.current.range !== windowSeconds) connectionScaleRef.current = { range: windowSeconds, key: 0 };
+  if (rateScaleRef.current.key !== scaleKey || !rateScaleRef.current.state) {
+    rateScaleRef.current.key = scaleKey;
+    rateScaleRef.current.state = nextStableScale(
+      rateScaleRef.current.state,
+      Math.max(...bufferedPoints.flatMap((point) => [numberValue(point.downloadSpeed), numberValue(point.uploadSpeed)]), 0),
+      512 * 1024,
+    );
+  }
+  if (connectionScaleRef.current.key !== scaleKey || !connectionScaleRef.current.state) {
+    connectionScaleRef.current.key = scaleKey;
+    connectionScaleRef.current.state = nextStableScale(
+      connectionScaleRef.current.state,
+      Math.max(...bufferedPoints.map((point) => numberValue(point.connections)), 0),
+      100,
+    );
+  }
+  const maxRate = rateScaleRef.current.state.ceiling;
+  const maxConnections = connectionScaleRef.current.state.ceiling;
+  const option = useMemo<EChartsOption>(() => ({
+    ...baseOption(dark, axisEnd - windowSeconds * 1000, axisEnd),
+    tooltip: {
+      ...(baseOption(dark, axisEnd - windowSeconds * 1000, axisEnd).tooltip as object),
+      formatter: (params: any) => {
+        const rows = Array.isArray(params) ? params : [params];
+        const time = rows[0]?.value?.[0];
+        const values = new Map(rows.map((row: any) => [row.seriesName, numberValue(row.value?.[1])]));
+        return `<div style="font-weight:600;margin-bottom:6px">${formatTooltipTime(time)}</div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${CONNECTION_COLOR}">连接数</span><b>${Math.round(values.get("连接数") ?? 0)}</b></div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${UPLOAD_COLOR}">上传速度</span><b>${formatByteRate(values.get("上传速度"))}</b></div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${CPU_COLOR}">下载速度</span><b>${formatByteRate(values.get("下载速度"))}</b></div>`;
+      },
+    },
+    yAxis: [
+      { type: "value", show: false, min: 0, max: maxRate, splitNumber: 4, splitLine: { show: true, lineStyle: { color: dark ? "rgba(255,255,255,.06)" : "rgba(35,38,45,.06)", width: 0.3 } } },
+      { type: "value", show: false, min: 0, max: maxConnections, splitLine: { show: false } },
+    ],
+    series: [
+      {
+        id: "download-speed", type: "line", name: "下载速度", yAxisIndex: 0, symbol: "none", smooth: 0.2, showSymbol: false,
+        lineStyle: { width: 1.5, color: CPU_COLOR, cap: "round", join: "round" },
+        areaStyle: { color: areaGradient("oklch(60% 0.21 235 / .30)", "oklch(60% 0.21 235 / .05)") },
+        data: bufferedPoints.map((point) => stableTimePoint(point, point.downloadSpeed)), emphasis: { disabled: true },
+      },
+      {
+        id: "upload-speed", type: "line", name: "上传速度", yAxisIndex: 0, symbol: "none", smooth: 0.2, showSymbol: false,
+        lineStyle: { width: 1.5, color: UPLOAD_COLOR, cap: "round", join: "round" },
+        areaStyle: { color: areaGradient("rgba(22,163,74,.30)", "rgba(22,163,74,.05)") },
+        data: bufferedPoints.map((point) => stableTimePoint(point, point.uploadSpeed)), emphasis: { disabled: true },
+      },
+      {
+        id: "connections", type: "line", name: "连接数", yAxisIndex: 1, symbol: "none", smooth: 0.2, showSymbol: false,
+        lineStyle: { width: 1.5, color: CONNECTION_COLOR, cap: "round", join: "round" },
+        areaStyle: { color: areaGradient("rgba(234,179,8,.30)", "rgba(234,179,8,.05)") },
+        data: bufferedPoints.map((point) => stableTimePoint(point, point.connections)), emphasis: { disabled: true },
+      },
+    ],
+  }), [axisEnd, bufferedPoints, dark, maxConnections, maxRate, windowSeconds]);
 
-  return (
-    <div
-      className="relative h-full w-full"
-      onMouseLeave={() => setHoverIndex(null)}
-      onMouseMove={(event) => {
-        const rect = event.currentTarget.getBoundingClientRect();
-        const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
-        const nextIndex = Math.round(Math.max(0, Math.min(1, ratio)) * Math.max(chartPoints.length - 1, 0));
-        setHoverIndex(nextIndex);
-      }}
-    >
-      <svg
-        viewBox="0 0 300 100"
-        className="h-full w-full cursor-crosshair"
-        preserveAspectRatio="none"
-      >
-        <Gridlines />
-        <defs>
-          <linearGradient id={`dlGradient-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="oklch(60% 0.21 235)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="oklch(60% 0.21 235)" stopOpacity="0.05" />
-          </linearGradient>
-          <linearGradient id={`ulGradient-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgb(22, 163, 74)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="rgb(22, 163, 74)" stopOpacity="0.05" />
-          </linearGradient>
-          <linearGradient id={`connGradient-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgb(234, 179, 8)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="rgb(234, 179, 8)" stopOpacity="0.05" />
-          </linearGradient>
-        </defs>
-        <path d={areaPath(dlYs, true)} fill={`url(#dlGradient-${id})`} />
-        <path
-          d={smoothLinePath(dlYs)}
-          fill="none"
-          stroke="oklch(60% 0.21 235)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path d={areaPath(ulYs, true)} fill={`url(#ulGradient-${id})`} />
-        <path
-          d={smoothLinePath(ulYs)}
-          fill="none"
-          stroke="rgb(22, 163, 74)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path d={areaPath(connYs, true)} fill={`url(#connGradient-${id})`} />
-        <path
-          d={smoothLinePath(connYs)}
-          fill="none"
-          stroke="rgb(234, 179, 8)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {activePoint ? (
-          <line
-            x1={hoverX}
-            y1="0"
-            x2={hoverX}
-            y2="100"
-            stroke="oklch(70% 0.03 250)"
-            strokeWidth="1.2"
-            strokeDasharray="2 2"
-            vectorEffect="non-scaling-stroke"
-          />
-        ) : null}
-      </svg>
-      {activePoint ? (
-        <div
-          className="gary-popover pointer-events-none absolute top-7 z-20 w-[190px] p-3 text-xs text-foreground"
-          style={{
-            left: `${tooltipX}%`,
-            transform: tooltipX > 68 ? "translateX(-100%)" : tooltipX < 32 ? "translateX(0)" : "translateX(-50%)",
-          }}
-        >
-          <div className="mb-2 font-semibold">{formatTooltipTime(activePoint.timestamp ?? activePoint.time)}</div>
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-amber-400" />连接数</span>
-              <span className="font-semibold">{Math.round(numberValue(activePoint.connections))}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-emerald-500" />上传速度</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatByteRate(activePoint.uploadSpeed)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-sky-500" />下载速度</span>
-              <span className="font-semibold text-sky-600 dark:text-sky-400">{formatByteRate(activePoint.downloadSpeed)}</span>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
+  return <EChartCanvas option={option} className="cursor-crosshair" />;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Split,
@@ -22,6 +22,10 @@ import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { cn } from "@/lib/utils";
 import { apiData, apiList, formatBytes, formatPercent } from "@/lib/api";
 import { useApiPath } from "@/lib/use-api";
+import { EChartCanvas, echarts, type EChartsOption } from "@/components/charts/EChartCanvas";
+import { TimeWindowSelector } from "@/components/charts/TimeWindowSelector";
+import { timestampMs, type TimeWindowSeconds } from "@/components/charts/timeSeries";
+import { namedTimeValue, nextStableScale, type StableScaleState } from "@/components/charts/chartStability";
 
 interface RuleRow {
   name: string;
@@ -132,56 +136,10 @@ function formatMs(value: unknown) {
   return `${numberValue(value).toFixed(2)} ms`;
 }
 
-function chartPointX(index: number, total: number) {
-  if (total <= 1) return 150;
-  return (index / (total - 1)) * 300;
-}
-
-function linePath(ys: number[]) {
-  if (ys.length <= 1) return "M0,100 L300,100";
-  const step = 300 / (ys.length - 1);
-  return ys.map((y, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${y.toFixed(1)}`).join(" ");
-}
-
-function smoothLinePath(ys: number[]) {
-  if (ys.length <= 1) return "M0,100 L300,100";
-  if (ys.length === 2) return linePath(ys);
-  const step = 300 / (ys.length - 1);
-  let path = `M0,${ys[0].toFixed(1)}`;
-  for (let i = 0; i < ys.length - 1; i += 1) {
-    const y0 = ys[Math.max(0, i - 1)];
-    const y1 = ys[i];
-    const y2 = ys[i + 1];
-    const y3 = ys[Math.min(ys.length - 1, i + 2)];
-    const x1 = i * step;
-    const x2 = (i + 1) * step;
-    path += ` C${(x1 + step / 6).toFixed(1)},${(y1 + (y2 - y0) / 6).toFixed(1)} ${(x2 - step / 6).toFixed(1)},${(y2 - (y3 - y1) / 6).toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
-  }
-  return path;
-}
-
-function areaPath(ys: number[]) {
-  const path = smoothLinePath(ys);
-  return path ? `${path} L300,100 L0,100 Z` : "";
-}
-
-function parseTimeMs(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value > 10_000_000_000 ? value : value * 1000;
-  }
-  if (typeof value !== "string" || !value.trim()) return 0;
-  const text = value.trim();
-  const numeric = Number(text);
-  if (Number.isFinite(numeric)) return numeric > 10_000_000_000 ? numeric : numeric * 1000;
-  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:/.test(text) ? text.replace(" ", "T") : text;
-  const parsed = Date.parse(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function entryTimeMs(entry: any, index: number, total: number) {
-  const parsed = parseTimeMs(entry.query_time ?? entry.time ?? entry.timestamp ?? entry.created_at ?? entry.datetime);
+function entryTimeMs(entry: any, index: number, total: number, fallbackNow = Date.now()) {
+  const parsed = timestampMs(entry.query_time ?? entry.time ?? entry.timestamp ?? entry.created_at ?? entry.datetime);
   if (parsed > 0) return parsed;
-  return Date.now() - Math.max(0, total - index - 1) * 1000;
+  return fallbackNow - Math.max(0, total - index - 1) * 1000;
 }
 
 function optionalNumber(...values: unknown[]) {
@@ -194,134 +152,143 @@ function optionalNumber(...values: unknown[]) {
 }
 
 function formatTooltipTime(value: unknown) {
-  const date = new Date(parseTimeMs(value) || Date.now());
+  const date = new Date(timestampMs(value) || Date.now());
   const pad = (part: number) => String(part).padStart(2, "0");
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-interface QueryTrendBucket {
+export interface QueryTrendBucket {
   timestamp: number;
   queries: number;
   durationMs: number;
 }
 
-interface QueryTrendData {
+export interface QueryTrendData {
   buckets: QueryTrendBucket[];
-  queryYs: number[];
-  durationYs: number[];
 }
 
-function makeTrend(entries: any[]): QueryTrendData {
-  const bucketCount = 25;
-  const now = Date.now();
+export function makeTrend(entries: any[], windowSeconds: number, now = Date.now()): QueryTrendData {
+  const bucketMs = 1000;
+  const bucketCount = Math.max(10, Math.round(windowSeconds));
+  const finalizedEnd = Math.floor(now / bucketMs) * bucketMs;
+  const start = finalizedEnd - bucketCount * bucketMs;
   const buckets = Array.from({ length: bucketCount }, (_, index) => ({
-    timestamp: now - (bucketCount - index - 1) * 1000,
+    timestamp: start + (index + 1) * bucketMs,
     queries: 0,
     durationTotal: 0,
     durationCount: 0,
   }));
   const normalized = entries
     .map((entry, index) => ({
-      timestamp: entryTimeMs(entry, index, entries.length),
+      timestamp: entryTimeMs(entry, index, entries.length, now),
       durationMs: optionalNumber(entry.duration_ms, entry.elapsed_ms, entry.cost_ms, entry.ms, entry.duration, entry.latency_ms),
     }))
+    .filter((point) => point.timestamp >= start && point.timestamp < finalizedEnd)
     .sort((a, b) => a.timestamp - b.timestamp)
     .slice(-250);
 
-  if (normalized.length > 0) {
-    const first = normalized[0].timestamp;
-    const last = normalized[normalized.length - 1].timestamp;
-    const span = Math.max(1, last - first);
-    buckets.forEach((bucket, index) => {
-      bucket.timestamp = normalized.length === 1 ? last : first + (span * index) / Math.max(bucketCount - 1, 1);
-    });
-    normalized.forEach((point) => {
-      const index = normalized.length === 1 ? bucketCount - 1 : Math.min(bucketCount - 1, Math.max(0, Math.floor(((point.timestamp - first) / span) * bucketCount)));
-      const bucket = buckets[index];
-      bucket.queries += 1;
-      if (point.durationMs != null) {
-        bucket.durationTotal += point.durationMs;
-        bucket.durationCount += 1;
-      }
-    });
-  }
+  normalized.forEach((point) => {
+    const index = Math.floor((point.timestamp - start) / bucketMs);
+    if (index < 0 || index >= bucketCount) return;
+    const bucket = buckets[index];
+    bucket.queries += 1;
+    if (point.durationMs != null) {
+      bucket.durationTotal += point.durationMs;
+      bucket.durationCount += 1;
+    }
+  });
 
   const resultBuckets = buckets.map((bucket) => ({
     timestamp: bucket.timestamp,
     queries: bucket.queries,
     durationMs: bucket.durationCount > 0 ? bucket.durationTotal / bucket.durationCount : 0,
   }));
-  const maxQueries = Math.max(...resultBuckets.map((bucket) => bucket.queries), 1);
-  const maxDuration = Math.max(...resultBuckets.map((bucket) => bucket.durationMs), 1);
-  return {
-    buckets: resultBuckets,
-    queryYs: resultBuckets.map((bucket) => 96 - (bucket.queries / maxQueries) * 76),
-    durationYs: resultBuckets.map((bucket) => 96 - (bucket.durationMs / maxDuration) * 76),
-  };
+  return { buckets: resultBuckets };
 }
 
-function QueryTrendChart({ trend }: { trend: QueryTrendData }) {
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const activeIndex = hoverIndex == null ? null : Math.max(0, Math.min(hoverIndex, trend.buckets.length - 1));
-  const activeBucket = activeIndex == null ? null : trend.buckets[activeIndex];
-  const hoverX = activeIndex == null ? 0 : chartPointX(activeIndex, trend.buckets.length);
-  const tooltipX = Math.max(0, Math.min(100, (hoverX / 300) * 100));
+export function freezeTrend(previous: QueryTrendData | undefined, incoming: QueryTrendData): QueryTrendData {
+  if (!previous || incoming.buckets.length === 0) return incoming;
+  const first = incoming.buckets[0].timestamp;
+  const last = incoming.buckets[incoming.buckets.length - 1].timestamp;
+  const frozen = new Map(incoming.buckets.map((bucket) => [bucket.timestamp, bucket]));
+  for (const bucket of previous.buckets) {
+    if (bucket.timestamp >= first && bucket.timestamp <= last) frozen.set(bucket.timestamp, bucket);
+  }
+  return { buckets: Array.from(frozen.values()).sort((left, right) => left.timestamp - right.timestamp) };
+}
 
-  return (
-    <div
-      className="absolute inset-0 min-h-0 min-w-0"
-      onMouseLeave={() => setHoverIndex(null)}
-      onMouseMove={(event) => {
-        const rect = event.currentTarget.getBoundingClientRect();
-        const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
-        setHoverIndex(Math.round(Math.max(0, Math.min(1, ratio)) * Math.max(trend.buckets.length - 1, 0)));
-      }}
-    >
-      <svg viewBox="0 0 300 100" className="w-full h-full" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="mosdnsQueryGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="oklch(60% 0.21 235)" stopOpacity="0.24" />
-            <stop offset="100%" stopColor="oklch(60% 0.21 235)" stopOpacity="0.03" />
-          </linearGradient>
-          <linearGradient id="mosdnsDurationGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="oklch(60% 0.17 152)" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="oklch(60% 0.17 152)" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {[0, 25, 50, 75, 100].map((y) => (
-          <line key={y} x1="0" y1={y} x2="300" y2={y} stroke="currentColor" strokeWidth="0.3" className="text-muted-foreground/10" />
-        ))}
-        <path d={areaPath(trend.durationYs)} fill="url(#mosdnsDurationGradient)" />
-        <path d={smoothLinePath(trend.durationYs)} fill="none" stroke="oklch(60% 0.17 152)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        <path d={areaPath(trend.queryYs)} fill="url(#mosdnsQueryGradient)" />
-        <path d={smoothLinePath(trend.queryYs)} fill="none" stroke="oklch(60% 0.21 235)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        {activeBucket ? (
-          <line x1={hoverX} y1="0" x2={hoverX} y2="100" stroke="oklch(70% 0.03 250)" strokeWidth="1.2" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
-        ) : null}
-      </svg>
-      {activeBucket ? (
-        <div
-          className="gary-popover pointer-events-none absolute top-7 z-20 w-[170px] p-3 text-xs text-foreground"
-          style={{
-            left: `${tooltipX}%`,
-            transform: tooltipX > 68 ? "translateX(-100%)" : tooltipX < 32 ? "translateX(0)" : "translateX(-50%)",
-          }}
-        >
-          <div className="mb-2 font-semibold">{formatTooltipTime(activeBucket.timestamp)}</div>
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-blue-500" />新增查询</span>
-              <span className="font-semibold text-blue-600 dark:text-blue-400">{activeBucket.queries}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full bg-green-500" />当前耗时</span>
-              <span className="font-semibold text-green-600 dark:text-green-400">{activeBucket.durationMs.toFixed(2)} ms</span>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
+function QueryTrendChart({ trend, windowSeconds }: { trend: QueryTrendData; windowSeconds: number }) {
+  const [dark, setDark] = useState(() => typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
+  useEffect(() => {
+    const observer = new MutationObserver(() => setDark(document.documentElement.classList.contains("dark")));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  const latest = trend.buckets.at(-1)?.timestamp ?? Date.now();
+  const scaleKey = latest;
+  const queryScaleRef = useRef<{ range: number; key: number; state?: StableScaleState }>({ range: windowSeconds, key: 0 });
+  const durationScaleRef = useRef<{ range: number; key: number; state?: StableScaleState }>({ range: windowSeconds, key: 0 });
+  if (queryScaleRef.current.range !== windowSeconds) queryScaleRef.current = { range: windowSeconds, key: 0 };
+  if (durationScaleRef.current.range !== windowSeconds) durationScaleRef.current = { range: windowSeconds, key: 0 };
+  if (queryScaleRef.current.key !== scaleKey || !queryScaleRef.current.state) {
+    queryScaleRef.current.key = scaleKey;
+    queryScaleRef.current.state = nextStableScale(
+      queryScaleRef.current.state,
+      Math.max(...trend.buckets.map((bucket) => bucket.queries), 0),
+      1,
+    );
+  }
+  if (durationScaleRef.current.key !== scaleKey || !durationScaleRef.current.state) {
+    durationScaleRef.current.key = scaleKey;
+    durationScaleRef.current.state = nextStableScale(
+      durationScaleRef.current.state,
+      Math.max(...trend.buckets.map((bucket) => bucket.durationMs), 0),
+      1,
+    );
+  }
+  const maxQueries = queryScaleRef.current.state.ceiling;
+  const maxDuration = durationScaleRef.current.state.ceiling;
+  const option = useMemo<EChartsOption>(() => ({
+    backgroundColor: "transparent",
+    animationDurationUpdate: 1000,
+    animationEasingUpdate: "linear",
+    grid: { left: 0, top: 0, right: 0, bottom: 0 },
+    tooltip: {
+      show: true,
+      trigger: "axis",
+      confine: true,
+      axisPointer: { type: "line", lineStyle: { color: "oklch(70% 0.03 250)", width: 1.2, type: "dashed" } },
+      backgroundColor: dark ? "rgba(20,20,23,.94)" : "rgba(255,255,255,.96)",
+      borderColor: dark ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.08)",
+      padding: [8, 10],
+      textStyle: { color: dark ? "#f4f4f5" : "#27272a", fontSize: 11 },
+      formatter: (params: any) => {
+        const rows = Array.isArray(params) ? params : [params];
+        const values = new Map(rows.map((row: any) => [row.seriesName, Number(row.value?.[1] || 0)]));
+        return `<div style="font-weight:600;margin-bottom:6px">${formatTooltipTime(rows[0]?.value?.[0])}</div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:oklch(60% 0.21 235)">新增查询</span><b>${Math.round(values.get("新增查询") ?? 0)}</b></div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:oklch(60% 0.17 152)">当前耗时</span><b>${(values.get("当前耗时") ?? 0).toFixed(2)} ms</b></div>`;
+      },
+    },
+    xAxis: { type: "time", show: false, min: latest - windowSeconds * 1000, max: latest },
+    yAxis: [
+      { type: "value", show: false, min: 0, max: maxQueries, splitNumber: 4, splitLine: { show: true, lineStyle: { color: dark ? "rgba(255,255,255,.06)" : "rgba(35,38,45,.06)", width: 0.3 } } },
+      { type: "value", show: false, min: 0, max: maxDuration, splitLine: { show: false } },
+    ],
+    series: [
+      {
+        id: "query-duration", type: "line", name: "当前耗时", yAxisIndex: 1, symbol: "none", smooth: 0.2, showSymbol: false,
+        lineStyle: { width: 2.5, color: "oklch(60% 0.17 152)", cap: "round", join: "round" },
+        areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: "oklch(60% 0.17 152 / .18)" }, { offset: 1, color: "oklch(60% 0.17 152 / .02)" }]) },
+        data: trend.buckets.map((bucket) => namedTimeValue(bucket.timestamp, bucket.durationMs)), emphasis: { disabled: true },
+      },
+      {
+        id: "query-count", type: "line", name: "新增查询", yAxisIndex: 0, symbol: "none", smooth: 0.2, showSymbol: false,
+        lineStyle: { width: 2.5, color: "oklch(60% 0.21 235)", cap: "round", join: "round" },
+        areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: "oklch(60% 0.21 235 / .24)" }, { offset: 1, color: "oklch(60% 0.21 235 / .03)" }]) },
+        data: trend.buckets.map((bucket) => namedTimeValue(bucket.timestamp, bucket.queries)), emphasis: { disabled: true },
+      },
+    ],
+  }), [dark, latest, maxDuration, maxQueries, trend.buckets, windowSeconds]);
+  return <EChartCanvas option={option} className="cursor-crosshair" />;
 }
 
 function normalizeRankRows(rows: any[], total: number, danger = false): RankRow[] {
@@ -575,8 +542,9 @@ function runtimeMetrics(data: any) {
 }
 
 export default function MosdnsOverviewPage() {
+  const [trendRange, setTrendRange] = useState<TimeWindowSeconds>(60);
   const overview = useApiPath<any>("/api/v1/mosdns/overview", [], 5000);
-  const queryLog = useApiPath<any>("/api/v1/mosdns/query-log?limit=250", [], 5000);
+  const queryLog = useApiPath<any>("/api/v1/mosdns/query-log?limit=250", [], 1000);
   const data = apiData<any>(overview.data, {});
   const queryData = apiData<any>(queryLog.data, {});
   const entries = apiList<any>(queryData, ["logs", "items", "data"]);
@@ -590,7 +558,13 @@ export default function MosdnsOverviewPage() {
   const upstreamStats = normalizeUpstreams(data);
   const cacheCards = normalizeCacheCards(data);
   const runtime = runtimeMetrics(data);
-  const trend = useMemo(() => makeTrend(entries), [entries]);
+  const frozenTrendRef = useRef<{ range: number; trend?: QueryTrendData }>({ range: trendRange });
+  const trend = useMemo(() => {
+    if (frozenTrendRef.current.range !== trendRange) frozenTrendRef.current = { range: trendRange };
+    const next = freezeTrend(frozenTrendRef.current.trend, makeTrend(entries, trendRange));
+    frozenTrendRef.current.trend = next;
+    return next;
+  }, [entries, trendRange]);
   const currentDuration = numberValue(entries[0]?.duration_ms || entries[0]?.elapsed_ms || entries[0]?.cost_ms || entries[0]?.ms || entries[0]?.duration || avgDuration);
   const running = Boolean(data.running || data.status === "running");
 
@@ -606,7 +580,7 @@ export default function MosdnsOverviewPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Card className="h-[300px] lg:col-span-2">
+          <Card className="h-[330px] lg:col-span-2">
             <CardHeader
               icon={Activity}
               iconColor="text-primary"
@@ -629,21 +603,24 @@ export default function MosdnsOverviewPage() {
                   <p className="text-[10px] text-muted-foreground mt-1">平均耗时</p>
                 </div>
               </div>
-              <div className="gary-solid-plate relative min-h-[120px] flex-1 overflow-hidden p-3">
-                <QueryTrendChart trend={trend} />
+              <div className="relative min-h-[130px] flex-1 overflow-hidden px-1 py-3">
+                <QueryTrendChart trend={trend} windowSeconds={trendRange} />
               </div>
-              <div className="flex items-center gap-4 mt-2">
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />新增查询
-                </span>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-green-500" />当前耗时
-                </span>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-4">
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />新增查询
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="w-2 h-2 rounded-full bg-green-500" />当前耗时
+                  </span>
+                </div>
+                <TimeWindowSelector value={trendRange} onChange={setTrendRange} />
               </div>
             </div>
           </Card>
 
-          <Card className="h-[300px]">
+          <Card className="h-[330px]">
             <CardHeader
               icon={Split}
               iconColor="text-primary"
@@ -655,7 +632,7 @@ export default function MosdnsOverviewPage() {
                 </div>
               }
             />
-            <div className="scrollbar-thin max-h-[210px] space-y-3 overflow-y-auto p-4">
+            <div className="scrollbar-thin min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
               {splitStats.length === 0 ? (
                 <SolidPlate className="p-6 text-center text-sm text-muted-foreground">暂无分流统计</SolidPlate>
               ) : splitStats.map((r) => (

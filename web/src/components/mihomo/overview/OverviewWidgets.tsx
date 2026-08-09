@@ -9,6 +9,14 @@ import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { aggregateConnections, clearClosedConnections, pruneClosedConnections, readClosedConnections, saveClosedConnections, toClosedConnection, type ClosedConnectionRecord, type HistoryAggregation } from "./connectionHistory";
 import { FAVICON_TARGETS, runFaviconRounds, type FaviconSample } from "./telemetry";
 import { echarts, ZashboardEChart, type EChartsOption } from "./ZashboardEChart";
+import {
+  MIHOMO_CONNECTION_AREA_COLOR,
+  MIHOMO_CONNECTION_COLOR,
+  MIHOMO_DOWNLOAD_AREA_COLOR,
+  MIHOMO_DOWNLOAD_COLOR,
+  MIHOMO_UPLOAD_AREA_COLOR,
+  MIHOMO_UPLOAD_COLOR,
+} from "./visualColors";
 
 export type OverviewConnection = Record<string, any>;
 
@@ -215,17 +223,12 @@ function SparklineChart({
 }
 
 export function OverviewStatCards({ downloadSpeed, uploadSpeed, connections, downloadTotal, uploadTotal, memory, trafficHistory, connectionHistory }: { downloadSpeed: number; uploadSpeed: number; connections: number; downloadTotal: number; uploadTotal: number; memory: number | string; trafficHistory: OverviewTrafficHistoryPoint[]; connectionHistory: OverviewConnectionHistoryPoint[] }) {
-  const dark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
-  const info = dark ? "#64d2ff" : "#5ac8fa";
-  const infoArea = dark ? "rgba(100,210,255,.18)" : "rgba(90,200,250,.14)";
-  const primary = dark ? "#8583e9" : "#6865c6";
-  const primaryArea = dark ? "rgba(133,131,233,.20)" : "rgba(104,101,198,.16)";
   const uploadParts = splitMetric(uploadSpeed);
   const downloadParts = splitMetric(downloadSpeed);
   const cards = [
-    { label: "上传", value: uploadParts.value, unit: `${uploadParts.unit}/s`, total: `总计 ${formatBytes(uploadTotal)}`, points: trafficHistory.map((point) => ({ name: String(point.timestamp), value: [point.timestamp, point.uploadSpeed] as [number, number], init: point.init })), color: info, areaColor: infoArea, floor: 60_000, axis: (value: number) => `${formatDecimalBytes(value, 0)}/s`, tooltip: (value: number) => `${formatDecimalBytes(value)}/s` },
-    { label: "下载", value: downloadParts.value, unit: `${downloadParts.unit}/s`, total: `总计 ${formatBytes(downloadTotal)}`, points: trafficHistory.map((point) => ({ name: String(point.timestamp), value: [point.timestamp, point.downloadSpeed] as [number, number], init: point.init })), color: primary, areaColor: primaryArea, floor: 60_000, axis: (value: number) => `${formatDecimalBytes(value, 0)}/s`, tooltip: (value: number) => `${formatDecimalBytes(value)}/s` },
-    { label: "连接", value: String(connections), unit: "", total: `内存使用 ${formatBinaryBytes(memory)}`, points: connectionHistory.map((point) => ({ name: String(point.timestamp), value: [point.timestamp, point.connections] as [number, number], init: point.init })), color: primary, areaColor: primaryArea, floor: 10, axis: (value: number) => String(Math.round(value)), tooltip: (value: number) => String(Math.round(value)) },
+    { label: "上传", value: uploadParts.value, unit: `${uploadParts.unit}/s`, total: `总计 ${formatBytes(uploadTotal)}`, points: trafficHistory.map((point) => ({ name: String(point.timestamp), value: [point.timestamp, point.uploadSpeed] as [number, number], init: point.init })), color: MIHOMO_UPLOAD_COLOR, areaColor: MIHOMO_UPLOAD_AREA_COLOR, floor: 60_000, axis: (value: number) => `${formatDecimalBytes(value, 0)}/s`, tooltip: (value: number) => `${formatDecimalBytes(value)}/s` },
+    { label: "下载", value: downloadParts.value, unit: `${downloadParts.unit}/s`, total: `总计 ${formatBytes(downloadTotal)}`, points: trafficHistory.map((point) => ({ name: String(point.timestamp), value: [point.timestamp, point.downloadSpeed] as [number, number], init: point.init })), color: MIHOMO_DOWNLOAD_COLOR, areaColor: MIHOMO_DOWNLOAD_AREA_COLOR, floor: 60_000, axis: (value: number) => `${formatDecimalBytes(value, 0)}/s`, tooltip: (value: number) => `${formatDecimalBytes(value)}/s` },
+    { label: "连接", value: String(connections), unit: "", total: `内存使用 ${formatBinaryBytes(memory)}`, points: connectionHistory.map((point) => ({ name: String(point.timestamp), value: [point.timestamp, point.connections] as [number, number], init: point.init })), color: MIHOMO_CONNECTION_COLOR, areaColor: MIHOMO_CONNECTION_AREA_COLOR, floor: 10, axis: (value: number) => String(Math.round(value)), tooltip: (value: number) => String(Math.round(value)) },
   ];
   return <GlassSurface material="thick" className="@container rounded-2xl p-3"><div className="grid grid-cols-2 gap-3 @min-[768px]:grid-cols-3">{cards.map((card, index) => <SolidPlate tone="regular" key={card.label} className={cn("flex min-w-0 flex-col gap-1.5 p-[15px]", index === 2 && "col-span-2 @min-[768px]:col-span-1")}><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{card.label}{index === 2 ? <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> : null}</div><div className="flex items-baseline gap-1.5"><span className="text-3xl font-extralight tabular-nums text-foreground">{card.value}</span>{card.unit ? <span className="text-sm text-muted-foreground">{card.unit}</span> : null}</div><div className="mt-1 h-14"><SparklineChart points={card.points} name={card.label} color={card.color} areaColor={card.areaColor} yAxisFloor={card.floor} axisFormatter={card.axis} tooltipFormatter={card.tooltip} /></div><div className="text-xs text-muted-foreground">{card.total}</div></SolidPlate>)}</div></GlassSurface>;
 }
@@ -235,28 +238,97 @@ interface LatencyState {
   running: boolean;
 }
 
+const LATENCY_ROUNDS = 10;
+
+function latencyColorClass(value: number) {
+  if (value < 400) return { bar: "bg-emerald-600/75", text: "text-emerald-600" };
+  if (value < 800) return { bar: "bg-amber-500/85", text: "text-amber-600" };
+  return { bar: "bg-rose-600/80", text: "text-rose-600" };
+}
+
+function LatencyChart({ samples }: { samples: FaviconSample[] }) {
+  const ceiling = Math.max(...samples.filter((sample) => sample.ok).map((sample) => sample.elapsedMs), 1);
+  return (
+    <div className="flex h-8 min-w-0 flex-1 items-end gap-0.5">
+      {Array.from({ length: LATENCY_ROUNDS }, (_, index) => {
+        const sample = samples[index];
+        const height = !sample ? 18 : sample.ok ? Math.max(18, Math.round(sample.elapsedMs / ceiling * 100)) : 100;
+        return (
+          <span
+            key={index}
+            title={!sample ? "等待测试" : sample.ok ? `${sample.elapsedMs}ms` : "测试失败"}
+            className={cn(
+              "min-w-0 flex-1 rounded-[1px] transition-[height,opacity,background-color] duration-300 ease-out hover:opacity-80",
+              !sample ? "bg-foreground/10" : sample.ok ? latencyColorClass(sample.elapsedMs).bar : "bg-rose-600/40",
+            )}
+            style={{ height: `${height}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function LatencyStats({ samples }: { samples: FaviconSample[] }) {
+  const values = samples.filter((sample) => sample.ok).map((sample) => sample.elapsedMs).sort((left, right) => left - right);
+  if (values.length === 0) return <span className="text-foreground/30">--</span>;
+  const stats = [
+    { label: "min", value: values[0] },
+    { label: "avg", value: Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) },
+    { label: "max", value: values.at(-1) ?? 0 },
+  ];
+  return stats.map((stat) => (
+    <span key={stat.label} className="animate-in fade-in duration-300">
+      <span className="mr-1 text-foreground/40">{stat.label}</span>
+      <span className={latencyColorClass(stat.value).text}>{stat.value}ms</span>
+    </span>
+  ));
+}
+
 export function FaviconLatencyTester() {
   const [state, setState] = useState<LatencyState>({ samples: [], running: false });
+  const runningRef = useRef(false);
   const run = async () => {
-    if (state.running) return;
+    if (runningRef.current) return;
+    runningRef.current = true;
     setState({ samples: [], running: true });
-    await runFaviconRounds(FAVICON_TARGETS, 10, (sample) => setState((current) => ({ ...current, samples: [...current.samples, sample] })));
-    setState((current) => ({ ...current, running: false }));
+    try {
+      await runFaviconRounds(FAVICON_TARGETS, LATENCY_ROUNDS, (sample) => {
+        setState((current) => ({ ...current, samples: [...current.samples, sample] }));
+      });
+    } finally {
+      runningRef.current = false;
+      setState((current) => ({ ...current, running: false }));
+    }
   };
   const progress = state.samples.length;
-  return <SolidPlate tone="subtle" className="flex flex-col rounded-xl p-4">
-    <div className="flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">延迟</div><button type="button" onClick={() => void run()} disabled={state.running} className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60" title="重新测试"><Zap className={cn("h-3.5 w-3.5", state.running && "animate-pulse")} /><span className="sr-only">{state.running ? `测试中 ${progress}/40` : "重新测试"}</span></button></div>
-    <div className="mt-2 grid grid-cols-2 gap-4">{FAVICON_TARGETS.map((target) => {
-      const rows = state.samples.filter((sample) => sample.targetId === target.id);
-      const successful = rows.filter((sample) => sample.ok);
-      const values = successful.map((sample) => sample.elapsedMs);
-      const minimum = values.length ? Math.min(...values) : 0;
-      const average = successful.length ? Math.round(successful.reduce((sum, sample) => sum + sample.elapsedMs, 0) / successful.length) : 0;
-      const maximum = values.length ? Math.max(...values) : 0;
-      const ceiling = maximum || 1;
-      return <div key={target.id} className="flex min-w-0 flex-col gap-0.5"><div className="flex items-center gap-1.5"><span className="inline-block w-14 shrink-0 text-xs text-muted-foreground">{target.label}</span><div className="flex h-8 min-w-0 flex-1 items-end gap-0.5">{Array.from({ length: 10 }, (_, index) => { const sample = rows[index]; const failed = sample && !sample.ok; const height = sample?.ok ? Math.max(18, sample.elapsedMs / ceiling * 100) : sample ? 100 : 18; return <span key={index} title={!sample ? "等待测试" : failed ? "测试失败" : `${sample.elapsedMs}ms`} className={cn("min-w-0 flex-1 rounded-[1px] transition-opacity duration-200 hover:opacity-80", !sample ? "bg-foreground/10" : failed ? "bg-rose-600/40" : sample.elapsedMs < 400 ? "bg-emerald-600/75" : sample.elapsedMs < 800 ? "bg-amber-500/85" : "bg-rose-600/80")} style={{ height: `${height}%` }} />; })}</div></div><div className="flex flex-wrap gap-x-4 text-[11px] tabular-nums"><span><span className="mr-1 text-foreground/40">min</span><span className={minimum ? minimum < 400 ? "text-emerald-600" : minimum < 800 ? "text-amber-600" : "text-rose-600" : "text-muted-foreground"}>{minimum ? `${minimum}ms` : "--"}</span></span><span><span className="mr-1 text-foreground/40">avg</span><span className={average ? average < 400 ? "text-emerald-600" : average < 800 ? "text-amber-600" : "text-rose-600" : "text-muted-foreground"}>{average ? `${average}ms` : "--"}</span></span><span><span className="mr-1 text-foreground/40">max</span><span className={maximum ? maximum < 400 ? "text-emerald-600" : maximum < 800 ? "text-amber-600" : "text-rose-600" : "text-muted-foreground"}>{maximum ? `${maximum}ms` : "--"}</span></span></div></div>;
-    })}</div>
-  </SolidPlate>;
+  return (
+    <SolidPlate tone="subtle" className="flex flex-col rounded-xl p-4">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">延迟</div>
+        <button type="button" onClick={() => void run()} disabled={state.running} className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-60" title="重新测试">
+          <Zap className={cn("h-3.5 w-3.5", state.running && "animate-pulse")} />
+          <span className="sr-only">{state.running ? `测试中 ${progress}/40` : "重新测试"}</span>
+        </button>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-4">
+        {FAVICON_TARGETS.map((target) => {
+          const samples = state.samples.filter((sample) => sample.targetId === target.id);
+          return (
+            <div key={target.id} className="flex min-w-0 flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-14 shrink-0 text-xs text-muted-foreground">{target.label}</span>
+                <LatencyChart samples={samples} />
+              </div>
+              <div className="flex flex-wrap gap-x-4 text-[11px] tabular-nums">
+                <LatencyStats samples={samples} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </SolidPlate>
+  );
 }
 
 function maskIP(value: string) {

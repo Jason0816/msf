@@ -22,6 +22,7 @@ import * as ipaddr from "ipaddr.js";
 import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 import { formatBytes } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { MIHOMO_DOWNLOAD_COLOR, MIHOMO_UPLOAD_COLOR } from "./visualColors";
 import type { OverviewConnection } from "./OverviewWidgets";
 import { buildEarthRoutes } from "./earth/routes";
 import {
@@ -524,8 +525,8 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
 
         <div className="pointer-events-none absolute bottom-2 right-2 flex max-w-[calc(100%-1rem)] flex-wrap gap-x-3 gap-y-1 rounded-lg border border-white/15 bg-background/75 px-2 py-1.5 text-[11px] text-foreground shadow backdrop-blur-md">
           <span className="flex items-center gap-1"><i className="h-0.5 w-4 bg-[#5fcaff]" />连接线路</span>
-          <span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full bg-[#ffdc5e]" />上传</span>
-          <span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full bg-[#3235ee]" />下载</span>
+          <span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: MIHOMO_UPLOAD_COLOR }} />上传</span>
+          <span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: MIHOMO_DOWNLOAD_COLOR }} />下载</span>
         </div>
 
         <div className={cn(
