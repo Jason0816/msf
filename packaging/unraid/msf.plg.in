@@ -9,16 +9,11 @@
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
 <!ENTITY packageSHA256 "__PACKAGE_SHA256__">
 ]>
-<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://raw.githubusercontent.com/&githubRepo;/main/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
 ### msf __PLUGIN_VERSION__
-- 完成 IPv6、FakeIPv6 与 MosDNS 配置链路，使 WebUI、Mihomo、MosDNS、nftables、TUN、策略路由与 Docker host-tun 使用一致状态和网段。
-- 新增 FakeIP CIDR 规范化、地址族校验、MosDNS ECS 与上游覆盖渲染，以及 generated/custom 运行配置一致性检查。
-- 修复关闭 IPv6 后残留 IPv6 nftables、TUN、fwmark rule 和 table 100 local route 的问题。
-- 修复 partial save 重置 FakeIP 网段、订阅、节点或其他未提交配置的问题，并增加失败回滚和 FakeIP cache 安全重建。
-- 补充 DNS fixture、IPv6 设置 E2E 与后端完整性测试，并完善 IPv6 数据面和 MosDNS 协议优先级说明。
-- 修复 MosDNS 规则编辑弹窗无法稳定居中于视口的问题。
+__PLUGIN_CHANGES__
     ]]>
   </CHANGES>
 

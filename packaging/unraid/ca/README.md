@@ -12,9 +12,9 @@
 | `ca/msf.xml` | **CA 插件模板**（根元素 `<Plugin>`：`Name/PluginURL/Icon/Overview/Support/Project/Category/Beta`） |
 | `ca/msf-docker.xml` | **CA Docker 模板**（根元素 `<Container version="2">`，默认 `br0` + `macvlan-tun`） |
 | `../msf.png` | 256×256 列表图标（被 Profile、插件和 Docker 模板引用） |
-| `../../../msf.plg` | 安装入口，`<PLUGIN>` 已补 `support="https://github.com/scoltzero/msf/issues"` |
+| `../../../msf.plg` | CA 与旧安装的兼容入口；安装后由清单内的 GitHub Latest Release 地址检查更新 |
 
-> 所有 `<Icon>` / `<PluginURL>` / `<TemplateURL>` 都用 `raw.githubusercontent.com/scoltzero/msf/main/...` 的 raw 链接，**前提是仓库 public 且这些文件已推到 `main`**。
+> CA 的插件入口继续读取 `main/msf.plg`，以兼容已经发布的旧清单；清单内部的 `pluginURL` 使用 `releases/latest/download/msf.plg`，后续更新始终跟随最新正式 Release。
 
 ## 上架前置条件（CA 官方要求）
 

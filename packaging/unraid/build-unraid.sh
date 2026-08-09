@@ -19,10 +19,16 @@ PLG="${OUT_DIR}/${APP_NAME}.plg"
 ROOT_PLG="${ROOT_DIR}/${APP_NAME}.plg"
 UPDATE_ROOT_PLG="${UPDATE_ROOT_PLG:-false}"
 BIN="${ROOT_DIR}/${DIST}/${APP_NAME}-linux-amd64"
+CHANGELOG="${ROOT_DIR}/CHANGELOG.md"
 
 if [ ! -x "$BIN" ]; then
   echo "missing Linux amd64 binary: $BIN" >&2
   echo "run: make package GOOS=linux GOARCH=amd64" >&2
+  exit 1
+fi
+
+if [ ! -f "$CHANGELOG" ]; then
+  echo "missing changelog: $CHANGELOG" >&2
   exit 1
 fi
 
@@ -67,12 +73,42 @@ else
   PKG_SHA256="$(shasum -a 256 "$TXZ" | awk '{print $1}')"
 fi
 
+CHANGES_TMP="$(mktemp)"
+MANIFEST_TMP="$(mktemp)"
+trap 'rm -f "$CHANGES_TMP" "$MANIFEST_TMP"' EXIT HUP INT TERM
+
+awk -v prefix="## v${UNRAID_VERSION} - " '
+  index($0, prefix) == 1 { in_release=1; next }
+  in_release && /^## v/ { exit }
+  in_release && $0 == "### 中文" { in_chinese=1; next }
+  in_chinese && $0 == "### English" { exit }
+  in_chinese { print }
+' "$CHANGELOG" > "$CHANGES_TMP"
+
+if ! grep -q '^- ' "$CHANGES_TMP"; then
+  echo "missing Chinese changelog entries for v${UNRAID_VERSION}" >&2
+  exit 1
+fi
+if grep -q ']]>' "$CHANGES_TMP"; then
+  echo "v${UNRAID_VERSION} changelog contains an invalid CDATA terminator" >&2
+  exit 1
+fi
+
 sed \
   -e "s|__PLUGIN_VERSION__|${UNRAID_VERSION}|g" \
   -e "s|__GITHUB_REPO__|${GITHUB_REPO}|g" \
   -e "s|__RELEASE_TAG__|${RELEASE_TAG}|g" \
   -e "s|__PACKAGE_SHA256__|${PKG_SHA256}|g" \
-  "${ROOT_DIR}/packaging/unraid/msf.plg.in" > "$PLG"
+  "${ROOT_DIR}/packaging/unraid/msf.plg.in" > "$MANIFEST_TMP"
+
+awk -v changes_file="$CHANGES_TMP" '
+  /__PLUGIN_CHANGES__/ {
+    while ((getline line < changes_file) > 0) print line
+    close(changes_file)
+    next
+  }
+  { print }
+' "$MANIFEST_TMP" > "$PLG"
 if [ "$UPDATE_ROOT_PLG" = "true" ]; then
   cp "$PLG" "$ROOT_PLG"
 fi

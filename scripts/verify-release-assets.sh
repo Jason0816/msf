@@ -82,6 +82,22 @@ done
 cmp "$DIST/msf-linux-amd64.tar.gz" "$DIST/msm-free-linux-amd64.tar.gz" >/dev/null || fail "amd64 compatibility asset differs"
 cmp "$DIST/msf-linux-arm64.tar.gz" "$DIST/msm-free-linux-arm64.tar.gz" >/dev/null || fail "arm64 compatibility asset differs"
 
+manifest="$DIST/unraid/msf.plg"
+package="$DIST/unraid/msf-$VERSION-x86_64-1.txz"
+if command -v sha256sum >/dev/null 2>&1; then
+  package_digest="$(sha256sum "$package" | awk '{ print $1 }')"
+else
+  package_digest="$(shasum -a 256 "$package" | awk '{ print $1 }')"
+fi
+grep -F "<!ENTITY version \"$VERSION\">" "$manifest" >/dev/null || fail "Unraid manifest version mismatch"
+grep -F "<!ENTITY releaseTag \"$TAG\">" "$manifest" >/dev/null || fail "Unraid manifest release tag mismatch"
+grep -F "<!ENTITY packageSHA256 \"$package_digest\">" "$manifest" >/dev/null || fail "Unraid manifest package digest mismatch"
+grep -F 'pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg"' "$manifest" >/dev/null || fail "Unraid manifest update URL is not the latest stable release"
+grep -F "### msf $VERSION" "$manifest" >/dev/null || fail "Unraid manifest changelog heading mismatch"
+if grep -q '__[A-Z][A-Z_]*__' "$manifest"; then
+  fail "Unraid manifest contains an unresolved template placeholder"
+fi
+
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 

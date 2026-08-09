@@ -14,7 +14,7 @@ Build:
 make unraid VERSION=0.3.7 UNRAID_VERSION=0.3.7 GITHUB_REPO=scoltzero/msf RELEASE_TAG=v0.3.7
 ```
 
-Publish the generated `.txz` package and `.plg` file to the GitHub release named by `RELEASE_TAG`, then commit the generated root `msf.plg` when you want a branch-based install URL.
+Publish the generated `.txz` package and `.plg` file to the GitHub release named by `RELEASE_TAG`. The release workflow also synchronizes the generated manifest to the repository root for compatibility with installations that still use the former branch-based update URL.
 
 Example:
 
@@ -30,16 +30,16 @@ gh release create v0.3.7 \
   --notes-file /tmp/msf-v0.3.7-release-notes.md
 ```
 
-Recommended install URL for the v0.3.7 release:
+Recommended stable install and update URL:
 
 ```text
-https://github.com/scoltzero/msf/releases/download/v0.3.7/msf.plg
+https://github.com/scoltzero/msf/releases/latest/download/msf.plg
 ```
 
-Branch install URL, only after the generated root `msf.plg` has been committed to that branch:
+Legacy branch install URL, maintained automatically for existing installations:
 
 ```text
-https://raw.githubusercontent.com/scoltzero/msf/<branch>/msf.plg
+https://raw.githubusercontent.com/scoltzero/msf/main/msf.plg
 ```
 
 ## Runtime Behavior
