@@ -844,10 +844,13 @@ func normalizeMihomoProxies(raw map[string]any, groupOrder map[string]int) (map[
 
 func (a *App) mihomoRulesRuntime(r *http.Request) map[string]any {
 	raw, ok := a.mihomoControllerMap("/rules")
+	// Keep controller availability separate from the (valid) empty-list case.
+	// A missing controller must never look like a running controller with zero
+	// rules to callers rendering the runtime page.
 	if !ok {
 		raw = map[string]any{"rules": []any{}}
 	}
-	rules := normalizeMihomoRules(anySlice(raw["rules"]))
+	rules := normalizeMihomoRules(mihomoRulesFromControllerRaw(raw))
 	if r != nil {
 		q := r.URL.Query()
 		search := strings.ToLower(strings.TrimSpace(firstNonEmpty(q.Get("search"), q.Get("q"), q.Get("keyword"))))
@@ -873,7 +876,9 @@ func (a *App) mihomoRulesRuntime(r *http.Request) map[string]any {
 			filtered = append(filtered, rule)
 		}
 		rules = filtered
-		sortMihomoRows(rules, q.Get("sort"), q.Get("sort_order"))
+		// The controller's order is the matching order.  Never apply the old
+		// default id-desc sort (or any client supplied sort) here; filtering and
+		// pagination below must only slice the original sequence.
 	}
 	page, limit := 1, len(rules)
 	if r != nil {
@@ -893,10 +898,40 @@ func (a *App) mihomoRulesRuntime(r *http.Request) map[string]any {
 		end = total
 	}
 	items := rules[start:end]
-	return map[string]any{
-		"rules": items, "items": items, "total": total, "raw": raw,
-		"pagination": map[string]any{"page": page, "limit": limit, "page_size": limit, "total": total, "total_pages": (total + limit - 1) / limit},
+	capabilities := mihomoRuleCapabilities(raw, rules, ok)
+	result := map[string]any{
+		"available":            ok,
+		"controller_available": ok,
+		"source":               "controller",
+		"rules":                items,
+		"items":                items,
+		"total":                total,
+		"raw":                  raw,
+		"capabilities":         capabilities,
+		"pagination":           map[string]any{"page": page, "limit": limit, "page_size": limit, "total": total, "total_pages": (total + limit - 1) / limit},
 	}
+	if !ok {
+		result["error"] = "controller_unavailable"
+		result["message"] = "mihomo controller unavailable"
+	}
+	return result
+}
+
+func mihomoRulesFromControllerRaw(raw map[string]any) []any {
+	if raw == nil {
+		return nil
+	}
+	if rules := anySlice(raw["rules"]); rules != nil {
+		return rules
+	}
+	for _, key := range []string{"data", "result"} {
+		if nested, ok := raw[key].(map[string]any); ok {
+			if rules := anySlice(nested["rules"]); rules != nil {
+				return rules
+			}
+		}
+	}
+	return nil
 }
 
 func normalizeMihomoRules(items []any) []map[string]any {
@@ -904,25 +939,11 @@ func normalizeMihomoRules(items []any) []map[string]any {
 	for i, item := range items {
 		switch v := item.(type) {
 		case map[string]any:
-			row := map[string]any{
-				"id": i + 1, "index": i + 1,
-				"type":     firstNonEmpty(stringMapValue(v, "type"), stringMapValue(v, "ruleType")),
-				"payload":  firstNonEmpty(stringMapValue(v, "payload"), stringMapValue(v, "rulePayload")),
-				"proxy":    firstNonEmpty(stringMapValue(v, "proxy"), stringMapValue(v, "adapter")),
-				"provider": stringMapValue(v, "provider"),
-				"raw":      v,
-			}
-			if extra, ok := v["extra"].(map[string]any); ok {
-				row["extra"] = extra
-				row["hit_count"] = firstNumericMapValue(extra, "hitCount", "hit_count")
-				row["miss_count"] = firstNumericMapValue(extra, "missCount", "miss_count")
-				row["hit_at"] = firstNonEmpty(stringMapValue(extra, "hitAt"), stringMapValue(extra, "hit_at"))
-				row["miss_at"] = firstNonEmpty(stringMapValue(extra, "missAt"), stringMapValue(extra, "miss_at"))
-			}
+			row := normalizeMihomoRuleMap(v, i)
 			out = append(out, row)
 		case string:
 			parts := strings.Split(v, ",")
-			row := map[string]any{"id": i + 1, "index": i + 1, "raw": v}
+			row := map[string]any{"id": fmt.Sprintf("%d", i+1), "index": i + 1, "raw": v, "disabled": false}
 			if len(parts) > 0 {
 				row["type"] = strings.TrimSpace(parts[0])
 			}
@@ -936,6 +957,278 @@ func normalizeMihomoRules(items []any) []map[string]any {
 		}
 	}
 	return out
+}
+
+// normalizeMihomoRuleMap preserves controller fields while exposing a stable
+// compatibility shape for older Mihomo versions.  The controller's index and
+// id/uuid are authoritative; the positional fallback is only used when a
+// legacy controller omitted both fields.
+func normalizeMihomoRuleMap(v map[string]any, position int) map[string]any {
+	index := mihomoRuleIndex(v, position)
+	id := firstNonEmpty(
+		stringMapValue(v, "id"),
+		stringMapValue(v, "ruleId"),
+		stringMapValue(v, "rule_id"),
+		stringMapValue(v, "uuid"),
+		stringMapValue(v, "ruleUUID"),
+		stringMapValue(v, "rule_uuid"),
+		fmt.Sprintf("%d", index),
+	)
+	typ := firstNonEmpty(stringMapValue(v, "type"), stringMapValue(v, "ruleType"), stringMapValue(v, "rule_type"))
+	payload := firstNonEmpty(stringMapValue(v, "payload"), stringMapValue(v, "rulePayload"), stringMapValue(v, "rule_payload"))
+	target := firstNonEmpty(stringMapValue(v, "proxy"), stringMapValue(v, "adapter"), stringMapValue(v, "target"))
+	row := map[string]any{
+		"id":              id,
+		"index":           index,
+		"type":            typ,
+		"type_name":       typ,
+		"normalized_type": strings.ToLower(strings.TrimSpace(typ)),
+		"payload":         payload,
+		"proxy":           target,
+		"target":          target,
+		"provider":        firstNonEmpty(stringMapValue(v, "provider"), stringMapValue(v, "providerName"), stringMapValue(v, "provider_name")),
+		"disabled":        mihomoRuleDisabled(v),
+		"raw":             v,
+	}
+	if uuid := firstNonEmpty(stringMapValue(v, "uuid"), stringMapValue(v, "UUID"), stringMapValue(v, "ruleUUID"), stringMapValue(v, "rule_uuid")); uuid != "" {
+		row["uuid"] = uuid
+	}
+	if size, ok := mihomoNumericField(v, "size", "ruleSize", "rule_size"); ok {
+		row["size"] = size
+	}
+	// Newer controllers put counters in extra/stats, while older snapshots
+	// expose them directly.  Flatten both spellings without dropping the raw
+	// nested object.
+	stats := map[string]any{}
+	for _, key := range []string{"extra", "stats", "statistics", "stat"} {
+		if nested, ok := v[key].(map[string]any); ok {
+			if len(stats) == 0 {
+				stats = nested
+			} else {
+				for k, value := range nested {
+					if _, exists := stats[k]; !exists {
+						stats[k] = value
+					}
+				}
+			}
+		}
+	}
+	if len(stats) > 0 {
+		row["extra"] = stats
+	}
+	if hit, ok := mihomoNumericField(v, "hitCount", "hit_count", "hits"); !ok {
+		hit, ok = mihomoNumericField(stats, "hitCount", "hit_count", "hits")
+		if ok {
+			row["hit_count"] = hit
+			row["hitCount"] = hit
+		}
+	} else {
+		row["hit_count"] = hit
+		row["hitCount"] = hit
+	}
+	if miss, ok := mihomoNumericField(v, "missCount", "miss_count", "misses"); !ok {
+		miss, ok = mihomoNumericField(stats, "missCount", "miss_count", "misses")
+		if ok {
+			row["miss_count"] = miss
+			row["missCount"] = miss
+		}
+	} else {
+		row["miss_count"] = miss
+		row["missCount"] = miss
+	}
+	if hitAt := firstNonEmpty(
+		stringMapValue(v, "hitAt"), stringMapValue(v, "hit_at"), stringMapValue(v, "lastHitAt"), stringMapValue(v, "last_hit_at"),
+		stringMapValue(stats, "hitAt"), stringMapValue(stats, "hit_at"), stringMapValue(stats, "lastHitAt"), stringMapValue(stats, "last_hit_at"),
+	); hitAt != "" {
+		row["hit_at"] = hitAt
+		row["hitAt"] = hitAt
+		row["last_hit_at"] = hitAt
+	}
+	if missAt := firstNonEmpty(
+		stringMapValue(v, "missAt"), stringMapValue(v, "miss_at"), stringMapValue(v, "lastMissAt"), stringMapValue(v, "last_miss_at"),
+		stringMapValue(stats, "missAt"), stringMapValue(stats, "miss_at"), stringMapValue(stats, "lastMissAt"), stringMapValue(stats, "last_miss_at"),
+	); missAt != "" {
+		row["miss_at"] = missAt
+		row["missAt"] = missAt
+		row["last_miss_at"] = missAt
+	}
+	return row
+}
+
+func mihomoRuleIndex(v map[string]any, position int) int {
+	for _, key := range []string{"index", "position", "order"} {
+		if value, ok := mihomoIntField(v, key); ok {
+			return value
+		}
+	}
+	return position + 1
+}
+
+func mihomoIntField(m map[string]any, key string) (int, bool) {
+	if m == nil {
+		return 0, false
+	}
+	value, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	switch n := value.(type) {
+	case int:
+		return n, true
+	case int8:
+		return int(n), true
+	case int16:
+		return int(n), true
+	case int32:
+		return int(n), true
+	case int64:
+		return int(n), true
+	case uint:
+		return int(n), true
+	case uint8:
+		return int(n), true
+	case uint16:
+		return int(n), true
+	case uint32:
+		return int(n), true
+	case uint64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	case json.Number:
+		i, err := n.Int64()
+		return int(i), err == nil
+	case string:
+		i, err := strconv.Atoi(strings.TrimSpace(n))
+		return i, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func mihomoNumericField(m map[string]any, keys ...string) (float64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	for _, key := range keys {
+		if _, exists := m[key]; !exists {
+			continue
+		}
+		return numericMapValue(m, key), true
+	}
+	return 0, false
+}
+
+func mihomoRuleDisabled(v map[string]any) bool {
+	for _, key := range []string{"disabled", "isDisabled", "is_disabled"} {
+		if value, exists := v[key]; exists {
+			return boolAny(value, false)
+		}
+	}
+	for _, key := range []string{"enabled", "isEnabled", "is_enabled"} {
+		if value, exists := v[key]; exists {
+			return !boolAny(value, true)
+		}
+	}
+	return false
+}
+
+func boolAny(value any, fallback bool) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
+			return parsed
+		}
+	case json.Number:
+		return v.String() != "0"
+	case float64:
+		return v != 0
+	case int:
+		return v != 0
+	}
+	return fallback
+}
+
+func mihomoRuleCapabilities(raw map[string]any, rules []map[string]any, available bool) map[string]any {
+	if !available {
+		return map[string]any{"rule_toggle": false, "rule_stats": false, "provider_update": false}
+	}
+	capabilities := map[string]any{}
+	for _, key := range []string{"capabilities", "supports", "features"} {
+		if nested, ok := raw[key].(map[string]any); ok {
+			for k, value := range nested {
+				capabilities[k] = value
+			}
+		}
+	}
+	if value, exists := raw["rule_toggle"]; exists {
+		capabilities["rule_toggle"] = boolAny(value, false)
+	}
+	if value, exists := raw["rule_stats"]; exists {
+		capabilities["rule_stats"] = boolAny(value, false)
+	}
+	if value, exists := raw["provider_update"]; exists {
+		capabilities["provider_update"] = boolAny(value, false)
+	}
+	if _, exists := capabilities["rule_toggle"]; !exists {
+		// Meta-compatible controllers may support PATCH /rules/{index} without
+		// echoing disabled/id fields from GET /rules.  A non-empty live rule list
+		// is therefore enough to expose the switch as a runtime capability probe.
+		// Explicit controller capability flags above still take priority, and a
+		// 404/405/501 response makes the client disable the switch again.
+		capabilities["rule_toggle"] = len(mihomoRulesFromControllerRaw(raw)) > 0
+	}
+	if _, exists := capabilities["provider_update"]; !exists {
+		capabilities["provider_update"] = true
+	}
+	if _, exists := capabilities["rule_stats"]; !exists {
+		for _, rule := range rules {
+			if _, hit := rule["hit_count"]; hit {
+				capabilities["rule_stats"] = true
+				break
+			}
+		}
+		if _, exists := capabilities["rule_stats"]; !exists {
+			capabilities["rule_stats"] = false
+		}
+	}
+	// Keep the API's canonical snake-case keys while retaining any explicit
+	// camelCase capability aliases supplied by a newer controller.
+	if value, exists := capabilities["ruleToggle"]; exists {
+		capabilities["rule_toggle"] = boolAny(value, boolAny(capabilities["rule_toggle"], false))
+	}
+	if value, exists := capabilities["ruleStats"]; exists {
+		capabilities["rule_stats"] = boolAny(value, boolAny(capabilities["rule_stats"], false))
+	}
+	if value, exists := capabilities["providerUpdate"]; exists {
+		capabilities["provider_update"] = boolAny(value, boolAny(capabilities["provider_update"], false))
+	}
+	return capabilities
+}
+
+func mihomoRulesExposeToggleFields(raw map[string]any) bool {
+	for _, value := range mihomoRulesFromControllerRaw(raw) {
+		item, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		stableID := firstNonEmpty(
+			stringMapValue(item, "id"), stringMapValue(item, "uuid"),
+			stringMapValue(item, "ruleId"), stringMapValue(item, "rule_id"),
+			stringMapValue(item, "ruleUUID"), stringMapValue(item, "rule_uuid"),
+		)
+		if stableID == "" {
+			continue
+		}
+		for _, key := range []string{"disabled", "enabled", "isDisabled", "is_disabled", "isEnabled", "is_enabled"} {
+			if _, exists := item[key]; exists {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func firstNumericMapValue(m map[string]any, keys ...string) float64 {
@@ -978,7 +1271,34 @@ func (a *App) mihomoRuleProvidersPayload() map[string]any {
 	}
 	runtimeItems := runtimeProviderItems(runtime, "rule")
 	items := mergeProviders(configProviders, runtime, "rule")
-	return map[string]any{"rule-providers": cfg["rule-providers"], "items": items, "providers": items, "runtime": runtime, "runtime_items": runtimeItems, "runtime_providers": runtimeItems}
+	for _, item := range items {
+		name := stringMapValue(item, "name")
+		if state, exists := mihomoRuleProviderRuntimeStates.Load(mihomoRuleProviderRuntimeStateKey(a, name)); exists {
+			if runtimeState, ok := state.(mihomoRuleProviderRuntimeState); ok {
+				item["using_stale_cache"] = true
+				item["stale_cache"] = true
+				item["last_update_error"] = runtimeState.Message
+				item["last_update_error_code"] = runtimeState.Error
+			}
+		}
+	}
+	result := map[string]any{
+		"available":            ok,
+		"controller_available": ok,
+		"source":               "controller",
+		"rule-providers":       cfg["rule-providers"],
+		"items":                items,
+		"providers":            items,
+		"runtime":              runtime,
+		"runtime_items":        runtimeItems,
+		"runtime_providers":    runtimeItems,
+		"capabilities":         map[string]any{"provider_update": ok},
+	}
+	if !ok {
+		result["error"] = "controller_unavailable"
+		result["message"] = "mihomo controller unavailable"
+	}
+	return result
 }
 
 func (a *App) handleMihomoProxyProviderGet(w http.ResponseWriter, r *http.Request) {
@@ -1031,6 +1351,10 @@ func (a *App) handleMihomoRuleProviderUpdate(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *App) writeMihomoProviderGet(w http.ResponseWriter, name, section, runtimePrefix string) {
+	if err := validateMihomoProviderName(name); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
 	cfgProviders := normalizeConfigProviders(a.mihomoConfigMap()[section])
 	item, ok := cfgProviders[name]
 	if raw, runtimeOK, _ := a.mihomoControllerJSON(http.MethodGet, runtimePrefix+url.PathEscape(name), nil); runtimeOK {
@@ -1091,26 +1415,38 @@ func (a *App) writeMihomoProviderDelete(w http.ResponseWriter, r *http.Request, 
 }
 
 func (a *App) writeMihomoProviderRuntimeUpdate(w http.ResponseWriter, name, kind string) {
-	if name == "" {
+	if strings.TrimSpace(name) == "" {
 		writeError(w, http.StatusBadRequest, "bad_request", "provider name required")
 		return
 	}
-	paths := []string{}
+	if err := validateMihomoProviderName(name); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
 	if kind == "proxy" {
-		paths = []string{"/providers/proxies/" + url.PathEscape(name) + "/healthcheck", "/providers/proxies/" + url.PathEscape(name)}
-	} else {
-		paths = []string{"/providers/rules/" + url.PathEscape(name)}
-	}
-	var lastErr error
-	for _, path := range paths {
-		if raw, ok, err := a.mihomoControllerJSON(http.MethodPut, path, nil); ok {
-			writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": raw})
-			return
-		} else {
-			lastErr = err
+		// Proxy provider update has a separate healthcheck action.  Keep the
+		// existing proxy-page semantics here; rule-provider updates below are
+		// deliberately a single, per-name operation and never a collection loop.
+		paths := []string{"/providers/proxies/" + url.PathEscape(name) + "/healthcheck", "/providers/proxies/" + url.PathEscape(name)}
+		var lastErr error
+		for _, path := range paths {
+			if raw, ok, err := a.mihomoControllerJSON(http.MethodPut, path, nil); ok {
+				writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": raw})
+				return
+			} else {
+				lastErr = err
+			}
 		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "warning": errString(lastErr, "mihomo controller unavailable"), "data": map[string]any{"updated": false}})
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": false, "warning": errString(lastErr, "mihomo controller unavailable"), "data": map[string]any{"updated": false}})
+
+	result := a.updateMihomoRuleProviderRuntime(name)
+	status := http.StatusOK
+	if !result.Success && result.Unsupported {
+		status = http.StatusNotImplemented
+	}
+	writeJSON(w, status, map[string]any{"success": result.Success, "error": result.ErrorCode, "message": result.Message, "data": result.Data})
 }
 
 func (a *App) upsertMihomoProvider(section, name string, provider map[string]any) error {
@@ -1328,8 +1664,7 @@ func mergeProviders(config, runtime map[string]map[string]any, kind string) []ma
 		}
 		if rt, ok := runtime[name]; ok {
 			item["runtime"] = rt
-			item["updated_at"] = firstNonEmpty(stringMapValue(rt, "updatedAt"), stringMapValue(rt, "updated_at"))
-			item["vehicle_type"] = stringMapValue(rt, "vehicleType")
+			mergeMihomoProviderRuntimeFields(item, rt)
 			item["source"] = "config+controller"
 		} else {
 			item["source"] = "config"
@@ -1354,11 +1689,62 @@ func runtimeProviderItems(runtime map[string]map[string]any, kind string) []map[
 		for k, v := range runtime[name] {
 			item[k] = v
 		}
-		item["updated_at"] = firstNonEmpty(stringMapValue(runtime[name], "updatedAt"), stringMapValue(runtime[name], "updated_at"))
-		item["vehicle_type"] = stringMapValue(runtime[name], "vehicleType")
+		mergeMihomoProviderRuntimeFields(item, runtime[name])
 		items = append(items, item)
 	}
 	return items
+}
+
+// mergeMihomoProviderRuntimeFields exposes the commonly consumed runtime
+// fields at the item level while retaining the complete controller object in
+// item["runtime"]. Unknown/future fields remain available through that raw
+// nested value and are never discarded by a config edit.
+func mergeMihomoProviderRuntimeFields(item, runtime map[string]any) {
+	if item == nil || runtime == nil {
+		return
+	}
+	item["runtime_available"] = true
+	if vehicleType := firstNonEmpty(stringMapValue(runtime, "vehicleType"), stringMapValue(runtime, "vehicle_type"), stringMapValue(runtime, "vehicle-type")); vehicleType != "" {
+		item["vehicle_type"] = vehicleType
+		item["vehicleType"] = vehicleType
+	}
+	if typ := firstNonEmpty(stringMapValue(runtime, "type"), stringMapValue(runtime, "providerType"), stringMapValue(runtime, "provider_type")); typ != "" {
+		item["runtime_type"] = typ
+	}
+	for _, field := range []struct {
+		canonical string
+		aliases   []string
+	}{
+		{"behavior", []string{"behavior"}},
+		{"format", []string{"format"}},
+		{"updated_at", []string{"updatedAt", "updated_at", "lastUpdated", "last_updated"}},
+		{"last_updated_at", []string{"lastUpdatedAt", "last_updated_at"}},
+		{"using_stale_cache", []string{"using_stale_cache", "usingStaleCache"}},
+		{"last_update_error", []string{"last_update_error", "lastUpdateError"}},
+	} {
+		for _, alias := range field.aliases {
+			if value, exists := runtime[alias]; exists {
+				item[field.canonical] = value
+				break
+			}
+		}
+	}
+	if size, ok := mihomoNumericField(runtime, "size", "bytes", "fileSize", "file_size"); ok {
+		item["size"] = size
+	}
+	if count, ok := mihomoNumericField(runtime, "ruleCount", "rule_count", "count", "rulesCount", "rules_count"); ok {
+		item["rule_count"] = count
+		item["ruleCount"] = count
+	} else if count := anyLen(runtime["rules"]); count > 0 {
+		item["rule_count"] = count
+		item["ruleCount"] = count
+	}
+	// Keep the original camelCase timestamp as well as the stable snake_case
+	// alias expected by the MSF frontend.
+	if updatedAt := firstNonEmpty(stringMapValue(runtime, "updatedAt"), stringMapValue(runtime, "updated_at")); updatedAt != "" {
+		item["updatedAt"] = updatedAt
+		item["updated_at"] = updatedAt
+	}
 }
 
 func providerVehicleType(item map[string]any) string {

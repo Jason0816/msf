@@ -551,18 +551,20 @@ func (a *App) mihomoConfigModePayload() map[string]any {
 	}
 	mode := a.mihomoConfigMode()
 	return map[string]any{
-		"mode":                  a.mihomoConfigMode(),
-		"backup_path":           backupRel,
-		"backup_exists":         backupExists,
-		"active_path":           activePath,
-		"active_name":           activeName,
-		"is_default":            !hasActive && mode == "generated",
-		"runtime_path":          mihomoActiveConfigRelPath,
-		"can_edit_groups":       mode == "custom",
-		"can_edit_providers":    true,
-		"can_edit_manual_nodes": true,
-		"protected_fields":      a.mihomoProtectedFields(),
-		"protected_warning":     "自定义配置请保留这些字段，否则 WebUI、MosDNS 转发或透明代理可能无法正常工作。",
+		"mode":                    a.mihomoConfigMode(),
+		"backup_path":             backupRel,
+		"backup_exists":           backupExists,
+		"active_path":             activePath,
+		"active_name":             activeName,
+		"is_default":              !hasActive && mode == "generated",
+		"runtime_path":            mihomoActiveConfigRelPath,
+		"can_edit_groups":         mode == "custom",
+		"can_edit_rules":          mode == "custom",
+		"can_edit_rule_providers": mode == "custom",
+		"can_edit_providers":      true,
+		"can_edit_manual_nodes":   true,
+		"protected_fields":        a.mihomoProtectedFields(),
+		"protected_warning":       "自定义配置请保留这些字段，否则 WebUI、MosDNS 转发或透明代理可能无法正常工作。",
 	}
 }
 

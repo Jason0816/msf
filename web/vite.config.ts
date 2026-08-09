@@ -32,7 +32,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/features/mihomo-proxies/**/*.test.ts"],
+    include: ["src/features/mihomo-proxies/**/*.test.ts", "src/features/mihomo-rules/**/*.test.ts"],
     globals: false,
     passWithNoTests: true
   }

@@ -65,6 +65,7 @@ func (a *App) registerMihomoRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/mihomo/proxies/{name}/delay", a.handleMihomoProxyDelay)
 	mux.HandleFunc("GET /api/v1/mihomo/proxy-groups/{name}/delay", a.handleMihomoProxyGroupDelay)
 	mux.HandleFunc("GET /api/v1/mihomo/rules", a.handleMihomoRules)
+	mux.HandleFunc("PATCH /api/v1/mihomo/rules/{id}", a.handleMihomoRulePatch)
 	mux.HandleFunc("GET /api/v1/mihomo/providers", a.handleMihomoProviders)
 	mux.HandleFunc("GET /api/v1/mihomo/proxy-providers", a.handleMihomoProxyProvidersConfig)
 	mux.HandleFunc("PUT /api/v1/mihomo/proxy-providers", a.handleMihomoProxyProvidersPut)
@@ -380,9 +381,13 @@ func (a *App) handleMihomoProviderConfigPut(w http.ResponseWriter, r *http.Reque
 }
 
 func (a *App) handleMihomoRulesConfig(w http.ResponseWriter, r *http.Request) {
-	cfg := map[string]any{}
-	_ = readYAMLFile(filepath.Join(a.DataDir, "configs/mihomo/config.yaml"), &cfg)
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": map[string]any{"rules": cfg["rules"], "rule-providers": cfg["rule-providers"], "runtime": a.mihomoRulesRuntime(r)}})
+	payload, err := a.mihomoRulesConfigPayload(r)
+	if err != nil {
+		code := firstNonEmpty(mihomoRulesConfigErrorCode(err), "rules_config_read_failed")
+		writeError(w, http.StatusBadRequest, code, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": payload})
 }
 
 func (a *App) handleMihomoRulesConfigPut(w http.ResponseWriter, r *http.Request) {
@@ -391,12 +396,13 @@ func (a *App) handleMihomoRulesConfigPut(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	if err := a.updateMihomoConfigSections(req, "rules", "rule-providers"); err != nil {
-		writeError(w, http.StatusBadRequest, "write_failed", err.Error())
+	result, err := a.saveMihomoRulesConfig(r.Context(), req, currentUsername(r))
+	if err != nil {
+		code := firstNonEmpty(mihomoRulesConfigErrorCode(err), "rules_config_apply_failed")
+		writeError(w, http.StatusBadRequest, code, err.Error())
 		return
 	}
-	_, _ = a.Services.Restart(r.Context(), "mihomo")
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "data": map[string]any{"rules": a.mihomoConfigMap()["rules"], "rule-providers": a.mihomoConfigMap()["rule-providers"], "runtime": a.mihomoRulesRuntime(r), "mode": a.mihomoConfigModePayload()}})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "data": result})
 }
 
 func (a *App) handleMihomoTraffic(w http.ResponseWriter, r *http.Request) {

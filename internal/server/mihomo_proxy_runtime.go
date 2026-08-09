@@ -594,6 +594,15 @@ func (a *App) handleMihomoProxyConfigValidate(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	if strings.EqualFold(strings.TrimSpace(stringMapValue(req, "scope")), "rules") {
+		validation := a.validateMihomoRulesConfigRequest(req)
+		resp := map[string]any{"success": true, "valid": validation.Valid, "warnings": validation.Warnings, "data": validation}
+		if !validation.Valid {
+			resp["error"] = validation.Error
+		}
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
 	content, err := a.mihomoCandidateConfigContent(req)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"success": true, "valid": false, "data": mihomoConfigValidation{Valid: false, Error: err.Error()}})

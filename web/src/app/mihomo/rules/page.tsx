@@ -1,524 +1,213 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, RefreshCw, SlidersHorizontal, ChevronDown, Zap, Plus, Trash2, Save } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, FileCode2, Save, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { useToaster, ToastStack } from "@/components/Toaster";
-import { cn } from "@/lib/utils";
-import { api, apiData, apiList } from "@/lib/api";
+import { ToastStack, useToaster } from "@/components/Toaster";
+import { GlassButton } from "@/components/liquid-glass/GlassButton";
+import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+import { createEmptyProviderDraft } from "@/components/mihomo/rules/RuleProviderEditor";
+import { RuleConfigStatus } from "@/components/mihomo/rules/RuleConfigStatus";
+import { RuleConfigValidationPanel } from "@/components/mihomo/rules/RuleConfigValidationPanel";
+import { RulePageHeader } from "@/components/mihomo/rules/RulePageHeader";
+import { RuleProviderEditor } from "@/components/mihomo/rules/RuleProviderEditor";
+import { RuleProviderList } from "@/components/mihomo/rules/RuleProviderList";
+import { RuleEmptyState } from "@/components/mihomo/rules/RuleEmptyState";
+import { RuleTextEditor } from "@/components/mihomo/rules/RuleTextEditor";
+import { RuleToolbar, type RulePageTab } from "@/components/mihomo/rules/RuleToolbar";
+import { RuleYamlEditor } from "@/components/mihomo/rules/RuleYamlEditor";
+import { RuntimeRuleList } from "@/components/mihomo/rules/RuntimeRuleList";
+import { useRuleConfig } from "@/features/mihomo-rules/useRuleConfig";
+import { useRuleRuntime } from "@/features/mihomo-rules/useRuleRuntime";
+import { draftHasUnsafeStructuredYaml, serializeProviderDrafts, serializeRuleConfigYaml } from "@/features/mihomo-rules/configDraft";
+import { selectFilteredRules, ruleStableKey } from "@/features/mihomo-rules/selectors";
+import { readRuleSettings, writeRuleSettings, type RulePageSettings } from "@/features/mihomo-rules/settings";
 
-interface Rule {
-  id: string;
-  type: string;
-  payload: string;
-  count?: number;
-  group: string;
-  node: string;
-  provider: string;
-  delay?: number;
-}
-
-interface RuleProvider {
-  name: string;
-  type: string;
-  vehicleType: string;
-  updatedAt: string;
-  ruleCount: number;
-}
-
-interface RuleProviderDraft {
-  id: string;
-  name: string;
-  url: string;
-  behavior: string;
-  type: string;
-  path: string;
-  extra: string;
-}
-
-interface SelectionInfo {
-  node: string;
-  delay?: number;
-}
-
-const typeBadge: Record<string, string> = {
-  "DST-PORT": "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
-  "DOMAIN-SUFFIX": "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  "DOMAIN-KEYWORD": "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  DOMAIN: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
-  "IP-CIDR": "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  "RULE-SET": "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  GEOIP: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
-  MATCH: "bg-muted text-muted-foreground",
-};
-
-const typeDot: Record<string, string> = {
-  "DST-PORT": "bg-cyan-500",
-  "DOMAIN-SUFFIX": "bg-blue-500",
-  "DOMAIN-KEYWORD": "bg-violet-500",
-  DOMAIN: "bg-indigo-500",
-  "IP-CIDR": "bg-amber-500",
-  "RULE-SET": "bg-emerald-500",
-  GEOIP: "bg-teal-500",
-  MATCH: "bg-muted-foreground",
-};
-
-function stringValue(value: unknown) {
-  return value == null ? "" : String(value);
-}
-
-function numberValue(value: unknown) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : 0;
-}
-
-function formatUpdated(value: unknown) {
-  const raw = stringValue(value);
-  if (!raw) return "未更新";
-  const time = Date.parse(raw);
-  if (!Number.isFinite(time)) return raw;
-  const days = Math.floor((Date.now() - time) / 86400000);
-  if (days <= 0) return "今天更新";
-  return `${days} 天前`;
-}
-
-function delayColor(d: number) {
-  if (d < 200) return "bg-green-500/10 text-green-600 dark:text-green-400";
-  if (d < 800) return "bg-amber-500/10 text-amber-600 dark:text-amber-400";
-  return "bg-red-500/10 text-red-600 dark:text-red-400";
-}
-
-function latestDelay(row: any) {
-  const direct = numberValue(row?.delay);
-  if (direct > 0) return direct;
-  const history = Array.isArray(row?.history) ? row.history : [];
-  for (let i = history.length - 1; i >= 0; i -= 1) {
-    const delay = numberValue(history[i]?.delay);
-    if (delay > 0) return delay;
-  }
-  return 0;
-}
-
-function normalizeSelections(proxiesPayload: any): Map<string, SelectionInfo> {
-  const data = apiData<any>(proxiesPayload, proxiesPayload || {});
-  const groups = apiList<any>(data, ["groups", "proxy_groups"]);
-  const map = new Map<string, SelectionInfo>();
-  groups.forEach((group) => {
-    const name = stringValue(group.name);
-    if (!name) return;
-    map.set(name, {
-      node: stringValue(group.now || group.selected || name),
-      delay: latestDelay(group) || undefined,
-    });
-  });
-  return map;
-}
-
-function normalizeRule(row: any, index: number, selections: Map<string, SelectionInfo>): Rule {
-  const group = stringValue(row.proxy || row.group || row.adapter || "-");
-  const selection = selections.get(group);
-  const provider = stringValue(row.provider);
-  return {
-    id: stringValue(row.id || row.index || index + 1),
-    type: stringValue(row.type || "MATCH").toUpperCase(),
-    payload: stringValue(row.payload || row.rule_payload),
-    count: row.count == null ? undefined : numberValue(row.count),
-    group,
-    node: selection?.node || provider || group,
-    provider,
-    delay: selection?.delay,
-  };
-}
-
-function normalizeProvider(row: any): RuleProvider {
-  const runtime = row.runtime || {};
-  const rules = Array.isArray(runtime.rules) ? runtime.rules : Array.isArray(row.rules) ? row.rules : [];
-  return {
-    name: stringValue(row.name || "-"),
-    type: stringValue(row.type || row.provider_type || "rule"),
-    vehicleType: stringValue(row.vehicle_type || runtime.vehicleType || row.vehicleType || "-"),
-    updatedAt: formatUpdated(row.updated_at || runtime.updatedAt || runtime.updated_at),
-    ruleCount: rules.length || numberValue(row.rule_count || row.count),
-  };
-}
-
-function normalizeRuleConfig(payload: any) {
-  const data = apiData<any>(payload, payload || {});
-  const rawProviders = data["rule-providers"] || data.rule_providers || {};
-  const providers: RuleProviderDraft[] = Object.entries(rawProviders).map(([name, value], index) => {
-    const row = (value || {}) as Record<string, unknown>;
-    const extra: Record<string, unknown> = {};
-    Object.entries(row).forEach(([key, item]) => {
-      if (["name", "url", "behavior", "type", "path"].includes(key)) return;
-      extra[key] = item;
-    });
-    return {
-      id: `${name}-${index}`,
-      name,
-      url: stringValue(row.url),
-      behavior: stringValue(row.behavior || "classical"),
-      type: stringValue(row.type || "http"),
-      path: stringValue(row.path),
-      extra: Object.keys(extra).length > 0 ? JSON.stringify(extra, null, 2) : "",
-    };
-  });
-  const rules = Array.isArray(data.rules) ? data.rules.map(String).join("\n") : "";
-  return { providers, rules };
-}
-
-function serializeRuleProviderDrafts(rows: RuleProviderDraft[]) {
-  const out: Record<string, unknown> = {};
-  rows.forEach((row) => {
-    const name = row.name.trim();
-    if (!name) return;
-    const item: Record<string, unknown> = {
-      type: row.type.trim() || "http",
-      behavior: row.behavior.trim() || "classical",
-    };
-    if (row.url.trim()) item.url = row.url.trim();
-    if (row.path.trim()) item.path = row.path.trim();
-    if (row.extra.trim()) Object.assign(item, JSON.parse(row.extra));
-    out[name] = item;
-  });
-  return out;
-}
+type ProviderScrollTarget =
+  | { id: number; kind: "existing"; name: string }
+  | { id: number; kind: "new"; index: number };
 
 export default function MihomoRulesPage() {
   const { toasts, showToast } = useToaster();
-  const [tab, setTab] = useState<"rules" | "providers" | "config">("rules");
+  const [settings, setSettings] = useState<RulePageSettings>(() => readRuleSettings());
+  const [tab, setTab] = useState<RulePageTab>("rules");
   const [query, setQuery] = useState("");
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [providers, setProviders] = useState<RuleProvider[]>([]);
-  const [providerDrafts, setProviderDrafts] = useState<RuleProviderDraft[]>([]);
-  const [rulesConfigText, setRulesConfigText] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [expandedRule, setExpandedRule] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const deferredQuery = useDeferredValue(query);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(settings.expandedRuleIds));
+  const searchRef = useRef<HTMLInputElement>(null);
+  const providerEditorRefs = useRef(new Map<number, HTMLDivElement>());
+  const providerScrollSequence = useRef(0);
+  const [providerScrollTarget, setProviderScrollTarget] = useState<ProviderScrollTarget>();
+  const [selectingTargetName, setSelectingTargetName] = useState<string>();
+  const runtime = useRuleRuntime({ enabled: true, autoRefreshMs: settings.autoRefresh ? 30_000 : 0 });
+  const config = useRuleConfig({ enabled: tab === "config" });
+  const { store, loading, refreshing, error } = runtime;
+  const { draft: configDraft, snapshot: configSnapshot, loading: configLoading, load: loadConfig, validating: configValidating, validation: configValidation, saving: configSaving } = config;
+  const authority = configSnapshot?.authority ?? store.authority;
+  const filtered = useMemo(() => selectFilteredRules(store, deferredQuery, settings.searchMode), [deferredQuery, settings.searchMode, store]);
+  const editable = authority.mode === "custom" && authority.canEditRules && authority.canEditRuleProviders;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [rulesPayload, providersPayload, proxiesPayload] = await Promise.all([
-        api<any>("/api/v1/mihomo/rules?limit=1000"),
-        api<any>("/api/v1/mihomo/providers").catch(() => null),
-        api<any>("/api/v1/mihomo/proxies").catch(() => null),
-      ]);
-      const selections = proxiesPayload ? normalizeSelections(proxiesPayload) : new Map<string, SelectionInfo>();
-      const rulesData = apiData<any>(rulesPayload, rulesPayload);
-      setRules(apiList<any>(rulesData, ["rules", "items", "data"]).map((row, index) => normalizeRule(row, index, selections)));
-      if (providersPayload) {
-        const providersData = apiData<any>(providersPayload, providersPayload);
-        const ruleProviders = apiList<any>(providersData, ["rule_providers", "items", "providers"]);
-        setProviders(ruleProviders.map(normalizeProvider));
+  useEffect(() => { writeRuleSettings(settings); }, [settings]);
+  useEffect(() => { if (error) showToast(error); }, [error, showToast]);
+  useEffect(() => {
+    if (tab === "config" && !configSnapshot && !configLoading) void loadConfig().catch((reason) => showToast(reason instanceof Error ? reason.message : "加载规则配置失败"));
+  }, [configLoading, configSnapshot, loadConfig, showToast, tab]);
+  useEffect(() => {
+    if (!providerScrollTarget || tab !== "config" || configLoading || configDraft.mode !== "structured") return;
+    const index = providerScrollTarget.kind === "new"
+      ? providerScrollTarget.index
+      : configDraft.providers.findIndex((provider) => provider.name === providerScrollTarget.name);
+    if (index < 0) {
+      if (configSnapshot && providerScrollTarget.kind === "existing") {
+        showToast(`当前配置中未找到 ${providerScrollTarget.name}`);
+        setProviderScrollTarget(undefined);
       }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "加载规则失败");
-    } finally {
-      setLoading(false);
+      return;
     }
-  }, [showToast]);
-
-  const loadConfig = useCallback(async () => {
-    try {
-      const payload = await api<any>("/api/v1/mihomo/rules-config");
-      const next = normalizeRuleConfig(payload);
-      setProviderDrafts(next.providers);
-      setRulesConfigText(next.rules);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "加载规则配置失败");
-    }
-  }, [showToast]);
-
-  useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), 10000);
-    return () => window.clearInterval(timer);
-  }, [load]);
-
-  useEffect(() => {
-    if (tab === "config") void loadConfig();
-  }, [loadConfig, tab]);
-
-  const saveConfig = async () => {
-    setSavingConfig(true);
-    try {
-      const ruleProviders = serializeRuleProviderDrafts(providerDrafts);
-      const nextRules = rulesConfigText.split("\n").map((line) => line.trim()).filter(Boolean);
-      await api("/api/v1/mihomo/rules-config", {
-        method: "PUT",
-        body: JSON.stringify({ "rule-providers": ruleProviders, rules: nextRules }),
+    const element = providerEditorRefs.current.get(index);
+    if (!element || typeof window === "undefined") return;
+    const targetId = providerScrollTarget.id;
+    const targetName = providerScrollTarget.kind === "existing" ? providerScrollTarget.name : undefined;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        element.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+        element.focus({ preventScroll: true });
+        setProviderScrollTarget((current) => current?.id === targetId ? undefined : current);
+        showToast(targetName ? `已定位到 ${targetName} 的配置` : "已定位到新增规则提供商");
       });
-      showToast("规则配置已保存并重启 Mihomo");
-      await Promise.all([load(), loadConfig()]);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "保存规则配置失败，请检查高级 JSON");
-    } finally {
-      setSavingConfig(false);
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [configDraft.mode, configDraft.providers, configLoading, configSnapshot, providerScrollTarget, showToast, tab]);
+
+  const changeTab = (next: RulePageTab) => {
+    if (tab === "config" && configDraft.dirty && next !== "config") {
+      if (typeof window !== "undefined" && !window.confirm("配置草稿尚未保存，离开后会丢失修改。确定离开吗？")) return;
+    }
+    setTab(next);
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      setSettings((value) => ({ ...value, expandedRuleIds: Array.from(next) }));
+      return next;
+    });
+  };
+
+  const toggleRule = async (rule: (typeof store.rules)[number], disabled: boolean) => {
+    try {
+      const result = await runtime.toggleRule(rule.id, disabled, settings.disconnectMatchedOnDisable && disabled);
+      const closed = result.disconnect?.closed ?? 0;
+      const failed = result.disconnect?.failedIds.length ?? 0;
+      showToast(disabled ? `规则已禁用${closed ? `，已关闭 ${closed} 条匹配连接` : ""}${failed ? `，${failed} 条关闭失败` : ""}` : "规则已启用");
+    } catch (reason) {
+      showToast(reason instanceof Error ? reason.message : "规则状态更新失败");
     }
   };
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rules;
-    return rules.filter(
-      (r) =>
-        r.payload.toLowerCase().includes(q) ||
-        r.type.toLowerCase().includes(q) ||
-        r.group.toLowerCase().includes(q) ||
-        r.node.toLowerCase().includes(q) ||
-        r.provider.toLowerCase().includes(q)
-    );
-  }, [query, rules]);
+  const updateProvider = async (name: string) => {
+    try {
+      await runtime.updateProvider(name);
+      showToast(`${name} 已更新`);
+    } catch (reason) {
+      showToast(reason instanceof Error ? reason.message : "更新失败，正在使用旧缓存");
+    }
+  };
+
+  const editProvider = (name: string) => {
+    providerScrollSequence.current += 1;
+    setProviderScrollTarget({ id: providerScrollSequence.current, kind: "existing", name });
+    setTab("config");
+  };
+
+  const addProvider = () => {
+    providerScrollSequence.current += 1;
+    setProviderScrollTarget({ id: providerScrollSequence.current, kind: "new", index: configDraft.providers.length });
+    config.setDraft((draft) => ({ ...draft, providers: [...draft.providers, createEmptyProviderDraft()], dirty: true }));
+  };
+
+  const selectTargetNode = async (groupName: string, nodeName: string) => {
+    setSelectingTargetName(groupName);
+    try {
+      await runtime.selectProxy(groupName, nodeName);
+      showToast(`${groupName} 已切换到 ${nodeName}`);
+    } catch (reason) {
+      showToast(reason instanceof Error ? reason.message : "切换节点失败");
+    } finally {
+      setSelectingTargetName(undefined);
+    }
+  };
+
+  const updateConfigRules = (rulesText: string) => config.setDraft((draft) => ({ ...draft, rulesText, dirty: true }));
+  const updateConfigYaml = (yamlText: string) => config.setDraft((draft) => ({ ...draft, yamlText, mode: "yaml", dirty: true }));
+  const setStructuredMode = () => {
+    const text = configDraft.yamlText?.trim();
+    config.setDraft((draft) => ({ ...draft, mode: "structured", dirty: true, yamlText: text || serializeRuleConfigYaml(draft.rulesText, serializeProviderDrafts(draft.providers)) }));
+  };
+
+  const validateConfig = async () => {
+    try {
+      const result = await config.validate();
+      showToast(result.valid ? "配置校验通过，可保存" : "配置校验失败，未写入");
+    } catch (reason) { showToast(reason instanceof Error ? reason.message : "配置校验失败，未写入"); }
+  };
+
+  const saveConfig = async () => {
+    if (!editable) { showToast("默认配置只读；请在配置管理中应用自定义配置后再编辑"); return; }
+    try {
+      await config.save();
+      showToast("已保存并生效");
+      await runtime.refresh({ silent: true });
+    } catch (reason) { showToast(reason instanceof Error ? reason.message : "保存失败，未写入"); }
+  };
+
+  const structuredUnsafe = configDraft.mode === "structured" && draftHasUnsafeStructuredYaml(configDraft);
+  const canSaveStructured = editable && !structuredUnsafe && !configSaving;
 
   return (
     <AppShell>
-      <div className="space-y-4 animate-fade-in">
-        <div className="relative rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
-          <div className="h-px w-full bg-primary/35" />
-          <div className="p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg md:text-xl font-bold text-foreground">规则</h1>
-              <span className="text-xs text-muted-foreground">
-                总计 <span className="font-semibold text-foreground">{rules.length}</span> 条 ·{" "}
-                供应商 <span className="font-semibold text-foreground">{providers.length}</span>
-              </span>
-              <div className="ml-auto flex items-center gap-1.5">
-                <button
-                  onClick={() => void load().then(() => showToast("已刷新规则"))}
-                  className="p-2 rounded-lg border border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  aria-label="刷新"
-                >
-                  <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                </button>
-                <button
-                  onClick={() => searchInputRef.current?.focus()}
-                  className="p-2 rounded-lg border border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  aria-label="过滤"
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+      <div className="space-y-3 md:space-y-4">
+        <RulePageHeader ruleCount={store.rules.length} providerCount={store.providerNames.length} authority={authority} fetchedAt={store.fetchedAt} loading={loading} refreshing={refreshing} onRefresh={() => void runtime.refresh()} />
+        <RuleToolbar tab={tab} onTabChange={changeTab} ruleCount={store.rules.length} providerCount={store.providerNames.length} query={query} onQueryChange={setQuery} searchMode={settings.searchMode} onSearchModeChange={(mode) => setSettings((value) => ({ ...value, searchMode: mode }))} regexError={filtered.error} onFocusSearch={() => searchRef.current?.focus()} searchInputRef={searchRef} />
 
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
-                <button
-                  onClick={() => setTab("rules")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                    tab === "rules" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  规则 ({rules.length})
-                </button>
-                <button
-                  onClick={() => setTab("providers")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                    tab === "providers" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  供应商 ({providers.length})
-                </button>
-                <button
-                  onClick={() => setTab("config")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                    tab === "config" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  配置管理
-                </button>
-              </div>
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  ref={searchInputRef}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="搜索规则、策略组或供应商"
-                  className="w-full pl-10 pr-4 py-2 text-sm rounded-lg border border-border/60 bg-background focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-              </div>
+        {tab === "rules" ? (
+          <GlassSurface material="regular" className="p-2 md:p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-muted-foreground">
+              <span>{filtered.rules.length === store.rules.length ? "按 Controller 原始顺序" : `筛选后 ${filtered.rules.length} 条，序号保持原始位置`}</span>
+              {store.capabilities.ruleToggle ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">可切换运行状态</span> : <span className="rounded-full bg-muted px-2 py-0.5">当前内核不支持规则切换</span>}
+              <label className="ml-auto inline-flex items-center gap-1.5"><input type="checkbox" checked={settings.disconnectMatchedOnDisable} onChange={(event) => { const checked = event.currentTarget.checked; setSettings((value) => ({ ...value, disconnectMatchedOnDisable: checked })); }} className="accent-primary" />禁用后断开精确匹配连接</label>
             </div>
-          </div>
-        </div>
-
-        {tab === "config" ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-border bg-card p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">规则集</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">编辑 config.yaml 的 rule-providers，未知字段保存在高级 JSON 中。</p>
-                </div>
-                <button
-                  onClick={() => setProviderDrafts((items) => [...items, { id: `new-${Date.now()}`, name: "", url: "", behavior: "classical", type: "http", path: "", extra: "" }])}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-muted"
-                >
-                  <Plus className="h-4 w-4" />
-                  新增规则集
-                </button>
-              </div>
-              <div className="space-y-3">
-                {providerDrafts.length === 0 && <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">暂无规则集</div>}
-                {providerDrafts.map((provider, index) => (
-                  <div key={provider.id} className="rounded-lg border border-border/60 bg-background p-3">
-                    <div className="grid gap-2 md:grid-cols-[10rem_8rem_8rem_1fr_auto]">
-                      <input value={provider.name} onChange={(event) => setProviderDrafts((items) => items.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} placeholder="名称" className="rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:border-primary/60" />
-                      <select value={provider.type} onChange={(event) => setProviderDrafts((items) => items.map((item, i) => i === index ? { ...item, type: event.target.value } : item))} className="rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:border-primary/60">
-                        <option value="http">http</option>
-                        <option value="file">file</option>
-                        <option value="inline">inline</option>
-                      </select>
-                      <select value={provider.behavior} onChange={(event) => setProviderDrafts((items) => items.map((item, i) => i === index ? { ...item, behavior: event.target.value } : item))} className="rounded-lg border border-border/60 bg-card px-3 py-2 text-sm focus:outline-none focus:border-primary/60">
-                        <option value="classical">classical</option>
-                        <option value="domain">domain</option>
-                        <option value="ipcidr">ipcidr</option>
-                      </select>
-                      <input value={provider.url} onChange={(event) => setProviderDrafts((items) => items.map((item, i) => i === index ? { ...item, url: event.target.value } : item))} placeholder="URL 或留空使用 file/path" className="rounded-lg border border-border/60 bg-card px-3 py-2 font-mono text-sm focus:outline-none focus:border-primary/60" />
-                      <button onClick={() => setProviderDrafts((items) => items.filter((_, i) => i !== index))} className="rounded-lg border border-border/60 p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="删除">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <input value={provider.path} onChange={(event) => setProviderDrafts((items) => items.map((item, i) => i === index ? { ...item, path: event.target.value } : item))} placeholder="./rules/name.yaml" className="mt-2 w-full rounded-lg border border-border/60 bg-card px-3 py-2 font-mono text-xs focus:outline-none focus:border-primary/60" />
-                    <textarea value={provider.extra} onChange={(event) => setProviderDrafts((items) => items.map((item, i) => i === index ? { ...item, extra: event.target.value } : item))} placeholder='高级 JSON，例如 {"interval":86400,"format":"yaml"}' className="mt-2 min-h-20 w-full rounded-lg border border-border/60 bg-card px-3 py-2 font-mono text-xs focus:outline-none focus:border-primary/60" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-border bg-card p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">规则列表</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">一行一条 Mihomo rule，顺序即 config.yaml 中的匹配顺序。</p>
-                </div>
-                <button onClick={() => void saveConfig()} disabled={savingConfig} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                  <Save className="h-4 w-4" />
-                  {savingConfig ? "保存中" : "保存并重启"}
-                </button>
-              </div>
-              <textarea
-                value={rulesConfigText}
-                onChange={(event) => setRulesConfigText(event.target.value)}
-                spellCheck={false}
-                className="min-h-[360px] w-full rounded-lg border border-border/60 bg-background px-3 py-2 font-mono text-xs leading-5 focus:outline-none focus:border-primary/60"
-                placeholder={"DOMAIN-SUFFIX,example.com,节点选择\nRULE-SET,ai,人工智能\nMATCH,漏网之鱼"}
-              />
-            </div>
-          </div>
+            <RuntimeRuleList rules={filtered.rules} store={store} matcher={filtered.matcher} loading={loading} expandedIds={expandedIds} onExpand={toggleExpanded} onToggle={toggleRule} disconnectMatched={settings.disconnectMatchedOnDisable} selectingTargetName={selectingTargetName} onSelectTarget={(groupName, nodeName) => void selectTargetNode(groupName, nodeName)} />
+          </GlassSurface>
         ) : tab === "providers" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {providers.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground lg:col-span-2">
-                {loading ? "正在加载规则供应商..." : "暂无规则供应商"}
-              </div>
-            ) : providers.map((provider) => (
-              <div key={provider.name} className="rounded-lg border border-border bg-card px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">{provider.name}</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">{provider.type} · {provider.vehicleType}</p>
-                  </div>
-                  <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{provider.ruleCount} 条</span>
-                </div>
-                <div className="mt-3 text-xs text-muted-foreground">更新于 {provider.updatedAt}</div>
-              </div>
-            ))}
-          </div>
+          <RuleProviderList store={store} query={deferredQuery} loading={loading} onUpdate={(name) => void updateProvider(name)} onEdit={editProvider} />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {filtered.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground lg:col-span-2">
-                {loading ? "正在加载规则..." : "暂无规则"}
-              </div>
-            ) : filtered.map((r, i) => (
-              <div
-                key={r.id}
-                className="rounded-lg border border-border bg-card px-3 py-2.5 hover:shadow-sm hover:border-primary/30 transition-all"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-muted-foreground">#{i + 1}</span>
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold",
-                      typeBadge[r.type] || "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    <span className={cn("h-1.5 w-1.5 rounded-full", typeDot[r.type] || "bg-muted-foreground")} />
-                    {r.type}
-                  </span>
-                  <button
-                    onClick={() => setExpandedRule((current) => current === r.id ? "" : r.id)}
-                    className="ml-auto p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
-                    aria-label="展开"
-                    aria-expanded={expandedRule === r.id}
-                  >
-                    <ChevronDown className={cn("h-4 w-4 transition-transform", expandedRule === r.id && "rotate-180")} />
-                  </button>
+          <div className="space-y-3">
+            <RuleConfigStatus authority={authority} dirty={configDraft.dirty} />
+            {configLoading ? <RuleEmptyState loading title="正在加载配置草稿" /> : null}
+            {!configLoading ? (
+              <GlassSurface material="thick" className="space-y-4 p-4 md:p-5">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-1"><h2 className="flex items-center gap-2 text-base font-semibold text-foreground"><FileCode2 className="h-4 w-4 text-primary" aria-hidden="true" />规则配置</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">规则一行一条，保存只移除真正的空行；规则提供商结构化编辑会深度合并并保留未知字段。</p></div>
+                  <div className="flex items-center gap-2"><GlassButton type="button" variant={configDraft.mode === "structured" ? "primary" : "tool"} onClick={setStructuredMode} disabled={!editable}>结构化</GlassButton><GlassButton type="button" variant={configDraft.mode === "yaml" ? "primary" : "tool"} onClick={() => config.setDraft((draft) => ({ ...draft, mode: "yaml", yamlText: draft.yamlText || serializeRuleConfigYaml(draft.rulesText, serializeProviderDrafts(draft.providers)), dirty: true }))}>YAML 高级</GlassButton></div>
                 </div>
-
-                <div className="mt-1.5 flex items-center gap-2">
-                  {r.count !== undefined && (
-                    <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                      {r.count}
-                    </span>
-                  )}
-                  <span className="font-mono text-sm text-foreground truncate">
-                    {r.payload || <span className="text-muted-foreground italic">final</span>}
-                  </span>
-                </div>
-
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-                    {r.group}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded border border-border/60 text-foreground font-mono truncate max-w-[55%]">
-                    {r.node}
-                  </span>
-                  {r.delay !== undefined ? (
-                    <span
-                      className={cn("ml-auto text-xs font-semibold px-2 py-0.5 rounded", delayColor(r.delay))}
-                    >
-                      {r.delay}
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => setExpandedRule((current) => current === r.id ? "" : r.id)}
-                      className="ml-auto p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
-                      aria-label="策略"
-                    >
-                      <Zap className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {expandedRule === r.id ? (
-                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-border/50 bg-muted/20 p-2 text-xs">
-                    <div className="min-w-0">
-                      <div className="text-muted-foreground">规则内容</div>
-                      <div className="truncate font-mono text-foreground" title={r.payload || "final"}>
-                        {r.payload || "final"}
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-muted-foreground">策略组</div>
-                      <div className="truncate font-medium text-foreground" title={r.group}>{r.group}</div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-muted-foreground">当前节点</div>
-                      <div className="truncate font-mono text-foreground" title={r.node}>{r.node}</div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-muted-foreground">供应商</div>
-                      <div className="truncate font-medium text-foreground" title={r.provider || "-"}>{r.provider || "-"}</div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ))}
+                {configDraft.mode === "yaml" ? <RuleYamlEditor value={configDraft.yamlText || ""} onChange={updateConfigYaml} readOnly={!editable} /> : (
+                  <>
+                    <div><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-medium text-foreground">规则（多行文本）</h3><span className="text-xs text-muted-foreground">顺序即匹配顺序</span></div><RuleTextEditor value={configDraft.rulesText} onChange={updateConfigRules} issues={configValidation?.issues.filter((issue) => !issue.path || issue.path.startsWith("rules"))} readOnly={!editable} /></div>
+                    <div><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-medium text-foreground">规则提供商配置</h3><GlassButton type="button" variant="tool" onClick={addProvider} disabled={!editable}>新增规则提供商</GlassButton></div><div className="space-y-2">{configDraft.providers.map((provider, index) => <div key={`${provider.name}-${index}`} ref={(element) => { if (element) providerEditorRefs.current.set(index, element); else providerEditorRefs.current.delete(index); }} tabIndex={-1} aria-label={`规则提供商配置 ${provider.name || "未命名"}`} className="min-w-0 scroll-mt-24 rounded-[var(--gary-radius-regular)] outline-none focus:ring-2 focus:ring-primary/60 focus:ring-offset-2 focus:ring-offset-background"><RuleProviderEditor draft={provider} onChange={(next) => config.setDraft((draft) => ({ ...draft, providers: draft.providers.map((item, itemIndex) => itemIndex === index ? next : item), dirty: true }))} onDelete={() => config.setDraft((draft) => ({ ...draft, providers: draft.providers.filter((_, itemIndex) => itemIndex !== index), dirty: true }))} /></div>)}</div>{configDraft.providers.length === 0 ? <p className="mt-2 text-xs text-muted-foreground">暂无规则提供商。运行态仍可从 Controller 查看。</p> : null}</div>
+                  </>
+                )}
+                {structuredUnsafe ? <p className="flex items-start gap-1.5 text-xs leading-5 text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />该区域包含 YAML 锚点或别名，请使用 YAML 编辑模式。</p> : null}
+                <RuleConfigValidationPanel result={configValidation} validating={configValidating} />
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/50 pt-3"><GlassButton type="button" variant="tool" onClick={() => config.discard()} disabled={!configDraft.dirty}>重新加载</GlassButton><GlassButton type="button" variant="tool" onClick={() => void validateConfig()} disabled={configValidating}><ShieldCheck className="h-4 w-4" aria-hidden="true" />校验配置</GlassButton><GlassButton type="button" variant="primary" onClick={() => void saveConfig()} disabled={(!canSaveStructured && configDraft.mode === "structured") || !editable || configSaving}><Save className="h-4 w-4" aria-hidden="true" />{configSaving ? "保存中" : "保存并重启"}</GlassButton></div>
+              </GlassSurface>
+            ) : null}
           </div>
         )}
       </div>

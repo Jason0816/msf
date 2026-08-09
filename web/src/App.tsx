@@ -16,7 +16,6 @@ import MosdnsLogsPage from "@/app/mosdns/logs/page";
 import ProxyPage from "@/app/proxy/page";
 import MihomoPage from "@/app/mihomo/page";
 import MihomoOverviewPage from "@/app/mihomo/overview/page";
-import MihomoRulesPage from "@/app/mihomo/rules/page";
 import MihomoConnectionsPage from "@/app/mihomo/connections/page";
 import MihomoConfigPage from "@/app/mihomo/config/page";
 import MihomoLogsPage from "@/app/mihomo/logs/page";
@@ -34,6 +33,8 @@ import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 
 const MihomoProxiesPage = lazy(() => import("@/app/mihomo/proxies/page"));
 const LegacyMihomoProxiesPage = lazy(() => import("@/app/mihomo/proxies/LegacyMihomoProxiesPage"));
+const MihomoRulesPage = lazy(() => import("@/app/mihomo/rules/page"));
+const LegacyMihomoRulesPage = lazy(() => import("@/app/mihomo/rules/LegacyMihomoRulesPage"));
 
 function Splash() {
   return (
@@ -147,6 +148,17 @@ function MihomoProxiesRoute() {
   );
 }
 
+function MihomoRulesRoute() {
+  const [params] = useSearchParams();
+  const legacy = params.get("ui") === "legacy";
+  const Page = legacy ? LegacyMihomoRulesPage : MihomoRulesPage;
+  return (
+    <Suspense fallback={<Splash />}>
+      <Page />
+    </Suspense>
+  );
+}
+
 export function App() {
   return (
     <Routes>
@@ -177,7 +189,7 @@ export function App() {
       <Route path="/mihomo" element={protectedRoute(<MihomoPage />)} />
       <Route path="/mihomo/overview" element={protectedRoute(<MihomoOverviewPage />)} />
       <Route path="/mihomo/proxies" element={protectedRoute(<MihomoProxiesRoute />)} />
-      <Route path="/mihomo/rules" element={protectedRoute(<MihomoRulesPage />)} />
+      <Route path="/mihomo/rules" element={protectedRoute(<MihomoRulesRoute />)} />
       <Route path="/mihomo/connections" element={protectedRoute(<MihomoConnectionsPage />)} />
       <Route path="/mihomo/config" element={protectedRoute(<MihomoConfigPage />)} />
       <Route path="/mihomo/logs" element={protectedRoute(<MihomoLogsPage />)} />
