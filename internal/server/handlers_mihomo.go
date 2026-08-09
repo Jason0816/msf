@@ -60,19 +60,25 @@ func (a *App) registerMihomoRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/mihomo/connections", a.handleMihomoConnectionsClose)
 	mux.HandleFunc("DELETE /api/v1/mihomo/connections/{id}", a.handleMihomoConnectionClose)
 	mux.HandleFunc("GET /api/v1/mihomo/proxies", a.handleMihomoProxies)
+	mux.HandleFunc("DELETE /api/v1/mihomo/proxies/{group}/connections", a.handleMihomoProxyGroupConnectionsClose)
 	mux.HandleFunc("PUT /api/v1/mihomo/proxies/{name}", a.handleMihomoProxySelect)
 	mux.HandleFunc("GET /api/v1/mihomo/proxies/{name}/delay", a.handleMihomoProxyDelay)
+	mux.HandleFunc("GET /api/v1/mihomo/proxy-groups/{name}/delay", a.handleMihomoProxyGroupDelay)
 	mux.HandleFunc("GET /api/v1/mihomo/rules", a.handleMihomoRules)
 	mux.HandleFunc("GET /api/v1/mihomo/providers", a.handleMihomoProviders)
 	mux.HandleFunc("GET /api/v1/mihomo/proxy-providers", a.handleMihomoProxyProvidersConfig)
 	mux.HandleFunc("PUT /api/v1/mihomo/proxy-providers", a.handleMihomoProxyProvidersPut)
 	mux.HandleFunc("POST /api/v1/mihomo/proxy-providers", a.handleMihomoProxyProvidersPut)
 	mux.HandleFunc("GET /api/v1/mihomo/proxy-providers/{name}", a.handleMihomoProxyProviderGet)
+	mux.HandleFunc("GET /api/v1/mihomo/proxy-providers/{provider}/proxies/{proxy}/delay", a.handleMihomoProviderProxyDelay)
 	mux.HandleFunc("PUT /api/v1/mihomo/proxy-providers/{name}", a.handleMihomoProxyProviderPut)
 	mux.HandleFunc("PATCH /api/v1/mihomo/proxy-providers/{name}", a.handleMihomoProxyProviderPut)
 	mux.HandleFunc("DELETE /api/v1/mihomo/proxy-providers/{name}", a.handleMihomoProxyProviderDelete)
 	mux.HandleFunc("POST /api/v1/mihomo/proxy-providers/{name}/update", a.handleMihomoProxyProviderUpdate)
-	mux.HandleFunc("POST /api/v1/mihomo/proxy-providers/{name}/healthcheck", a.handleMihomoProxyProviderUpdate)
+	mux.HandleFunc("POST /api/v1/mihomo/proxy-providers/{name}/healthcheck", a.handleMihomoProxyProviderHealthcheck)
+	mux.HandleFunc("GET /api/v1/mihomo/manual-proxies", a.handleMihomoManualProxiesGet)
+	mux.HandleFunc("PUT /api/v1/mihomo/manual-proxies", a.handleMihomoManualProxiesPut)
+	mux.HandleFunc("POST /api/v1/mihomo/proxy-config/validate", a.handleMihomoProxyConfigValidate)
 	mux.HandleFunc("GET /api/v1/mihomo/rule-providers", a.handleMihomoRuleProviders)
 	mux.HandleFunc("PUT /api/v1/mihomo/rule-providers", a.handleMihomoRuleProvidersPut)
 	mux.HandleFunc("POST /api/v1/mihomo/rule-providers", a.handleMihomoRuleProvidersPut)
@@ -426,7 +432,19 @@ func (a *App) handleMihomoProxies(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleMihomoProxySelect(w http.ResponseWriter, r *http.Request) {
 	path := "/proxies/" + url.PathEscape(r.PathValue("name"))
-	a.proxyMihomoRequestOrJSON(w, r, http.MethodPut, path, map[string]any{"updated": true})
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 64<<10))
+	raw, ok, err := a.mihomoControllerJSON(http.MethodPut, path, body)
+	if !ok {
+		writeMihomoControllerError(w, err)
+		return
+	}
+	data := map[string]any{"updated": true}
+	if item, ok := raw.(map[string]any); ok {
+		for key, value := range item {
+			data[key] = value
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": data, "updated": true})
 }
 
 func (a *App) handleMihomoProxyDelay(w http.ResponseWriter, r *http.Request) {
@@ -434,7 +452,12 @@ func (a *App) handleMihomoProxyDelay(w http.ResponseWriter, r *http.Request) {
 	if r.URL.RawQuery != "" {
 		path += "?" + r.URL.RawQuery
 	}
-	a.proxyMihomoRequestOrJSON(w, r, http.MethodGet, path, map[string]any{"delay": 0})
+	raw, ok, err := a.mihomoControllerJSON(http.MethodGet, path, nil)
+	if !ok {
+		writeMihomoControllerError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": raw})
 }
 
 func (a *App) handleMihomoRules(w http.ResponseWriter, r *http.Request) {
@@ -457,12 +480,14 @@ func (a *App) handleMihomoProxyProvidersPut(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	if err := a.updateMihomoConfigSections(req, "proxy-providers"); err != nil {
+	restarted, err := a.applyMihomoConfigMutation(r.Context(), false, func() error {
+		return a.updateMihomoProxyProviderCollection(req)
+	})
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "write_failed", err.Error())
 		return
 	}
-	_, _ = a.Services.Restart(r.Context(), "mihomo")
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "data": a.mihomoProxyProvidersPayload()})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "restarted": restarted, "data": a.mihomoProxyProvidersPayload()})
 }
 
 func (a *App) handleMihomoControllerProxy(w http.ResponseWriter, r *http.Request) {

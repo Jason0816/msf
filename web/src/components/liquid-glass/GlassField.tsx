@@ -5,5 +5,5 @@ export const GlassField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLI
   { className, ...props },
   ref
 ) {
-  return <input ref={ref} className={cn("gary-field", className)} {...props} />;
+  return <input ref={ref} className={cn("gary-field px-3 text-foreground placeholder:text-muted-foreground", className)} {...props} />;
 });

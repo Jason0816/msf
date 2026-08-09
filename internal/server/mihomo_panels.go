@@ -703,6 +703,8 @@ func (a *App) mihomoProxiesPayload(r *http.Request) map[string]any {
 	}
 	rawProxies = mergeMihomoProviderProxies(rawProxies, rawProviders)
 	proxyMap, groups, proxies := normalizeMihomoProxies(rawProxies, a.mihomoProxyGroupOrder())
+	pagePolicy, groupPolicies, _ := a.mihomoTestPolicyData()
+	a.attachMihomoTestPolicies(groups)
 	if r != nil {
 		search := strings.ToLower(strings.TrimSpace(firstNonEmpty(r.URL.Query().Get("search"), r.URL.Query().Get("q"))))
 		if search != "" {
@@ -712,13 +714,16 @@ func (a *App) mihomoProxiesPayload(r *http.Request) map[string]any {
 		}
 	}
 	return map[string]any{
-		"groups":       groups,
-		"proxy_groups": groups,
-		"proxy_list":   proxies,
-		"nodes":        proxies,
-		"proxies":      proxyMap,
-		"providers":    normalizeProviderMap(rawProviders["providers"]),
-		"raw":          rawProxies,
+		"groups":            groups,
+		"proxy_groups":      groups,
+		"proxy_list":        proxies,
+		"nodes":             proxies,
+		"proxies":           proxyMap,
+		"providers":         normalizeProviderMap(rawProviders["providers"]),
+		"raw":               rawProxies,
+		"test_policy":       pagePolicy,
+		"group_test_policy": groupPolicies,
+		"config_authority":  a.mihomoConfigModePayload(),
 	}
 }
 
@@ -958,7 +963,9 @@ func (a *App) mihomoProxyProvidersPayload() map[string]any {
 	}
 	runtimeItems := runtimeProviderItems(runtime, "proxy")
 	items := mergeProviders(configProviders, runtime, "proxy")
-	return map[string]any{"proxy-providers": cfg["proxy-providers"], "items": items, "providers": items, "runtime": runtime, "runtime_items": runtimeItems, "runtime_providers": runtimeItems}
+	a.attachMihomoProviderTestPolicies(items)
+	pagePolicy, _, _ := a.mihomoTestPolicyData()
+	return map[string]any{"proxy-providers": cfg["proxy-providers"], "items": items, "providers": items, "runtime": runtime, "runtime_items": runtimeItems, "runtime_providers": runtimeItems, "test_policy": pagePolicy, "config_authority": a.mihomoConfigModePayload()}
 }
 
 func (a *App) mihomoRuleProvidersPayload() map[string]any {
@@ -987,7 +994,7 @@ func (a *App) handleMihomoProxyProviderDelete(w http.ResponseWriter, r *http.Req
 }
 
 func (a *App) handleMihomoProxyProviderUpdate(w http.ResponseWriter, r *http.Request) {
-	a.writeMihomoProviderRuntimeUpdate(w, r.PathValue("name"), "proxy")
+	a.writeMihomoProviderRuntimeAction(w, r, r.PathValue("name"), "update")
 }
 
 func (a *App) handleMihomoRuleProviders(w http.ResponseWriter, r *http.Request) {
@@ -1044,17 +1051,24 @@ func (a *App) writeMihomoProviderUpsert(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	providerName := firstNonEmpty(name, stringMapValue(req, "name"), stringMapValue(req, "tag"))
+	if providerName != "" {
+		if existing, ok := normalizeConfigProviders(a.mihomoConfigMap()[section])[providerName]; ok {
+			req = mergeMihomoMaps(existing, req)
+		}
+	}
 	provider, err := normalizeProviderRequest(providerName, req, section)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	if err := a.upsertMihomoProvider(section, providerName, provider); err != nil {
+	restarted, err := a.applyMihomoConfigMutation(r.Context(), false, func() error {
+		return a.upsertMihomoProvider(section, providerName, provider)
+	})
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "write_failed", err.Error())
 		return
 	}
-	_, _ = a.Services.Restart(r.Context(), "mihomo")
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "data": provider, "mode": a.mihomoConfigModePayload()})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "restarted": restarted, "data": provider, "mode": a.mihomoConfigModePayload()})
 }
 
 func (a *App) writeMihomoProviderDelete(w http.ResponseWriter, r *http.Request, name, section string) {
@@ -1066,12 +1080,14 @@ func (a *App) writeMihomoProviderDelete(w http.ResponseWriter, r *http.Request, 
 	providers := normalizeConfigProviders(cfg[section])
 	delete(providers, name)
 	cfg[section] = providerConfigMap(providers)
-	if err := a.writeMihomoConfigMap(cfg, section); err != nil {
+	restarted, err := a.applyMihomoConfigMutation(r.Context(), false, func() error {
+		return a.writeMihomoConfigMap(cfg, section)
+	})
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "write_failed", err.Error())
 		return
 	}
-	_, _ = a.Services.Restart(r.Context(), "mihomo")
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "mode": a.mihomoConfigModePayload()})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "restarted": restarted, "mode": a.mihomoConfigModePayload()})
 }
 
 func (a *App) writeMihomoProviderRuntimeUpdate(w http.ResponseWriter, name, kind string) {
@@ -1100,6 +1116,10 @@ func (a *App) writeMihomoProviderRuntimeUpdate(w http.ResponseWriter, name, kind
 func (a *App) upsertMihomoProvider(section, name string, provider map[string]any) error {
 	cfg := a.mihomoConfigMap()
 	providers := normalizeConfigProviders(cfg[section])
+	if existing, ok := providers[name]; ok {
+		provider = mergeMihomoMaps(existing, provider)
+	}
+	provider["name"] = name
 	providers[name] = provider
 	cfg[section] = providerConfigMap(providers)
 	return a.writeMihomoConfigMap(cfg, section)
@@ -1192,21 +1212,28 @@ func (a *App) writeMihomoConfigMap(cfg map[string]any, sections ...string) error
 	if err := a.ensureMihomoGeneratedBackup(); err != nil {
 		return err
 	}
-	if old, err := a.readTextFile("configs/mihomo/config.yaml"); err == nil {
-		a.createConfigHistory("mihomo", "configs/mihomo/config.yaml", old, "auto backup before Mihomo config update", "system")
-	}
 	b, err := yaml.Marshal(cfg)
 	if err != nil {
+		return err
+	}
+	content := string(b)
+	files := map[string]string{mihomoActiveConfigRelPath: content}
+	if rel, ok := a.appliedMihomoUserConfigRel(); ok {
+		if path, pathErr := a.safePath(rel); pathErr == nil {
+			if _, statErr := os.Stat(path); statErr == nil {
+				files[rel] = content
+			} else if !os.IsNotExist(statErr) {
+				return statErr
+			}
+		}
+	}
+	if err := a.replaceGeneratedConfigFiles(files, nil); err != nil {
 		return err
 	}
 	if a.mihomoConfigMode() != "generated" || !mihomoConfigSectionsDefaultSafe(sections) {
 		a.setMihomoConfigMode("custom")
 	}
-	content := string(b)
-	if err := a.writeTextFile("configs/mihomo/config.yaml", content); err != nil {
-		return err
-	}
-	return a.syncAppliedMihomoUserConfig(content)
+	return nil
 }
 
 func (a *App) syncAppliedMihomoUserConfig(content string) error {

@@ -256,14 +256,26 @@ func (a *App) handleMihomoProxyGroupsConfigPut(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	if err := a.updateMihomoConfigSections(req, "proxy-groups"); err != nil {
+	if a.mihomoConfigMode() == "generated" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"error":   "default_config_requires_user_config",
+			"message": "默认配置下代理组由 MSF 管理，请先应用自定义配置",
+			"data":    map[string]any{"mode": a.mihomoConfigModePayload(), "written": false},
+		})
+		return
+	}
+	restarted, err := a.applyMihomoConfigMutation(r.Context(), false, func() error {
+		return a.updateMihomoConfigSections(req, "proxy-groups")
+	})
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "write_failed", err.Error())
 		return
 	}
-	_, _ = a.Services.Restart(r.Context(), "mihomo")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":          true,
 		"restart_required": false,
+		"restarted":        restarted,
 		"data":             a.mihomoConfigSectionPayload("proxy-groups", a.mihomoProxiesPayload(r)),
 	})
 }
@@ -537,15 +549,20 @@ func (a *App) mihomoConfigModePayload() map[string]any {
 	if hasActive {
 		activeName = filepath.Base(activePath)
 	}
+	mode := a.mihomoConfigMode()
 	return map[string]any{
-		"mode":              a.mihomoConfigMode(),
-		"backup_path":       backupRel,
-		"backup_exists":     backupExists,
-		"active_path":       activePath,
-		"active_name":       activeName,
-		"is_default":        !hasActive && a.mihomoConfigMode() == "generated",
-		"protected_fields":  a.mihomoProtectedFields(),
-		"protected_warning": "自定义配置请保留这些字段，否则 WebUI、MosDNS 转发或透明代理可能无法正常工作。",
+		"mode":                  a.mihomoConfigMode(),
+		"backup_path":           backupRel,
+		"backup_exists":         backupExists,
+		"active_path":           activePath,
+		"active_name":           activeName,
+		"is_default":            !hasActive && mode == "generated",
+		"runtime_path":          mihomoActiveConfigRelPath,
+		"can_edit_groups":       mode == "custom",
+		"can_edit_providers":    true,
+		"can_edit_manual_nodes": true,
+		"protected_fields":      a.mihomoProtectedFields(),
+		"protected_warning":     "自定义配置请保留这些字段，否则 WebUI、MosDNS 转发或透明代理可能无法正常工作。",
 	}
 }
 

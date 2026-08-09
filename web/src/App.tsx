@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth";
@@ -15,7 +16,6 @@ import MosdnsLogsPage from "@/app/mosdns/logs/page";
 import ProxyPage from "@/app/proxy/page";
 import MihomoPage from "@/app/mihomo/page";
 import MihomoOverviewPage from "@/app/mihomo/overview/page";
-import MihomoProxiesPage from "@/app/mihomo/proxies/page";
 import MihomoRulesPage from "@/app/mihomo/rules/page";
 import MihomoConnectionsPage from "@/app/mihomo/connections/page";
 import MihomoConfigPage from "@/app/mihomo/config/page";
@@ -31,6 +31,9 @@ import { SingBoxPage } from "@/pages/SingBoxPage";
 import { LiquidGlassLab } from "@/pages/LiquidGlassLab";
 import { SceneBackdrop } from "@/components/liquid-glass/SceneBackdrop";
 import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
+
+const MihomoProxiesPage = lazy(() => import("@/app/mihomo/proxies/page"));
+const LegacyMihomoProxiesPage = lazy(() => import("@/app/mihomo/proxies/LegacyMihomoProxiesPage"));
 
 function Splash() {
   return (
@@ -133,6 +136,17 @@ function protectedRoute(element: React.ReactNode) {
   return <RequireReady>{element}</RequireReady>;
 }
 
+function MihomoProxiesRoute() {
+  const [params] = useSearchParams();
+  const legacy = params.get("ui") === "legacy";
+  const Page = legacy ? LegacyMihomoProxiesPage : MihomoProxiesPage;
+  return (
+    <Suspense fallback={<Splash />}>
+      <Page />
+    </Suspense>
+  );
+}
+
 export function App() {
   return (
     <Routes>
@@ -162,7 +176,7 @@ export function App() {
 
       <Route path="/mihomo" element={protectedRoute(<MihomoPage />)} />
       <Route path="/mihomo/overview" element={protectedRoute(<MihomoOverviewPage />)} />
-      <Route path="/mihomo/proxies" element={protectedRoute(<MihomoProxiesPage />)} />
+      <Route path="/mihomo/proxies" element={protectedRoute(<MihomoProxiesRoute />)} />
       <Route path="/mihomo/rules" element={protectedRoute(<MihomoRulesPage />)} />
       <Route path="/mihomo/connections" element={protectedRoute(<MihomoConnectionsPage />)} />
       <Route path="/mihomo/config" element={protectedRoute(<MihomoConfigPage />)} />
