@@ -463,7 +463,7 @@ export default function MosdnsRulesPage() {
             </div>
             <div>
               <h1 className="text-lg md:text-xl font-bold text-foreground leading-none">规则管理</h1>
-              <p className="text-[10px] md:text-xs text-muted-foreground mt-1">MosDNS 域名和 IP 规则</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground mt-1">MosDNS 域名和 IP 规则 · 保存后自动热更新</p>
             </div>
           </div>
           <div className="flex gap-2 overflow-x-auto overflow-y-visible scrollbar-hide -mx-2 px-2 py-2">

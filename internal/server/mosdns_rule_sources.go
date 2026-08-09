@@ -97,7 +97,12 @@ func (a *App) handleMosDNSRuleSourceCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	source, _ := a.findMosDNSRuleSource(req.ID)
-	writeJSON(w, http.StatusCreated, map[string]any{"success": true, "data": source})
+	runtimeSource, err := a.syncMosDNSRuleSourceRuntime(source, true)
+	if err != nil {
+		writeError(w, http.StatusConflict, "runtime_sync_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"success": true, "restart_required": false, "data": runtimeSource})
 }
 
 func (a *App) handleMosDNSRuleSourcePut(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +112,7 @@ func (a *App) handleMosDNSRuleSourcePut(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "not_found", "rule source not found")
 		return
 	}
+	previous := current
 	var req struct {
 		ID                  string `json:"id"`
 		Name                string `json:"name"`
@@ -155,7 +161,12 @@ func (a *App) handleMosDNSRuleSourcePut(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	source, _ := a.findMosDNSRuleSource(current.ID)
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": source})
+	runtimeSource, err := a.updateMosDNSRuleSourceRuntime(previous, source)
+	if err != nil {
+		writeError(w, http.StatusConflict, "runtime_sync_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "data": runtimeSource})
 }
 
 func (a *App) handleMosDNSRuleSourceDelete(w http.ResponseWriter, r *http.Request) {
@@ -180,12 +191,28 @@ func (a *App) handleMosDNSRuleSourceDelete(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "write_failed", err.Error())
 		return
 	}
-	if r.URL.Query().Get("delete_file") == "true" && source.LocalPath != "" {
-		if path, err := a.safePath(source.LocalPath); err == nil {
-			_ = os.Remove(path)
+	deleteFile := r.URL.Query().Get("delete_file") == "true"
+	var preserved []byte
+	var localPath string
+	if source.LocalPath != "" {
+		if path, pathErr := a.safePath(source.LocalPath); pathErr == nil {
+			localPath = path
+			if !deleteFile {
+				preserved, _ = os.ReadFile(path)
+			}
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": source})
+	if err := a.deleteMosDNSRuleSourceRuntime(source); err != nil {
+		writeError(w, http.StatusConflict, "runtime_sync_failed", err.Error())
+		return
+	}
+	if deleteFile && localPath != "" {
+		_ = os.Remove(localPath)
+	} else if len(preserved) > 0 && localPath != "" {
+		_ = os.MkdirAll(filepath.Dir(localPath), 0755)
+		_ = os.WriteFile(localPath, preserved, 0644)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "data": source})
 }
 
 func (a *App) handleMosDNSRuleSourceUpdate(w http.ResponseWriter, r *http.Request) {
@@ -255,8 +282,13 @@ func (a *App) updateMosDNSRuleSource(source mosDNSRuleSource) (mosDNSRuleSource,
 	if err := a.replaceMosDNSRuleSource(source); err != nil {
 		return source, err
 	}
-	if err := httpPostNoBody(a.mosDNSAPIURL("/plugins/" + source.Type + "/reload")); err != nil {
-		source.Warning = "rule downloaded but MosDNS reload failed: " + err.Error()
+	runtimeSource, err := a.syncMosDNSRuleSourceRuntime(source, false)
+	if err != nil {
+		source.Warning = err.Error()
+		return source, err
+	}
+	if runtimeSource.ID != "" {
+		source = runtimeSource
 	}
 	next, _ := a.findMosDNSRuleSource(source.ID)
 	if next.ID != "" {

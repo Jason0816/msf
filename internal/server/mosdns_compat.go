@@ -195,8 +195,10 @@ func (a *App) createCompatRuleSource(req mosDNSRuleSource) (mosDNSRuleSource, in
 		return req, http.StatusBadRequest, err
 	}
 	replaced := false
+	var previous mosDNSRuleSource
 	for i := range items {
 		if items[i].ID == req.ID || items[i].Name == req.Name {
+			previous = items[i]
 			items[i] = req
 			replaced = true
 			break
@@ -218,7 +220,16 @@ func (a *App) createCompatRuleSource(req mosDNSRuleSource) (mosDNSRuleSource, in
 	if !replaced {
 		status = http.StatusCreated
 	}
-	return source, status, nil
+	var runtimeSource mosDNSRuleSource
+	if replaced {
+		runtimeSource, err = a.updateMosDNSRuleSourceRuntime(previous, source)
+	} else {
+		runtimeSource, err = a.syncMosDNSRuleSourceRuntime(source, true)
+	}
+	if err != nil {
+		return source, http.StatusConflict, err
+	}
+	return runtimeSource, status, nil
 }
 
 func (a *App) handleCompatRuleSourcePut(w http.ResponseWriter, r *http.Request, sourceType string, geosite bool) {
@@ -228,6 +239,7 @@ func (a *App) handleCompatRuleSourcePut(w http.ResponseWriter, r *http.Request, 
 		writeError(w, http.StatusNotFound, "not_found", "rule source not found")
 		return
 	}
+	previous := current
 	var req mosDNSRuleSource
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -264,7 +276,12 @@ func (a *App) handleCompatRuleSourcePut(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	source, _ := a.findMosDNSRuleSource(current.ID)
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": mosDNSRuleSourceCompatMap(source, geosite)})
+	runtimeSource, err := a.updateMosDNSRuleSourceRuntime(previous, source)
+	if err != nil {
+		writeError(w, http.StatusConflict, "runtime_sync_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "restart_required": false, "data": mosDNSRuleSourceCompatMap(runtimeSource, geosite)})
 }
 
 func (a *App) handleCompatRuleSourceDelete(w http.ResponseWriter, r *http.Request, sourceType string) {
@@ -281,6 +298,14 @@ func (a *App) handleCompatRuleSourceDelete(w http.ResponseWriter, r *http.Reques
 }
 
 func (a *App) deleteCompatRuleSource(source mosDNSRuleSource) error {
+	var preserved []byte
+	var localPath string
+	if source.LocalPath != "" {
+		if path, err := a.safePath(source.LocalPath); err == nil {
+			localPath = path
+			preserved, _ = os.ReadFile(path)
+		}
+	}
 	items, err := a.readMosDNSRuleSourceConfig(source.ConfigPath, source.SourceType)
 	if err != nil {
 		return err
@@ -291,7 +316,21 @@ func (a *App) deleteCompatRuleSource(source mosDNSRuleSource) error {
 			next = append(next, item)
 		}
 	}
-	return a.writeMosDNSRuleSourceConfig(source.ConfigPath, next)
+	if err := a.writeMosDNSRuleSourceConfig(source.ConfigPath, next); err != nil {
+		return err
+	}
+	if err := a.deleteMosDNSRuleSourceRuntime(source); err != nil {
+		return err
+	}
+	if len(preserved) > 0 && localPath != "" {
+		if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(localPath, preserved, 0644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *App) updateCompatRuleSources(w http.ResponseWriter, sourceType string) {
