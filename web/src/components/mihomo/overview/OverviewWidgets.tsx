@@ -520,7 +520,12 @@ export function ConnectionHistoryPanel({ connections }: { connections: OverviewC
 function normalizeRuleHits(payload: unknown) {
   const data = objectValue(payload);
   const raw = Array.isArray(payload) ? payload : arrayValue(data.rules || data.items || data.data || data.runtime?.rules);
-  return raw.filter((row: any) => row.extra || row.raw?.extra || row.hit_count != null).map((row: any, index) => { const extra = objectValue(row.extra || row.raw?.extra); return { name: `${stringValue(row.type, `规则 ${index + 1}`)} · ${stringValue(row.payload, "-")}`, hits: numberValue(row.hit_count ?? extra.hitCount ?? extra.hit_count), lastHit: stringValue(row.hit_at ?? extra.hitAt ?? extra.hit_at, "") }; }).sort((a, b) => b.hits - a.hits).slice(0, 40);
+  return raw.flatMap((row: any, index) => {
+    const extra = objectValue(row.extra || row.raw?.extra);
+    const hitValue = row.hit_count ?? extra.hitCount ?? extra.hit_count;
+    if (hitValue == null || hitValue === "" || !Number.isFinite(Number(hitValue))) return [];
+    return [{ name: `${stringValue(row.type, `规则 ${index + 1}`)} · ${stringValue(row.payload, "-")}`, hits: Math.max(0, Number(hitValue)), lastHit: stringValue(row.hit_at ?? extra.hitAt ?? extra.hit_at, "") }];
+  }).sort((a, b) => b.hits - a.hits).slice(0, 40);
 }
 
 export function RuleHitChart({ payload }: { payload: unknown }) {

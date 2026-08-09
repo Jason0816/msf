@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import { Responsive, WidthProvider, type Layout, type LayoutItem, type ResponsiveLayouts } from "react-grid-layout/legacy";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Responsive, type Layout, type LayoutItem, type ResponsiveLayouts } from "react-grid-layout/legacy";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import type { DashboardBreakpoint, DashboardSettings, DashboardWidgetInstance } from "@/lib/dashboard-settings";
@@ -9,15 +9,13 @@ import { getWidgetDefinition, sizeColumns } from "./widgetRegistry";
 import { snapDashboardItem } from "./layout/dashboardLayout";
 import { DashboardWidgetFrame } from "./DashboardWidgetFrame";
 
-const ResponsiveGrid = WidthProvider(Responsive);
-
-export type DashboardRenderSize = "s" | "m" | "l";
+export type DashboardRenderSize = "xs" | "s" | "m" | "l";
 
 function widgetSize(item: LayoutItem | undefined, breakpoint: DashboardBreakpoint): DashboardRenderSize {
   if (breakpoint === "mobile") return "s";
   const width = item?.w ?? (breakpoint === "tablet" ? 3 : 6);
   const normalized = breakpoint === "tablet" ? width * 2 : width;
-  return normalized <= 4 ? "s" : normalized <= 6 ? "m" : "l";
+  return normalized <= 3 ? "xs" : normalized <= 4 ? "s" : normalized <= 6 ? "m" : "l";
 }
 
 function withConstraints(layout: DashboardSettings["layouts"][DashboardBreakpoint], instances: DashboardWidgetInstance[], breakpoint: DashboardBreakpoint): Layout {
@@ -47,6 +45,24 @@ export function DashboardGrid({ settings, editing, onChange, renderWidget }: {
   renderWidget: (instance: DashboardWidgetInstance, size: DashboardRenderSize) => ReactNode;
 }) {
   const [breakpoint, setBreakpoint] = useState<DashboardBreakpoint>("desktop");
+  const [containerWidth, setContainerWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const updateWidth = () => setContainerWidth((current) => {
+      const next = Math.max(0, Math.floor(element.getBoundingClientRect().width));
+      return current === next ? current : next;
+    });
+    updateWidth();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateWidth);
+      return () => window.removeEventListener("resize", updateWidth);
+    }
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const layouts = useMemo<ResponsiveLayouts<DashboardBreakpoint>>(() => ({
     desktop: withConstraints(settings.layouts.desktop, settings.instances, "desktop"),
     tablet: withConstraints(settings.layouts.tablet, settings.instances, "tablet"),
@@ -71,8 +87,9 @@ export function DashboardGrid({ settings, editing, onChange, renderWidget }: {
   }
 
   return (
-    <div className="dashboard-grid -mx-2" data-breakpoint={breakpoint} data-editing={editing || undefined}>
-      <ResponsiveGrid
+    <div ref={containerRef} className="dashboard-grid min-w-0 overflow-x-clip" data-breakpoint={breakpoint} data-editing={editing || undefined}>
+      {containerWidth > 0 ? <Responsive
+        width={containerWidth}
         layouts={layouts}
         breakpoints={{ desktop: 1024, tablet: 640, mobile: 0 }}
         cols={{ desktop: 12, tablet: 6, mobile: 1 }}
@@ -99,7 +116,7 @@ export function DashboardGrid({ settings, editing, onChange, renderWidget }: {
             </DashboardWidgetFrame>
           </div>
         ))}
-      </ResponsiveGrid>
+      </Responsive> : <div className="min-h-52" aria-hidden="true" />}
       <style>{`
         .dashboard-grid .react-grid-placeholder { background: oklch(82% 0.08 235 / .42); border: 1px solid oklch(72% 0.12 235 / .7); border-radius: 24px; opacity: 1; }
         .dashboard-grid .react-grid-item > .react-resizable-handle::after { border-color: oklch(65% .14 235); width: 9px; height: 9px; right: 8px; bottom: 8px; }

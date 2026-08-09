@@ -12,7 +12,26 @@ import {
   type DashboardSettings,
   type DashboardWidgetInstance,
 } from "@/lib/dashboard-settings";
-import { DashboardDataProvider } from "./data";
+import { DashboardDataProvider, MihomoDashboardProvider, MosdnsDashboardProvider } from "./data";
+import {
+  MosdnsCacheStatsWidget,
+  MosdnsCacheSystemWidget,
+  MosdnsInfoWidget,
+  MosdnsQueryWidget,
+  MosdnsResolutionPolicyWidget,
+  MosdnsRuntimeWidget,
+  type MosdnsCachePage,
+  type MosdnsCacheSystemPage,
+  type MosdnsInfoPage,
+  type MosdnsRuntimePage,
+} from "./widgets/mosdns";
+import {
+  MihomoConnectionStatsWidget,
+  MihomoLatencyWidget,
+  MihomoProviderTrafficWidget,
+  MihomoRuleHitsWidget,
+  MihomoTrafficWidget,
+} from "./widgets/mihomo";
 import {
   MihomoServiceWidget,
   MosdnsServiceWidget,
@@ -36,6 +55,11 @@ function MissingWidget({ type }: { type: string }) {
 
 function cloneSettings(settings: DashboardSettings) {
   return JSON.parse(JSON.stringify(settings)) as DashboardSettings;
+}
+
+function storedPage<T extends string>(instance: DashboardWidgetInstance, allowed: readonly T[], fallback: T): T {
+  const page = instance.settings?.activePage;
+  return typeof page === "string" && allowed.includes(page as T) ? page as T : fallback;
 }
 
 export function Dashboard() {
@@ -104,23 +128,51 @@ export function Dashboard() {
   };
 
   const renderWidget = (instance: DashboardWidgetInstance, size: DashboardRenderSize) => {
+    const standardSize = size === "xs" ? "s" : size;
     switch (instance.type) {
       case "system-info": {
         const page = (["device", "hardware", "stats"] as const).includes(instance.settings?.tab as SystemInfoPage) ? instance.settings?.tab as SystemInfoPage : "device";
-        return <SystemInfoCollectionWidget activePage={page} onActivePageChange={(tab) => updateInstanceSettings(instance, { tab })} size={size} />;
+        return <SystemInfoCollectionWidget activePage={page} onActivePageChange={(tab) => updateInstanceSettings(instance, { tab })} size={standardSize} />;
       }
-      case "system-resources": return <SystemResourcesWidget size={size} />;
-      case "system-rate": return <SystemRateWidget size={size} />;
+      case "system-resources": return <SystemResourcesWidget size={standardSize} />;
+      case "system-rate": return <SystemRateWidget size={standardSize} />;
       case "singbox-service": return <SingboxServiceWidget />;
       case "mosdns-service": return <MosdnsServiceWidget />;
+      case "mosdns-query": return <MosdnsQueryWidget size={size} />;
+      case "mosdns-info": {
+        const activePage = storedPage<MosdnsInfoPage>(instance, ["split", "domains", "slowest", "clients"], "split");
+        return <MosdnsInfoWidget size={size} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} />;
+      }
+      case "mosdns-cache-stats": {
+        const activePage = storedPage<MosdnsCachePage>(instance, ["all", "domestic", "foreign", "node"], "all");
+        return <MosdnsCacheStatsWidget size={size} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} />;
+      }
+      case "mosdns-runtime": {
+        const activePage = storedPage<MosdnsRuntimePage>(instance, ["overview", "memory", "system"], "overview");
+        return <MosdnsRuntimeWidget size={size} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} />;
+      }
+      case "mosdns-resolution-policy": return <MosdnsResolutionPolicyWidget size={size} />;
+      case "mosdns-cache-system": {
+        const activePage = storedPage<MosdnsCacheSystemPage>(instance, ["stats", "strategy", "task", "operations"], "stats");
+        return <MosdnsCacheSystemWidget size={size} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} />;
+      }
       case "mihomo-service": return <MihomoServiceWidget />;
+      case "mihomo-traffic": return <MihomoTrafficWidget size={standardSize} />;
+      case "mihomo-latency": return <MihomoLatencyWidget size={standardSize} />;
+      case "mihomo-provider-traffic": return <MihomoProviderTrafficWidget size={standardSize} />;
+      case "mihomo-connection-stats": return <MihomoConnectionStatsWidget size={standardSize} />;
+      case "mihomo-rule-hits": return <MihomoRuleHitsWidget size={standardSize} />;
       default: return <MissingWidget type={instance.type} />;
     }
   };
 
   return (
     <DashboardDataProvider>
-      <DashboardGrid settings={settings} editing={editing} onChange={applySettings} renderWidget={renderWidget} />
+      <MosdnsDashboardProvider>
+        <MihomoDashboardProvider>
+          <DashboardGrid settings={settings} editing={editing} onChange={applySettings} renderWidget={renderWidget} />
+        </MihomoDashboardProvider>
+      </MosdnsDashboardProvider>
     </DashboardDataProvider>
   );
 }
