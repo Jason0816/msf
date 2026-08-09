@@ -36,3 +36,5 @@ export type {
   MihomoRuleHit,
   MihomoTrafficPoint,
 } from "./useMihomoDashboardData";
+export { DashboardProxyRuntimeProvider } from "./DashboardProxyRuntimeProvider";
+export { useDashboardProxyRuntime } from "./useDashboardProxyRuntime";

@@ -39,6 +39,7 @@ export type ProxyRefreshOptions = { silent?: boolean };
 
 /** Internal attribution carried on jobs until the UI types can adopt it. */
 export type ProxyRuntimeTestJob = ProxyTestJob & {
+  scopeKey?: string;
   physicalKeys?: ProxyKey[];
   displayKeys?: ProxyKey[];
   targetDisplayKeys?: Record<string, ProxyKey[]>;
@@ -47,6 +48,7 @@ export type ProxyRuntimeTestJob = ProxyTestJob & {
 export type ProxyRuntime = Omit<ProxyRuntimeSnapshot, "testingJobs"> & {
   testingJobs: Record<string, ProxyRuntimeTestJob>;
   store: ProxyStore;
+  pendingSelections: Record<string, ProxyKey>;
   refresh(options?: ProxyRefreshOptions): Promise<ProxyStore | undefined>;
   selectProxy(groupKey: ProxyKey, targetKey: ProxyKey): Promise<unknown>;
   testNode(key: ProxyKey, options?: { groupKey?: ProxyKey; temporary?: ProxyPolicySource }): Promise<ProxyTestJob>;
@@ -78,11 +80,14 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
   const [error, setError] = useState<string | undefined>();
   const [visible, setVisible] = useState(true);
   const [testingJobs, setTestingJobs] = useState<Record<string, ProxyRuntimeTestJob>>({});
+  const [pendingSelections, setPendingSelections] = useState<Record<string, ProxyKey>>({});
   const storeRef = useRef(store);
   const sequenceRef = useRef(0);
   const requestAbortRef = useRef<AbortController | undefined>(undefined);
   const mountedRef = useRef(true);
   const jobControllersRef = useRef<JobControllers>(new Map());
+  const selectionLocksRef = useRef(new Set<ProxyKey>());
+  const testLocksRef = useRef(new Set<string>());
   // Incremented for every local selection/test mutation. A refresh that began
   // against an older revision is discarded instead of overwriting a fresh
   // delay result with a stale controller snapshot.
@@ -173,9 +178,10 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
   }, []);
 
   const startJob = useCallback(
-    (scope: ProxyTestJobScope, total: number, plan?: ProxySpeedtestPlan) => {
+    (scope: ProxyTestJobScope, total: number, plan?: ProxySpeedtestPlan, scopeKey?: string) => {
       const job: ProxyRuntimeTestJob = {
         ...createProxyTestJob(scope, total),
+        scopeKey,
         ...(plan ? {
           physicalKeys: plan.targets.map((target) => target.physicalKey),
           displayKeys: Array.from(new Set(plan.targets.flatMap((target) => target.displayKeys))),
@@ -235,10 +241,13 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
 
   const selectProxy = useCallback(
     async (groupKey: ProxyKey, targetKey: ProxyKey) => {
+      if (selectionLocksRef.current.has(groupKey)) throw new Error("该策略组正在切换节点，请稍候");
       const before = storeRef.current;
       const group = before.entities[groupKey];
       const target = before.entities[targetKey];
       if (!group || group.kind !== "group" || !target) throw new Error("代理组或节点不存在");
+      selectionLocksRef.current.add(groupKey);
+      setPendingSelections((current) => ({ ...current, [groupKey]: targetKey }));
       const optimistic = patchProxySelection(before, groupKey, targetKey);
       localRevisionRef.current += 1;
       storeRef.current = optimistic;
@@ -262,6 +271,13 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
           setStore(before);
         }
         throw reason;
+      } finally {
+        selectionLocksRef.current.delete(groupKey);
+        if (mountedRef.current) setPendingSelections((current) => {
+          const next = { ...current };
+          delete next[groupKey];
+          return next;
+        });
       }
     },
     [client],
@@ -269,6 +285,8 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
 
   const testNode = useCallback(
     async (key: ProxyKey, testOptions: { groupKey?: ProxyKey; temporary?: ProxyPolicySource } = {}) => {
+      const lockKey = `node:${key}`;
+      if (testLocksRef.current.has(lockKey)) throw new Error("该节点正在测速，请勿重复操作");
       const current = storeRef.current;
       const node = current.entities[key];
       if (!node) throw new Error("节点不存在");
@@ -278,8 +296,9 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
         systemDefault: systemDefaultRef.current,
         temporary: testOptions.temporary,
       });
+      testLocksRef.current.add(lockKey);
       localRevisionRef.current += 1;
-      const started = startJob("node", plan.targets.length, plan);
+      const started = startJob("node", plan.targets.length, plan, key);
       let job = updateProxyTestJob(started.job, { status: "running", startedAt: Date.now() });
       updateJob(job);
       const recordResult = (result: PlannedTargetResult) => {
@@ -301,16 +320,22 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
           ...(result.error ? { error: result.error instanceof Error ? result.error.message : "测速失败" } : {}),
         });
       };
-      await runPlannedTargets(plan, started.controller.signal, recordResult);
-      const cancelled = started.controller.signal.aborted;
-      job = finishJob(job, { status: cancelled ? "cancelled" : "done", completed: cancelled ? job.completed : plan.targets.length });
-      return job;
+      try {
+        await runPlannedTargets(plan, started.controller.signal, recordResult);
+        const cancelled = started.controller.signal.aborted;
+        job = finishJob(job, { status: cancelled ? "cancelled" : "done", completed: cancelled ? job.completed : plan.targets.length });
+        return job;
+      } finally {
+        testLocksRef.current.delete(lockKey);
+      }
     },
     [commitDelayResult, finishJob, runPlannedTargets, startJob, updateJob],
   );
 
   const testGroup = useCallback(
     async (groupKey: ProxyKey, testOptions: { temporary?: ProxyPolicySource } = {}) => {
+      const lockKey = `group:${groupKey}`;
+      if (testLocksRef.current.has(lockKey)) throw new Error("该策略组正在测速，请勿重复操作");
       const current = storeRef.current;
       const group = current.entities[groupKey];
       if (!group || group.kind !== "group") throw new Error("代理组不存在");
@@ -319,8 +344,9 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
         systemDefault: systemDefaultRef.current,
         temporary: testOptions.temporary,
       });
+      testLocksRef.current.add(lockKey);
       localRevisionRef.current += 1;
-      const started = startJob("group", plan.targets.length, plan);
+      const started = startJob("group", plan.targets.length, plan, groupKey);
       let job = updateProxyTestJob(started.job, { status: "running", startedAt: Date.now() });
       updateJob(job);
       const recordResult = (result: PlannedTargetResult) => {
@@ -342,10 +368,14 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
           ...(result.error ? { error: result.error instanceof Error ? result.error.message : "测速失败" } : {}),
         });
       };
-      await runPlannedTargets(plan, started.controller.signal, recordResult);
-      const cancelled = started.controller.signal.aborted;
-      job = finishJob(job, { status: cancelled ? "cancelled" : "done", completed: cancelled ? job.completed : plan.targets.length });
-      return job;
+      try {
+        await runPlannedTargets(plan, started.controller.signal, recordResult);
+        const cancelled = started.controller.signal.aborted;
+        job = finishJob(job, { status: cancelled ? "cancelled" : "done", completed: cancelled ? job.completed : plan.targets.length });
+        return job;
+      } finally {
+        testLocksRef.current.delete(lockKey);
+      }
     },
     [commitDelayResult, finishJob, runPlannedTargets, startJob, updateJob],
   );
@@ -430,7 +460,7 @@ export function useProxyRuntime(options: ProxyRuntimeOptions = {}): ProxyRuntime
   const resolveChain = useCallback((groupKey: ProxyKey) => resolveProxyChain(groupKey, storeRef.current), []);
 
   return useMemo(
-    () => ({ store, loading, refreshing, error, visible, testingJobs, refresh, selectProxy, testNode, testGroup, testProvider, testAll, cancelTest, clearError, resolveChain }),
-    [cancelTest, clearError, error, loading, refresh, refreshing, resolveChain, selectProxy, store, testAll, testGroup, testNode, testProvider, testingJobs, visible],
+    () => ({ store, loading, refreshing, error, visible, testingJobs, pendingSelections, refresh, selectProxy, testNode, testGroup, testProvider, testAll, cancelTest, clearError, resolveChain }),
+    [cancelTest, clearError, error, loading, pendingSelections, refresh, refreshing, resolveChain, selectProxy, store, testAll, testGroup, testNode, testProvider, testingJobs, visible],
   );
 }

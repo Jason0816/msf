@@ -117,7 +117,14 @@ function OverlayPanel({ children, className }: { children: React.ReactNode; clas
   );
 }
 
-export function EarthGlobeCard({ connections }: { connections: OverviewConnection[] }) {
+export interface EarthGlobeCardProps {
+  connections: OverviewConnection[];
+  embedded?: boolean;
+  editing?: boolean;
+  size?: "m" | "l";
+}
+
+export function EarthGlobeCard({ connections, embedded = false, editing = false, size = "l" }: EarthGlobeCardProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<EarthRenderer | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -131,6 +138,7 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
   const originRequestIDRef = useRef(0);
   const disposedRef = useRef(false);
   const connectionsRef = useRef(connections);
+  const editingRef = useRef(editing);
   const originIPRef = useRef("");
   const databaseStatusRef = useRef<GeoDatabaseStatus>("checking");
   const refreshRunningRef = useRef(false);
@@ -159,6 +167,7 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
   connectionsRef.current = connections;
+  editingRef.current = editing;
   originIPRef.current = originIP;
   databaseStatusRef.current = databaseStatus;
 
@@ -289,6 +298,14 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
   }, [visualMode]);
 
   useEffect(() => {
+    rendererRef.current?.setAutoRotation(!editing && !rotationPaused);
+  }, [editing, rotationPaused]);
+
+  useEffect(() => {
+    rendererRef.current?.setReducedMotion(editing || window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }, [editing]);
+
+  useEffect(() => {
     scheduleRouteRefresh();
   }, [connections, databaseStatus, originIP, scheduleRouteRefresh]);
 
@@ -310,7 +327,7 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
   useEffect(() => {
     disposedRef.current = false;
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const handleReducedMotion = () => rendererRef.current?.setReducedMotion(media.matches);
+    const handleReducedMotion = () => rendererRef.current?.setReducedMotion(media.matches || editingRef.current);
     media.addEventListener("change", handleReducedMotion);
 
     const themeObserver = new MutationObserver(() => {
@@ -347,7 +364,7 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
         const { createEarthRenderer } = await import("./earth/EarthRenderer");
         if (!canvasRef.current || disposedRef.current) return;
         const renderer = await createEarthRenderer(canvasRef.current, {
-          reducedMotion: media.matches,
+          reducedMotion: media.matches || editingRef.current,
           visualMode,
           colorScheme: getColorScheme(),
           onEndpointHover(info, x, y) {
@@ -362,7 +379,7 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
         }
 
         rendererRef.current = renderer;
-        renderer.setAutoRotation(!rotationPaused);
+        renderer.setAutoRotation(!editing && !rotationPaused);
         scheduleRouteRefresh();
       } catch {
         canvasRef.current?.replaceChildren();
@@ -425,23 +442,12 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
     top: `${Math.min(window.innerHeight - 150, tooltipPosition.y + 12)}px`,
   }), [tooltipPosition]);
 
-  const toggleRotation = () => {
-    setRotationPaused((current) => {
-      rendererRef.current?.setAutoRotation(current);
-      return !current;
-    });
-  };
+  const toggleRotation = () => setRotationPaused((current) => !current);
 
-  return (
-    <GlassSurface
-      material="thick"
-      className={cn(
-        "earth-globe-card flex min-w-0 flex-col rounded-2xl p-4",
-        expanded && "earth-globe-card--expanded",
-      )}
-    >
+  const content = (
+    <>
       <div className="flex items-center justify-between gap-3">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className={cn("text-xs font-semibold uppercase tracking-wider text-muted-foreground", embedded && "sr-only")}>
           全球连接
         </div>
         <div className="flex items-center gap-1">
@@ -480,7 +486,7 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
 
       <div className={cn(
         "relative mt-2 w-full overflow-hidden rounded-xl",
-        expanded ? "min-h-0 flex-1" : "h-96",
+        expanded ? "min-h-0 flex-1" : embedded ? (size === "m" ? "min-h-[280px] flex-1" : "min-h-[360px] flex-1") : "h-96",
         visualMode === "flat" ? "bg-muted/30" : "bg-black",
       )}>
         <div ref={canvasRef} className="absolute inset-0 touch-none" />
@@ -592,6 +598,15 @@ export function EarthGlobeCard({ connections }: { connections: OverviewConnectio
         </div>,
         document.body,
       ) : null}
-    </GlassSurface>
+    </>
   );
+
+  const className = cn(
+    "earth-globe-card flex min-w-0 flex-col",
+    embedded ? "h-full min-h-0" : "rounded-2xl p-4",
+    expanded && "earth-globe-card--expanded",
+  );
+  return embedded
+    ? <div className={className}>{content}</div>
+    : <GlassSurface material="thick" className={className}>{content}</GlassSurface>;
 }

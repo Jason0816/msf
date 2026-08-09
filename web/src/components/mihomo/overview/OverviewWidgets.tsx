@@ -370,76 +370,91 @@ export function ProviderTrafficPanel({ payload }: { payload: unknown }) {
   return <GlassSurface material="thick" className="rounded-2xl p-4">{sectionTitle(<Database className="h-4 w-4" />, "订阅流量统计", "已用 / 总量与剩余额度")}{rows.length ? <div className="grid max-h-[32rem] grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] gap-2 overflow-y-auto">{rows.map((provider) => { const percent = Math.min(100, provider.used / provider.total * 100); const remaining = Math.max(0, provider.total - provider.used); return <SolidPlate tone="regular" key={provider.name} className="p-3"><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-semibold text-foreground">{provider.name}</span><span className="text-[10px] tabular-nums text-muted-foreground">{percent.toFixed(1)}%</span></div><div className="mt-2 text-lg font-light tabular-nums text-foreground">{formatBytes(provider.used)} <span className="text-xs text-muted-foreground">/ {formatBytes(provider.total)}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", percent >= 90 ? "bg-rose-500" : percent >= 70 ? "bg-amber-500" : "bg-emerald-500")} style={{ width: `${percent}%` }} /></div><div className="mt-1.5 text-[10px] text-muted-foreground">剩余 {formatBytes(remaining)}</div></SolidPlate>; })}</div> : <EmptyState>当前 Provider 没有可用的订阅配额信息</EmptyState>}</GlassSurface>;
 }
 
-export function ConnectionSankey({ connections }: { connections: OverviewConnection[] }) {
+export interface ConnectionSankeyProps {
+  connections: OverviewConnection[];
+  size?: "m" | "l";
+  editing?: boolean;
+  embedded?: boolean;
+}
+
+export function buildConnectionTopology(snapshot: OverviewConnection[]) {
+  const colors = ["#6a6fc5", "#a8d4a0", "#fddb8a", "#f2a0a0"];
+  const nodeIds = new Map<string, number>();
+  const nodeNames = new Map<string, string>();
+  const nodeLayers = new Map<string, number>();
+  const linkCounts = new Map<string, number>();
+  let nextNodeId = 0;
+  const addNode = (name: string, layer: number) => {
+    const key = `${layer}:${name}`;
+    if (!nodeIds.has(key)) {
+      nodeIds.set(key, nextNodeId++);
+      nodeNames.set(key, name);
+      nodeLayers.set(key, layer);
+    }
+    return nodeIds.get(key)!;
+  };
+  const addLink = (source: number, target: number) => {
+    const key = `${source}:${target}`;
+    linkCounts.set(key, (linkCounts.get(key) ?? 0) + 1);
+  };
+  snapshot.forEach((row) => {
+    const chains = Array.isArray(row.chains) ? row.chains.map(String).filter(Boolean) : [];
+    if (!chains.length) return;
+    const source = addNode(stringValue(row.source, "未知"), 0);
+    const ruleName = stringValue(row.rulePayload ? `${row.rule}: ${row.rulePayload}` : row.rule, "未知");
+    const rule = addNode(ruleName, 1);
+    const chainExit = chains[0];
+    const chainEntry = chains.at(-1)!;
+    addLink(source, rule);
+    if (chainEntry === chainExit) {
+      addLink(rule, addNode(chainExit, 3));
+    } else {
+      const entry = addNode(chainEntry, 2);
+      const exit = addNode(chainExit, 3);
+      addLink(rule, entry);
+      addLink(entry, exit);
+    }
+  });
+  const grouped = new Map<number, Array<{ oldId: number; name: string; layer: number }>>();
+  nodeIds.forEach((oldId, key) => {
+    const layer = nodeLayers.get(key) ?? 0;
+    const rows = grouped.get(layer) ?? [];
+    rows.push({ oldId, name: nodeNames.get(key) ?? "", layer });
+    grouped.set(layer, rows);
+  });
+  const idMapping = new Map<number, number>();
+  const nodes: Array<{ id: number; name: string; depth: number; itemStyle: { color: string } }> = [];
+  Array.from(grouped.keys()).sort((a, b) => a - b).forEach((layer) => {
+    grouped.get(layer)!.sort((a, b) => a.name.localeCompare(b.name)).forEach((node) => {
+      const id = nodes.length;
+      idMapping.set(node.oldId, id);
+      nodes.push({ id, name: node.name, depth: layer, itemStyle: { color: colors[layer] } });
+    });
+  });
+  const links = Array.from(linkCounts, ([key, originalValue]) => {
+    const [oldSource, oldTarget] = key.split(":").map(Number);
+    const source = idMapping.get(oldSource);
+    const target = idMapping.get(oldTarget);
+    if (source == null || target == null || source === target) return null;
+    return { source, target, value: Math.log10(originalValue + 1) * 10, originalValue };
+  }).filter(Boolean) as Array<{ source: number; target: number; value: number; originalValue: number }>;
+  return { nodes, links };
+}
+
+export function ConnectionSankey({ connections, size = "l", editing = false, embedded = false }: ConnectionSankeyProps) {
   const [manuallyPaused, setManuallyPaused] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [snapshot, setSnapshot] = useState(connections);
   const [fullScreen, setFullScreen] = useState(false);
-  const paused = manuallyPaused || tooltipVisible;
+  const paused = manuallyPaused || tooltipVisible || editing;
   useEffect(() => { if (!paused) setSnapshot(connections); }, [connections, paused]);
-  const graph = useMemo(() => {
-    const colors = ["#6a6fc5", "#a8d4a0", "#fddb8a", "#f2a0a0"];
-    const nodeIds = new Map<string, number>();
-    const nodeNames = new Map<string, string>();
-    const nodeLayers = new Map<string, number>();
-    const linkCounts = new Map<string, number>();
-    let nextNodeId = 0;
-    const addNode = (name: string, layer: number) => {
-      const key = `${layer}:${name}`;
-      if (!nodeIds.has(key)) {
-        nodeIds.set(key, nextNodeId++);
-        nodeNames.set(key, name);
-        nodeLayers.set(key, layer);
-      }
-      return nodeIds.get(key)!;
-    };
-    const addLink = (source: number, target: number) => {
-      const key = `${source}:${target}`;
-      linkCounts.set(key, (linkCounts.get(key) ?? 0) + 1);
-    };
-    snapshot.forEach((row) => {
-      const chains = Array.isArray(row.chains) ? row.chains.map(String).filter(Boolean) : [];
-      if (!chains.length) return;
-      const source = addNode(stringValue(row.source, "未知"), 0);
-      const ruleName = stringValue(row.rulePayload ? `${row.rule}: ${row.rulePayload}` : row.rule, "未知");
-      const rule = addNode(ruleName, 1);
-      const chainExit = chains[0];
-      const chainEntry = chains.at(-1)!;
-      addLink(source, rule);
-      if (chainEntry === chainExit) {
-        addLink(rule, addNode(chainExit, 3));
-      } else {
-        const entry = addNode(chainEntry, 2);
-        const exit = addNode(chainExit, 3);
-        addLink(rule, entry);
-        addLink(entry, exit);
-      }
-    });
-    const grouped = new Map<number, Array<{ oldId: number; name: string; layer: number }>>();
-    nodeIds.forEach((oldId, key) => {
-      const layer = nodeLayers.get(key) ?? 0;
-      const rows = grouped.get(layer) ?? [];
-      rows.push({ oldId, name: nodeNames.get(key) ?? "", layer });
-      grouped.set(layer, rows);
-    });
-    const idMapping = new Map<number, number>();
-    const nodes: Array<{ id: number; name: string; depth: number; itemStyle: { color: string } }> = [];
-    Array.from(grouped.keys()).sort((a, b) => a - b).forEach((layer) => {
-      grouped.get(layer)!.sort((a, b) => a.name.localeCompare(b.name)).forEach((node) => {
-        const id = nodes.length;
-        idMapping.set(node.oldId, id);
-        nodes.push({ id, name: node.name, depth: layer, itemStyle: { color: colors[layer] } });
-      });
-    });
-    const links = Array.from(linkCounts, ([key, originalValue]) => {
-      const [oldSource, oldTarget] = key.split(":").map(Number);
-      const source = idMapping.get(oldSource);
-      const target = idMapping.get(oldTarget);
-      if (source == null || target == null || source === target) return null;
-      return { source, target, value: Math.log10(originalValue + 1) * 10, originalValue };
-    }).filter(Boolean) as Array<{ source: number; target: number; value: number; originalValue: number }>;
-    return { nodes, links };
-  }, [snapshot]);
+  useEffect(() => {
+    if (!fullScreen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setFullScreen(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [fullScreen]);
+  const graph = useMemo(() => buildConnectionTopology(snapshot), [snapshot]);
   const dark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
   const option = useMemo<EChartsOption>(() => ({
     backgroundColor: "transparent",
@@ -469,27 +484,32 @@ export function ConnectionSankey({ connections }: { connections: OverviewConnect
       label: {
         color: dark ? "#f4f4f5" : "#27272a",
         fontSize: 12,
-        formatter: (params: any) => params.name.length > (fullScreen ? 45 : 30) ? `${params.name.slice(0, fullScreen ? 45 : 30)}...` : params.name,
+        formatter: (params: any) => {
+          const limit = fullScreen ? 45 : size === "m" ? 18 : 32;
+          return params.name.length > limit ? `${params.name.slice(0, limit)}…` : params.name;
+        },
       },
       nodeGap: 4,
       nodeWidth: 15,
       nodeAlign: "left",
-      animation: true,
-      animationDuration: 1000,
+      animation: !paused,
+      animationDuration: paused ? 0 : 1000,
       animationEasing: "cubicOut",
       animationDelay: (index: number) => index * 50,
     } as any],
-  }), [dark, fullScreen, graph]);
-  return <GlassSurface material="thick" className={cn("rounded-2xl p-4", fullScreen && "fixed inset-0 z-[120] rounded-none bg-background p-4")}>
-    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">连接拓扑</div>
-    <SolidPlate tone="subtle" className={cn("relative mt-4 h-96 w-full overflow-hidden rounded-xl", fullScreen && "h-[calc(100vh-3rem)] rounded-none")}>
+  }), [dark, fullScreen, graph, paused, size]);
+  const content = <>
+    <div className={cn("text-xs font-semibold uppercase tracking-wider text-muted-foreground", embedded && "sr-only")}>连接拓扑</div>
+    <SolidPlate tone="subtle" className={cn("relative w-full overflow-hidden rounded-xl", embedded ? "h-full min-h-[280px]" : "mt-4 h-96", fullScreen && "h-[calc(100vh-2rem)] rounded-none")}>
       {graph.nodes.length ? <ZashboardEChart option={option} onTooltipVisibilityChange={setTooltipVisible} /> : <EmptyState>暂无连接拓扑数据</EmptyState>}
       <div className="absolute bottom-1 right-1 flex flex-col gap-1">
-        <button type="button" onClick={() => { setManuallyPaused((value) => !value); if (manuallyPaused) setSnapshot(connections); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" title={manuallyPaused ? "继续更新" : "暂停更新"}>{manuallyPaused ? <PlayCircle className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}</button>
+        <button type="button" onClick={() => { setManuallyPaused((value) => !value); if (manuallyPaused) setSnapshot(connections); }} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" title={manuallyPaused ? "继续更新" : editing ? "编辑布局时已暂停" : "暂停更新"} disabled={editing}>{manuallyPaused || editing ? <PlayCircle className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}</button>
         <button type="button" onClick={() => setFullScreen((value) => !value)} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" title={fullScreen ? "退出全屏" : "全屏查看"}>{fullScreen ? <X className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</button>
       </div>
     </SolidPlate>
-  </GlassSurface>;
+  </>;
+  const wrapperClass = cn(embedded ? "h-full min-h-0" : "rounded-2xl p-4", fullScreen && "fixed inset-0 z-[120] rounded-none bg-background p-4");
+  return embedded ? <div className={wrapperClass}>{content}</div> : <GlassSurface material="thick" className={wrapperClass}>{content}</GlassSurface>;
 }
 
 export function ConnectionHistoryPanel({ connections }: { connections: OverviewConnection[] }) {

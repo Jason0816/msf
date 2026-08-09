@@ -173,7 +173,10 @@ async function main() {
     const selectedButton = dialog.locator('button[aria-pressed="true"]').first();
     await selectedButton.click();
     assert.equal(await selectedCount(page), 14);
-    assert.ok(await dialog.locator('button[aria-pressed="false"]:not([disabled])').count() > 0, "removing one widget must restore additions");
+    const restoredCandidate = dialog.locator('button[aria-pressed="false"]:not([disabled])').first();
+    assert.ok(await restoredCandidate.count() > 0, "removing one widget must restore additions");
+    await restoredCandidate.click();
+    assert.equal(await selectedCount(page), 15, "the restored slot should accept a fifteenth widget");
 
     await dialog.getByRole("button", { name: "编辑布局" }).click();
     await page.locator('.dashboard-grid[data-editing="true"]').waitFor();
@@ -222,6 +225,7 @@ async function main() {
       assert.ok(overflow.scrollWidth <= overflow.innerWidth + 2, `viewport overflow at ${viewport.width}px: ${JSON.stringify(overflow)}`);
       await page.screenshot({ path: path.join(screenshotDir, viewport.name), fullPage: true });
     }
+    assert.equal(await page.getByText(/组件正在接入/).count(), 0, "all registered dashboard widgets must have a real renderer");
 
     await page.setViewportSize({ width: 390, height: 844 });
     dialog = await openPicker(page);
@@ -232,6 +236,23 @@ async function main() {
       assert.equal(await mobileHandles.nth(index).evaluate((element) => getComputedStyle(element).display), "none", "mobile must hide resize handles");
     }
     await dialog.getByRole("button", { name: "完成编辑" }).click();
+
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('.dashboard-grid[data-breakpoint="desktop"]').waitFor();
+    while ((await selectedCount(page)) > 10) await dialog.locator('button[aria-pressed="true"]').first().click();
+    for (const label of ["连接拓扑", "订阅流量统计", "连接统计", "规则命中统计", "自定义策略组控制"]) {
+      const widgetButton = dialog.getByRole("button", { name: new RegExp(label) }).first();
+      assert.equal(await widgetButton.isDisabled(), false, `${label} should be addable`);
+      await widgetButton.click();
+    }
+    assert.equal(await selectedCount(page), 15, "the Mihomo-complete layout should exercise the maximum count");
+    await dialog.getByRole("button", { name: "关闭组件面板" }).dispatchEvent("click");
+    for (const type of ["mihomo-globe", "mihomo-topology", "mihomo-provider-traffic", "mihomo-connection-stats", "mihomo-rule-hits", "mihomo-proxy-group"]) {
+      await page.locator(`[data-widget-type="${type}"]`).waitFor();
+    }
+    await page.getByText("选择要控制的策略组", { exact: true }).waitFor();
+    assert.equal(await page.getByText(/组件正在接入/).count(), 0);
+    await page.screenshot({ path: path.join(screenshotDir, "dashboard-mihomo-complete-1440.png"), fullPage: true });
 
     const monitorStreams = await page.evaluate(() => window.__dashboardMonitorStreams);
     assert.ok(monitorStreams.calls > 0, "dashboard should create the shared monitor SSE");

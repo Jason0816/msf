@@ -12,7 +12,7 @@ import {
   type DashboardSettings,
   type DashboardWidgetInstance,
 } from "@/lib/dashboard-settings";
-import { DashboardDataProvider, MihomoDashboardProvider, MosdnsDashboardProvider } from "./data";
+import { DashboardDataProvider, DashboardProxyRuntimeProvider, MihomoDashboardProvider, MosdnsDashboardProvider, useMihomoDashboardData } from "./data";
 import {
   MosdnsCacheStatsWidget,
   MosdnsCacheSystemWidget,
@@ -27,9 +27,12 @@ import {
 } from "./widgets/mosdns";
 import {
   MihomoConnectionStatsWidget,
+  MihomoGlobeWidget,
   MihomoLatencyWidget,
   MihomoProviderTrafficWidget,
+  MihomoProxyGroupWidget,
   MihomoRuleHitsWidget,
+  MihomoTopologyWidget,
   MihomoTrafficWidget,
 } from "./widgets/mihomo";
 import {
@@ -60,6 +63,16 @@ function cloneSettings(settings: DashboardSettings) {
 function storedPage<T extends string>(instance: DashboardWidgetInstance, allowed: readonly T[], fallback: T): T {
   const page = instance.settings?.activePage;
   return typeof page === "string" && allowed.includes(page as T) ? page as T : fallback;
+}
+
+function ConnectedGlobeWidget({ size, editing }: { size: "m" | "l"; editing: boolean }) {
+  const { connections } = useMihomoDashboardData();
+  return <MihomoGlobeWidget connections={connections} size={size} editing={editing} />;
+}
+
+function ConnectedTopologyWidget({ size, editing }: { size: "m" | "l"; editing: boolean }) {
+  const { connections } = useMihomoDashboardData();
+  return <MihomoTopologyWidget connections={connections} size={size} editing={editing} />;
 }
 
 export function Dashboard() {
@@ -162,15 +175,26 @@ export function Dashboard() {
       case "mihomo-provider-traffic": return <MihomoProviderTrafficWidget size={standardSize} />;
       case "mihomo-connection-stats": return <MihomoConnectionStatsWidget size={standardSize} />;
       case "mihomo-rule-hits": return <MihomoRuleHitsWidget size={standardSize} />;
+      case "mihomo-globe": return <ConnectedGlobeWidget size={size === "l" ? "l" : "m"} editing={editing} />;
+      case "mihomo-topology": return <ConnectedTopologyWidget size={size === "l" ? "l" : "m"} editing={editing} />;
+      case "mihomo-proxy-group": {
+        const groupKey = typeof instance.settings?.groupKey === "string" ? instance.settings.groupKey : undefined;
+        return <MihomoProxyGroupWidget groupKey={groupKey} onGroupKeyChange={(next) => updateInstanceSettings(instance, { groupKey: next })} size={standardSize} />;
+      }
       default: return <MissingWidget type={instance.type} />;
     }
   };
+
+  const grid = <DashboardGrid settings={settings} editing={editing} onChange={applySettings} renderWidget={renderWidget} />;
+  const content = settings.instances.some((instance) => instance.type === "mihomo-proxy-group")
+    ? <DashboardProxyRuntimeProvider>{grid}</DashboardProxyRuntimeProvider>
+    : grid;
 
   return (
     <DashboardDataProvider>
       <MosdnsDashboardProvider>
         <MihomoDashboardProvider>
-          <DashboardGrid settings={settings} editing={editing} onChange={applySettings} renderWidget={renderWidget} />
+          {content}
         </MihomoDashboardProvider>
       </MosdnsDashboardProvider>
     </DashboardDataProvider>
