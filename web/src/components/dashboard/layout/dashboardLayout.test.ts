@@ -9,6 +9,12 @@ describe("dashboard layout", () => {
     expect(snapDashboardItem({ i: "cache", x: 11, y: -2, w: 3, h: 1 }, cache, "desktop")).toEqual({ i: "cache", x: 9, y: 0, w: 3, h: 5 });
   });
 
+  it("keeps the half-width default rate and stats pair", () => {
+    const settings = createDefaultDashboardSettings();
+    expect(settings.layouts.desktop.find((item) => item.i === "system-rate")).toMatchObject({ x: 0, w: 6 });
+    expect(settings.layouts.desktop.find((item) => item.i === "system-stats")).toMatchObject({ x: 6, w: 6 });
+  });
+
   it("never grants XS to widgets whose registry minimum is S", () => {
     const info = { id: "info", type: "system-info" as const };
     expect(snapDashboardItem({ i: "info", x: 0, y: 0, w: 3, h: 5 }, info, "desktop").w).toBe(4);

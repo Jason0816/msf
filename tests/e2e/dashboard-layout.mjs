@@ -285,6 +285,38 @@ async function main() {
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}").instances?.length === 7);
     const defaultTypes = await page.evaluate(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}").instances.map((item) => item.type));
     assert.deepEqual(defaultTypes, ["system-device", "system-hardware", "system-resources", "system-rate", "system-stats", "mosdns-service", "mihomo-service"], "default layout should restore the original seven-card homepage");
+    const defaultPair = await page.evaluate(() => {
+      const desktop = JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}").layouts.desktop;
+      return {
+        rate: desktop.find((item) => item.i === "system-rate"),
+        stats: desktop.find((item) => item.i === "system-stats"),
+      };
+    });
+    assert.deepEqual({ x: defaultPair.rate.x, w: defaultPair.rate.w }, { x: 0, w: 6 }, "default rate card should use the left half of the row");
+    assert.deepEqual({ x: defaultPair.stats.x, w: defaultPair.stats.w }, { x: 6, w: 6 }, "default stats card should use the right half of the row");
+    await page.setViewportSize({ width: 2048, height: 1179 });
+    await page.locator('.dashboard-grid[data-breakpoint="desktop"]').waitFor();
+    await page.waitForTimeout(350);
+    const defaultRateWidget = page.locator('[data-widget-type="system-rate"]');
+    await defaultRateWidget.locator('[data-rate-layout="compact"]').waitFor();
+    assert.equal(await defaultRateWidget.locator('[data-rate-metrics-placement="header"]').count(), 0, "half-width rate card should remove the top metrics row");
+    await defaultRateWidget.locator('[data-rate-metrics-placement="footer"]').waitFor();
+    const rateFooterGeometry = await defaultRateWidget.evaluate((widget) => {
+      const metrics = widget.querySelector('[data-rate-metrics-placement="footer"]');
+      const selector = widget.querySelector(".gary-segmented");
+      if (!metrics || !selector) return null;
+      const metricsRect = metrics.getBoundingClientRect();
+      const selectorRect = selector.getBoundingClientRect();
+      const metricTops = Array.from(metrics.children).map((child) => Math.round(child.getBoundingClientRect().top));
+      const separated = metricsRect.right <= selectorRect.left + 1 || metricsRect.bottom <= selectorRect.top + 1;
+      return { separated, metricsSingleRow: Math.max(...metricTops) - Math.min(...metricTops) <= 2, selectorClientWidth: selector.clientWidth, selectorScrollWidth: selector.scrollWidth };
+    });
+    assert.ok(rateFooterGeometry?.separated, `rate legend metrics and time selector must not overlap: ${JSON.stringify(rateFooterGeometry)}`);
+    assert.ok(rateFooterGeometry.metricsSingleRow, `rate values and legends should share one row at 2048px: ${JSON.stringify(rateFooterGeometry)}`);
+    assert.ok(rateFooterGeometry.selectorScrollWidth <= rateFooterGeometry.selectorClientWidth + 1, `time selector must remain fully visible: ${JSON.stringify(rateFooterGeometry)}`);
+    await defaultRateWidget.screenshot({ path: path.join(screenshotDir, "dashboard-default-rate-card-2048.png") });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('.dashboard-grid[data-breakpoint="desktop"]').waitFor();
     await dialog.waitFor();
     await dialog.getByRole("button", { name: "撤销调整" }).click();
     await page.waitForFunction((expected) => localStorage.getItem("msf.dashboard.settings.v3") === expected, beforeDefaultLayout);
