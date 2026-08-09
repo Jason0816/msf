@@ -1,148 +1,53 @@
 "use client";
 
-import { useState } from "react";
-import { Eye, EyeOff, Maximize2, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, LayoutGrid } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import {
-  dashboardComponentOptions,
-  defaultDashboardSettings,
+  DASHBOARD_LAYOUT_COMMAND_EVENT,
+  DASHBOARD_LAYOUT_STATE_EVENT,
+  DASHBOARD_SETTINGS_EVENT,
   loadDashboardSettings,
   saveDashboardSettings,
+  type DashboardLayoutCommand,
   type DashboardSettings,
 } from "@/lib/dashboard-settings";
 import { cn } from "@/lib/utils";
-import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
-import { ModalViewport } from "@/components/liquid-glass/ModalViewport";
-import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
+import { DashboardWidgetPicker } from "@/components/dashboard/DashboardWidgetPicker";
 
 export function Fab() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [settings, setSettings] = useState<DashboardSettings>(() => loadDashboardSettings());
+
+  useEffect(() => {
+    const sync = () => setSettings(loadDashboardSettings());
+    const syncEditing = (event: Event) => setEditing(Boolean((event as CustomEvent<{ editing?: boolean }>).detail?.editing));
+    window.addEventListener(DASHBOARD_SETTINGS_EVENT, sync);
+    window.addEventListener("storage", sync);
+    window.addEventListener(DASHBOARD_LAYOUT_STATE_EVENT, syncEditing);
+    return () => {
+      window.removeEventListener(DASHBOARD_SETTINGS_EVENT, sync);
+      window.removeEventListener("storage", sync);
+      window.removeEventListener(DASHBOARD_LAYOUT_STATE_EVENT, syncEditing);
+    };
+  }, []);
 
   if (location.pathname !== "/") return null;
 
-  const updateSettings = (next: DashboardSettings) => {
+  const update = (next: DashboardSettings) => {
     setSettings(next);
     saveDashboardSettings(next);
   };
-
-  const toggleComponent = (key: keyof DashboardSettings["visible"]) => {
-    updateSettings({
-      ...settings,
-      visible: {
-        ...settings.visible,
-        [key]: !settings.visible[key],
-      },
-    });
-  };
-
-  const resetLayout = () => {
-    updateSettings({
-      compact: defaultDashboardSettings.compact,
-      visible: { ...defaultDashboardSettings.visible },
-    });
-  };
+  const command = (value: DashboardLayoutCommand) => window.dispatchEvent(new CustomEvent(DASHBOARD_LAYOUT_COMMAND_EVENT, { detail: { command: value } }));
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label="打开仪表盘设置"
-        className={cn(
-          "gary-glass gary-glass--regular gary-glass--no-backdrop gary-icon-button fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[60] h-12 w-12 select-none rounded-[18px] text-foreground md:bottom-6 md:right-6 md:h-14 md:w-14",
-          open && "rotate-90"
-        )}
-        title="仪表盘设置"
-      >
-        <SlidersHorizontal className="h-5 w-5 md:h-6 md:w-6" />
+      {open ? <DashboardWidgetPicker settings={settings} editing={editing} onChange={update} onCommand={command} onClose={() => setOpen(false)} /> : null}
+      <button type="button" onClick={() => setOpen((value) => !value)} aria-label={editing ? "完成仪表盘编辑" : "打开仪表盘组件"} aria-expanded={open} className={cn("fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[60] grid h-12 w-12 place-items-center rounded-full border border-sky-300/70 bg-sky-200/90 text-sky-800 shadow-[0_12px_32px_rgb(56_189_248_/_0.28)] backdrop-blur-xl transition hover:bg-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 md:bottom-6 md:right-6 md:h-[52px] md:w-[52px]", editing && "bg-sky-400 text-white", open && "scale-105")} title={editing ? "布局编辑中" : "仪表盘组件"}>
+        {editing ? <Check className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
       </button>
-      {open && (
-        <ModalViewport onClose={() => setOpen(false)}>
-          <GlassSurface material="thick" strong className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-[420px] flex-col text-card-foreground" role="dialog" aria-modal="true">
-            <div className="flex items-center justify-between border-b border-border/50 px-4 py-4">
-              <h2 className="text-base font-semibold">仪表盘设置</h2>
-              <button
-                type="button"
-                aria-label="关闭仪表盘设置"
-                onClick={() => setOpen(false)}
-                className="gary-icon-button h-8 w-8 rounded-[11px] border-0 bg-transparent text-muted-foreground shadow-none"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-5 overflow-y-auto px-4 py-4">
-              <section className="space-y-2">
-                <h3 className="text-sm font-medium text-foreground">显示模式</h3>
-                <SolidPlate className="flex items-center justify-between px-3 py-3">
-                  <div className="flex items-center gap-3">
-                    <Maximize2 className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="text-sm font-medium text-foreground">紧凑模式</div>
-                      <div className="text-xs text-muted-foreground">
-                        {settings.compact ? "已启用 - 缩小间距" : "已关闭 - 标准间距"}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => updateSettings({ ...settings, compact: !settings.compact })}
-                    className={cn(
-                      "gary-glass-button rounded-xl px-3 py-1.5 text-xs font-medium",
-                      settings.compact && "text-primary"
-                    )}
-                  >
-                    {settings.compact ? "开启" : "关闭"}
-                  </button>
-                </SolidPlate>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="text-sm font-medium text-foreground">组件显示</h3>
-                <div className="space-y-2">
-                  {dashboardComponentOptions.map((item) => {
-                    const visible = settings.visible[item.key];
-                    return (
-                      <SolidPlate key={item.key} className="flex items-center justify-between px-3 py-3">
-                        <span className="text-sm text-foreground">{item.label}</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleComponent(item.key)}
-                          className={cn(
-                            "gary-glass-button inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium",
-                            visible && "text-primary"
-                          )}
-                        >
-                          {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                          {visible ? "显示" : "隐藏"}
-                        </button>
-                      </SolidPlate>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="space-y-2 border-t border-border/50 pt-4">
-                <h3 className="text-sm font-medium text-foreground">布局操作</h3>
-                <button
-                  type="button"
-                  aria-label="重置仪表盘布局"
-                  onClick={resetLayout}
-                  className="gary-glass-button w-full rounded-xl px-3 py-2.5 text-sm font-medium"
-                >
-                  重置布局
-                </button>
-              </section>
-            </div>
-
-            <div className="border-t border-border/50 px-4 py-3 text-center text-xs text-muted-foreground">
-              拖拽组件标题栏可以调整位置 · 窗口调整时自动优化布局
-            </div>
-          </GlassSurface>
-        </ModalViewport>
-      )}
     </>
   );
 }

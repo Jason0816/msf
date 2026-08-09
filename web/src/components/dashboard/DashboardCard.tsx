@@ -8,6 +8,7 @@ interface DashboardCardProps {
   className?: string;
   headerRight?: React.ReactNode;
   compact?: boolean;
+  editing?: boolean;
   children: React.ReactNode;
 }
 
@@ -17,6 +18,7 @@ export function DashboardCard({
   className,
   headerRight,
   compact = false,
+  editing = false,
   children,
 }: DashboardCardProps) {
   return (
@@ -27,15 +29,19 @@ export function DashboardCard({
         className
       )}
     >
-      <div className={cn("flex items-center justify-between border-b border-border/35", compact ? "p-3" : "p-4")}>
+      <div className={cn(
+        "flex items-center justify-between border-b border-border/35",
+        editing && "dashboard-widget-drag-handle cursor-grab select-none active:cursor-grabbing",
+        compact ? "p-3" : "p-4"
+      )}>
         <div className="flex items-center gap-2">
-          <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab active:cursor-grabbing" />
+          <GripVertical className={cn("h-5 w-5 text-muted-foreground transition-opacity", editing ? "opacity-100" : "opacity-35")} aria-hidden="true" />
           <Icon className="h-5 w-5 text-primary" />
           <h3 className={cn("font-semibold", compact && "text-sm")}>{title}</h3>
         </div>
         {headerRight}
       </div>
-      <div className={cn("flex-1", compact ? "p-3" : "p-4")}>{children}</div>
+      <div className={cn("min-h-0 flex-1 overflow-hidden", compact ? "p-3" : "p-4")}>{children}</div>
     </GlassSurface>
   );
 }

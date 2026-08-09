@@ -38,10 +38,19 @@ function mergeRatePoints(placeholders: ChartPoint[], samples: ChartPoint[], late
     .map(([, point]) => point);
 }
 
-const CPU_COLOR = "oklch(60% 0.21 235)";
-const MEMORY_COLOR = "rgb(147, 51, 234)";
-const UPLOAD_COLOR = "rgb(22, 163, 74)";
-const CONNECTION_COLOR = "rgb(234, 179, 8)";
+export const SYSTEM_CHART_COLORS = {
+  cpu: "oklch(60% 0.21 235)",
+  memory: "rgb(147, 51, 234)",
+  upload: "rgb(74, 222, 128)",
+  download: "rgb(96, 165, 250)",
+  connections: "rgb(139, 92, 246)",
+} as const;
+
+const CPU_COLOR = SYSTEM_CHART_COLORS.cpu;
+const MEMORY_COLOR = SYSTEM_CHART_COLORS.memory;
+const UPLOAD_COLOR = SYSTEM_CHART_COLORS.upload;
+const DOWNLOAD_COLOR = SYSTEM_CHART_COLORS.download;
+const CONNECTION_COLOR = SYSTEM_CHART_COLORS.connections;
 
 function numberValue(value: unknown) {
   const numeric = Number(value || 0);
@@ -245,7 +254,7 @@ export function RateChart({
         const rows = Array.isArray(params) ? params : [params];
         const time = rows[0]?.value?.[0];
         const values = new Map(rows.map((row: any) => [row.seriesName, numberValue(row.value?.[1])]));
-        return `<div style="font-weight:600;margin-bottom:6px">${formatTooltipTime(time)}</div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${CONNECTION_COLOR}">连接数</span><b>${Math.round(values.get("连接数") ?? 0)}</b></div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${UPLOAD_COLOR}">上传速度</span><b>${formatByteRate(values.get("上传速度"))}</b></div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${CPU_COLOR}">下载速度</span><b>${formatByteRate(values.get("下载速度"))}</b></div>`;
+        return `<div style="font-weight:600;margin-bottom:6px">${formatTooltipTime(time)}</div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${CONNECTION_COLOR}">连接数</span><b>${Math.round(values.get("连接数") ?? 0)}</b></div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${UPLOAD_COLOR}">上传速度</span><b>${formatByteRate(values.get("上传速度"))}</b></div><div style="display:flex;justify-content:space-between;gap:20px"><span style="color:${DOWNLOAD_COLOR}">下载速度</span><b>${formatByteRate(values.get("下载速度"))}</b></div>`;
       },
     },
     yAxis: [
@@ -255,20 +264,20 @@ export function RateChart({
     series: [
       {
         id: "download-speed", type: "line", name: "下载速度", yAxisIndex: 0, symbol: "none", smooth: 0.2, showSymbol: false,
-        lineStyle: { width: 1.5, color: CPU_COLOR, cap: "round", join: "round" },
-        areaStyle: { color: areaGradient("oklch(60% 0.21 235 / .30)", "oklch(60% 0.21 235 / .05)") },
+        lineStyle: { width: 1.5, color: DOWNLOAD_COLOR, cap: "round", join: "round" },
+        areaStyle: { color: areaGradient("rgba(96,165,250,.28)", "rgba(96,165,250,.04)") },
         data: bufferedPoints.map((point) => stableTimePoint(point, point.downloadSpeed)), emphasis: { disabled: true },
       },
       {
         id: "upload-speed", type: "line", name: "上传速度", yAxisIndex: 0, symbol: "none", smooth: 0.2, showSymbol: false,
         lineStyle: { width: 1.5, color: UPLOAD_COLOR, cap: "round", join: "round" },
-        areaStyle: { color: areaGradient("rgba(22,163,74,.30)", "rgba(22,163,74,.05)") },
+        areaStyle: { color: areaGradient("rgba(74,222,128,.26)", "rgba(74,222,128,.04)") },
         data: bufferedPoints.map((point) => stableTimePoint(point, point.uploadSpeed)), emphasis: { disabled: true },
       },
       {
         id: "connections", type: "line", name: "连接数", yAxisIndex: 1, symbol: "none", smooth: 0.2, showSymbol: false,
         lineStyle: { width: 1.5, color: CONNECTION_COLOR, cap: "round", join: "round" },
-        areaStyle: { color: areaGradient("rgba(234,179,8,.30)", "rgba(234,179,8,.05)") },
+        areaStyle: { color: areaGradient("rgba(139,92,246,.24)", "rgba(139,92,246,.04)") },
         data: bufferedPoints.map((point) => stableTimePoint(point, point.connections)), emphasis: { disabled: true },
       },
     ],
