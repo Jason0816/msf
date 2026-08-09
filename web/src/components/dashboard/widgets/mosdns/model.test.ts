@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildMosdnsTrend, freezeMosdnsTrend, normalizeMosdnsCaches, safePercent } from "./model";
 import { taskProgressPercent } from "./MosdnsCacheSystemWidget";
+import { runtimeMetricStyle } from "./MosdnsRuntimeWidget";
 import { assertMosdnsActionSuccess, normalizeMosdnsTaskStatus } from "../../data/MosdnsDashboardProvider";
 
 describe("MosDNS dashboard model", () => {
@@ -55,5 +56,13 @@ describe("MosDNS dashboard model", () => {
     expect(() => assertMosdnsActionSuccess({ success: false, error: "规则生成失败" })).toThrow("规则生成失败");
     expect(() => assertMosdnsActionSuccess({ data: { success: false, message: "写入失败" } })).toThrow("写入失败");
     expect(assertMosdnsActionSuccess({ success: true })).toEqual({ success: true });
+  });
+
+  it("keeps the original semantic tones for wide runtime metrics", () => {
+    expect(runtimeMetricStyle("CPU 使用率").text).toContain("orange");
+    expect(runtimeMetricStyle("进程内存 (RSS)").text).toContain("blue");
+    expect(runtimeMetricStyle("堆内存使用").text).toContain("purple");
+    expect(runtimeMetricStyle("GC 次数").text).toContain("amber");
+    expect(runtimeMetricStyle("文件描述符").text).toContain("cyan");
   });
 });

@@ -6,7 +6,7 @@ describe("dashboard layout", () => {
   it("snaps desktop widths to the four registered sizes", () => {
     expect(closestAllowedWidth(5, [3, 4, 6, 12])).toBe(4);
     const cache = { id: "cache", type: "mosdns-cache-stats" as const };
-    expect(snapDashboardItem({ i: "cache", x: 11, y: -2, w: 3, h: 1 }, cache, "desktop")).toEqual({ i: "cache", x: 9, y: 0, w: 3, h: 4 });
+    expect(snapDashboardItem({ i: "cache", x: 11, y: -2, w: 3, h: 1 }, cache, "desktop")).toEqual({ i: "cache", x: 9, y: 0, w: 3, h: 5 });
   });
 
   it("never grants XS to widgets whose registry minimum is S", () => {
@@ -68,7 +68,7 @@ describe("dashboard layout", () => {
 
   it("adds a widget into an existing row gap without moving customized items", () => {
     const settings = createDefaultDashboardSettings();
-    settings.instances = [{ id: "left", type: "singbox-service" }, { id: "right", type: "mihomo-service" }];
+    settings.instances = [{ id: "left", type: "system-device" }, { id: "right", type: "mihomo-service" }];
     settings.layouts.desktop = [
       { i: "left", x: 0, y: 0, w: 4, h: 5 },
       { i: "right", x: 8, y: 0, w: 4, h: 5 },

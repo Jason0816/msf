@@ -35,7 +35,7 @@ export function DashboardCard({
         compact ? "p-3" : "p-4"
       )}>
         <div className="flex items-center gap-2">
-          <GripVertical className={cn("h-5 w-5 text-muted-foreground transition-opacity", editing ? "opacity-100" : "opacity-35")} aria-hidden="true" />
+          {editing ? <GripVertical className="h-4 w-4 text-muted-foreground/65" aria-hidden="true" /> : null}
           <Icon className="h-5 w-5 text-primary" />
           <h3 className={cn("font-semibold", compact && "text-sm")}>{title}</h3>
         </div>

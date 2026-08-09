@@ -4,5 +4,5 @@ export { SystemResourcesWidget, systemPercentScale } from "./SystemResourcesWidg
 export type { SystemResourcesWidgetProps } from "./SystemResourcesWidget";
 export { SystemRateWidget } from "./SystemRateWidget";
 export type { SystemRateWidgetProps } from "./SystemRateWidget";
-export { MihomoServiceWidget, MosdnsServiceWidget, SingboxServiceWidget, SystemServiceWidget } from "./SystemServiceWidget";
+export { MihomoServiceWidget, MosdnsServiceWidget, SystemServiceWidget } from "./SystemServiceWidget";
 export type { ServiceWidgetProps, SystemServiceWidgetProps } from "./SystemServiceWidget";

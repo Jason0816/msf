@@ -10,6 +10,7 @@ import {
   LockKeyhole,
   Waypoints,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { GlassSurface } from "@/components/liquid-glass/GlassSurface";
 import { formatBytes } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,10 @@ function delayTextTone(delay: number, low: number, high: number) {
   return "text-red-600 dark:text-red-300";
 }
 
+export function proxyGroupManagementActionsVisible(embedded: boolean) {
+  return !embedded;
+}
+
 export function ProxyGroupCard({
   group,
   collapsed,
@@ -46,6 +51,7 @@ export function ProxyGroupCard({
   disableTextSelect = false,
   manageHiddenGroups = false,
   nodeDialogMode = false,
+  embedded = false,
   low,
   high,
   onToggle,
@@ -76,6 +82,8 @@ export function ProxyGroupCard({
   disableTextSelect?: boolean;
   manageHiddenGroups?: boolean;
   nodeDialogMode?: boolean;
+  /** Reuse the complete card anatomy inside a parent surface (for example a Dashboard card). */
+  embedded?: boolean;
   low?: number;
   high?: number;
   onToggle: () => void;
@@ -104,22 +112,17 @@ export function ProxyGroupCard({
     group.finalOutboundName &&
     group.finalOutboundName !== selected,
   );
+  const managementActions = proxyGroupManagementActionsVisible(embedded) ? (
+    <>
+      {onChain ? <button type="button" onClick={onChain} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-muted-foreground hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/45" title="查看节点链路" aria-label={`查看 ${group.name} 节点链路`}><GitBranch className="h-4 w-4" /></button> : null}
+      {manageHiddenGroups && onToggleHidden ? <button type="button" onClick={onToggleHidden} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-muted-foreground hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/45" title={group.userHidden ? "取消用户隐藏" : "用户隐藏该策略组"} aria-label={group.userHidden ? `取消隐藏 ${group.name}` : `隐藏 ${group.name}`}>{group.userHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button> : null}
+      {onEdit ? <button type="button" onClick={onEdit} disabled={group.readOnly} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-muted-foreground hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 disabled:cursor-not-allowed disabled:opacity-40" title={group.readOnly ? "默认配置中的策略组只读" : "编辑策略组"} aria-label={group.readOnly ? `${group.name} 为只读策略组` : `编辑策略组 ${group.name}`}><Edit3 className="h-4 w-4" /></button> : null}
+    </>
+  ) : null;
 
-  return (
-    <GlassSurface
-      material="regular"
-      refractive
-      className={cn(
-        "min-w-0 self-start overflow-hidden rounded-2xl p-0 transition-[box-shadow,transform,opacity] duration-250",
-        reorderEnabled && "cursor-grab active:cursor-grabbing",
-        disableTextSelect && "select-none",
-        group.userHidden && "opacity-65",
-      )}
-      draggable={reorderEnabled}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
+  const content: ReactNode = (
+    <>
+
       <div className="flex min-w-0 items-start gap-0 px-4 py-3">
         <button
           type="button"
@@ -195,9 +198,7 @@ export function ProxyGroupCard({
           >
             {isTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : delay > 0 ? delay : <Gauge className="h-3.5 w-3.5" />}
           </button>
-          {onChain ? <button type="button" onClick={onChain} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-muted-foreground hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/45" title="查看节点链路" aria-label={`查看 ${group.name} 节点链路`}><GitBranch className="h-4 w-4" /></button> : null}
-          {manageHiddenGroups && onToggleHidden ? <button type="button" onClick={onToggleHidden} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-muted-foreground hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/45" title={group.userHidden ? "取消用户隐藏" : "用户隐藏该策略组"} aria-label={group.userHidden ? `取消隐藏 ${group.name}` : `隐藏 ${group.name}`}>{group.userHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button> : null}
-          {onEdit ? <button type="button" onClick={onEdit} disabled={group.readOnly} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-muted-foreground hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 disabled:cursor-not-allowed disabled:opacity-40" title={group.readOnly ? "默认配置中的策略组只读" : "编辑策略组"} aria-label={group.readOnly ? `${group.name} 为只读策略组` : `编辑策略组 ${group.name}`}><Edit3 className="h-4 w-4" /></button> : null}
+          {managementActions}
         </div>
       </div>
 
@@ -221,6 +222,42 @@ export function ProxyGroupCard({
           />
         </div>
       ) : null}
+    </>
+  );
+
+  const surfaceClassName = cn(
+    "min-w-0 self-start overflow-hidden rounded-2xl p-0 transition-[box-shadow,transform,opacity] duration-250",
+    reorderEnabled && "cursor-grab active:cursor-grabbing",
+    disableTextSelect && "select-none",
+    group.userHidden && "opacity-65",
+  );
+
+  if (embedded) {
+    return (
+      <div
+        className={surfaceClassName}
+        data-proxy-group-card="embedded"
+        draggable={reorderEnabled}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <GlassSurface
+      material="regular"
+      refractive
+      className={surfaceClassName}
+      draggable={reorderEnabled}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {content}
     </GlassSurface>
   );
 }

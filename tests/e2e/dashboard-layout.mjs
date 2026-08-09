@@ -98,7 +98,7 @@ async function openPicker(page) {
 }
 
 async function selectedCount(page) {
-  return page.evaluate(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v2") || "{}").instances?.length ?? 0);
+  return page.evaluate(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}").instances?.length ?? 0);
 }
 
 async function main() {
@@ -114,7 +114,7 @@ async function main() {
   };
   await context.addInitScript((settings) => {
     localStorage.setItem("msf_token", "dashboard-e2e-token");
-    if (!localStorage.getItem("msf.dashboard.settings.v2")) localStorage.setItem("msf.dashboard.settings.v1", JSON.stringify(settings));
+    if (!localStorage.getItem("msf.dashboard.settings.v3")) localStorage.setItem("msf.dashboard.settings.v1", JSON.stringify(settings));
   }, legacy);
   await context.addInitScript(() => {
     const nativeFetch = window.fetch.bind(window);
@@ -153,15 +153,48 @@ async function main() {
     await page.goto(`${baseURL}/`);
     await waitForStablePage(page);
 
-    const migrated = await page.evaluate(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v2") || "null"));
-    assert.equal(migrated.version, 2, "legacy settings should migrate to V2");
-    assert.equal(migrated.instances.filter((item) => item.type === "system-info").length, 1, "legacy info cards should merge");
-    assert.equal(migrated.instances.find((item) => item.type === "system-info").settings.tab, "hardware");
+    const migrated = await page.evaluate(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "null"));
+    assert.equal(migrated.version, 3, "legacy settings should migrate to V3");
+    assert.equal(migrated.instances.some((item) => item.type === "system-device"), false, "hidden legacy device card should stay hidden");
+    assert.equal(migrated.instances.some((item) => item.type === "system-hardware"), true, "legacy hardware card should remain independent");
+    assert.equal(migrated.instances.some((item) => item.type === "system-stats"), false, "hidden legacy stats card should stay hidden");
+    assert.equal(migrated.instances.some((item) => item.type === "singbox-service"), false, "Sing-Box must not migrate into V3");
 
     let dialog = await openPicker(page);
     for (const label of ["系统", "MosDNS", "Mihomo"]) await dialog.getByRole("heading", { name: label, exact: true }).waitFor();
+    const initialPickerGeometry = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const parentRect = element.parentElement?.getBoundingClientRect();
+      return { rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom }, position: style.position, left: style.left, right: style.right, top: style.top, bottom: style.bottom, parent: parentRect ? { x: parentRect.x, y: parentRect.y, width: parentRect.width, height: parentRect.height } : null };
+    });
+    assert.ok(initialPickerGeometry.rect.y >= 0 && initialPickerGeometry.rect.bottom <= 1000 && initialPickerGeometry.rect.x >= 0 && initialPickerGeometry.rect.right <= 1440, `desktop picker must stay in the viewport: ${JSON.stringify(initialPickerGeometry)}`);
+    await dialog.focus();
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(await dialog.evaluate((element) => element.contains(document.activeElement)), true, "modal focus must stay inside the picker");
     assert.equal(await dialog.locator('input[type="search"], input[placeholder*="搜索"]').count(), 0, "picker must not contain search");
-    assert.equal(await selectedCount(page), 6);
+    assert.equal(await selectedCount(page), 5);
+
+    const systemCollectionButton = dialog.getByRole("button", { name: /系统信息集合/ }).first();
+    assert.equal(await systemCollectionButton.getAttribute("aria-pressed"), "false");
+    await systemCollectionButton.click();
+    await dialog.getByRole("button", { name: "关闭组件面板" }).click();
+    await dialog.waitFor({ state: "detached" });
+    assert.equal(await page.getByRole("button", { name: "打开仪表盘组件" }).evaluate((element) => document.activeElement === element), true, "closing the picker should restore focus to the FAB");
+    const systemCollection = page.locator('[data-widget-type="system-info"]');
+    await systemCollection.waitFor();
+    await systemCollection.getByRole("button", { name: "选择集合内容" }).click();
+    await systemCollection.getByRole("button", { name: "统计信息", exact: true }).click();
+    const collectionState = await page.evaluate(() => {
+      const stored = JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}");
+      return {
+        pages: stored.instances?.find((item) => item.type === "system-info")?.settings?.pages,
+        hasIndependentHardware: stored.instances?.some((item) => item.type === "system-hardware"),
+      };
+    });
+    assert.deepEqual(collectionState.pages, ["device", "hardware"], "a collection should save multiple selected pages and keep paginated tabs");
+    assert.equal(collectionState.hasIndependentHardware, true, "an independent info card must coexist with the merged collection");
+    dialog = await openPicker(page);
 
     while ((await selectedCount(page)) < 15) {
       const candidate = dialog.locator('button[aria-pressed="false"]:not([disabled])').first();
@@ -187,10 +220,10 @@ async function main() {
     await page.locator('.dashboard-grid[data-editing="true"]').waitFor({ state: "detached" });
     await dialog.waitFor({ state: "detached" });
 
-    const beforeReload = await page.evaluate(() => localStorage.getItem("msf.dashboard.settings.v2"));
+    const beforeReload = await page.evaluate(() => localStorage.getItem("msf.dashboard.settings.v3"));
     await page.reload();
     await waitForStablePage(page);
-    assert.equal(await page.evaluate(() => localStorage.getItem("msf.dashboard.settings.v2")), beforeReload, "layout and visibility must survive refresh");
+    assert.equal(await page.evaluate(() => localStorage.getItem("msf.dashboard.settings.v3")), beforeReload, "layout and visibility must survive refresh");
 
     const viewports = [
       { width: 1440, height: 1000, name: "dashboard-1440.png" },
@@ -239,13 +272,26 @@ async function main() {
 
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.locator('.dashboard-grid[data-breakpoint="desktop"]').waitFor();
-    while ((await selectedCount(page)) > 10) await dialog.locator('button[aria-pressed="true"]').first().click();
-    for (const label of ["连接拓扑", "订阅流量统计", "连接统计", "规则命中统计", "自定义策略组控制"]) {
+    const requiredMihomoLabels = ["全球连接", "连接拓扑", "订阅流量统计", "连接统计", "规则命中统计", "自定义策略组控制"];
+    let removedNonTarget = true;
+    while (removedNonTarget) {
+      removedNonTarget = false;
+      const selectedWidgets = dialog.locator('button[aria-pressed="true"]');
+      for (let index = 0; index < await selectedWidgets.count(); index += 1) {
+        const button = selectedWidgets.nth(index);
+        const label = (await button.innerText()).trim();
+        if (requiredMihomoLabels.some((required) => label.includes(required))) continue;
+        await button.click();
+        removedNonTarget = true;
+        break;
+      }
+    }
+    for (const label of requiredMihomoLabels) {
       const widgetButton = dialog.getByRole("button", { name: new RegExp(label) }).first();
       assert.equal(await widgetButton.isDisabled(), false, `${label} should be addable`);
-      await widgetButton.click();
+      if (await widgetButton.getAttribute("aria-pressed") !== "true") await widgetButton.click();
     }
-    assert.equal(await selectedCount(page), 15, "the Mihomo-complete layout should exercise the maximum count");
+    assert.equal(await selectedCount(page), requiredMihomoLabels.length, "the Mihomo-complete layout should contain each requested widget exactly once");
     await dialog.getByRole("button", { name: "关闭组件面板" }).dispatchEvent("click");
     for (const type of ["mihomo-globe", "mihomo-topology", "mihomo-provider-traffic", "mihomo-connection-stats", "mihomo-rule-hits", "mihomo-proxy-group"]) {
       await page.locator(`[data-widget-type="${type}"]`).waitFor();

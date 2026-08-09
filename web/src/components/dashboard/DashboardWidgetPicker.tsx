@@ -1,8 +1,23 @@
-import { Check, Pencil, RotateCcw, Undo2, X } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { Check, GripHorizontal, Pencil, RotateCcw, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_MAX_WIDGETS, type DashboardSettings } from "@/lib/dashboard-settings";
 import { addDashboardWidget, removeDashboardWidget } from "./layout/dashboardLayout";
+import { clampWidgetPickerPosition, type WidgetPickerPosition } from "./layout/widgetPickerPosition";
 import { widgetCategoryLabels, widgetRegistry } from "./widgetRegistry";
+
+const PICKER_POSITION_KEY = "msf.dashboard.widget-picker-position";
+
+function loadPickerPosition(): WidgetPickerPosition | null {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(PICKER_POSITION_KEY) ?? "null") as Partial<WidgetPickerPosition> | null;
+    return parsed && Number.isFinite(parsed.x) && Number.isFinite(parsed.y)
+      ? { x: Number(parsed.x), y: Number(parsed.y) }
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export function DashboardWidgetPicker({ settings, editing, onChange, onCommand, onClose }: {
   settings: DashboardSettings;
@@ -12,14 +27,110 @@ export function DashboardWidgetPicker({ settings, editing, onChange, onCommand, 
   onClose: () => void;
 }) {
   const atLimit = settings.instances.length >= DASHBOARD_MAX_WIDGETS;
+  const dialogRef = useRef<HTMLElement>(null);
+  const dragOffsetRef = useRef<WidgetPickerPosition | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches);
+  const [position, setPosition] = useState<WidgetPickerPosition | null>(() => typeof window === "undefined" ? null : loadPickerPosition());
+
+  const clampPosition = (next: WidgetPickerPosition) => {
+    const rect = dialogRef.current?.getBoundingClientRect();
+    if (!rect) return next;
+    return clampWidgetPickerPosition(next, {
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      panelWidth: rect.width,
+      panelHeight: rect.height,
+    });
+  };
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus({ preventScroll: true });
+    const media = window.matchMedia("(min-width: 768px)");
+    const syncViewport = () => {
+      setDesktop(media.matches);
+      setPosition((current) => current && media.matches ? clampPosition(current) : current);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])"))
+        .filter((element) => !element.hidden && element.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!dialog.contains(document.activeElement) || !focusable.includes(document.activeElement as HTMLElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    media.addEventListener("change", syncViewport);
+    window.addEventListener("resize", syncViewport);
+    document.addEventListener("keydown", closeOnEscape);
+    syncViewport();
+    return () => {
+      media.removeEventListener("change", syncViewport);
+      window.removeEventListener("resize", syncViewport);
+      document.removeEventListener("keydown", closeOnEscape);
+      previousFocusRef.current?.focus({ preventScroll: true });
+    };
+  }, [onClose]);
+
+  const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!desktop || event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+    const rect = dialogRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragOffsetRef.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    setPosition({ x: rect.left, y: rect.top });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  const moveDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    const offset = dragOffsetRef.current;
+    if (!desktop || !offset) return;
+    setPosition(clampPosition({ x: event.clientX - offset.x, y: event.clientY - offset.y }));
+  };
+
+  const finishDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!dragOffsetRef.current) return;
+    dragOffsetRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setPosition((current) => {
+      if (current) sessionStorage.setItem(PICKER_POSITION_KEY, JSON.stringify(current));
+      return current;
+    });
+  };
+
+  const desktopPositionStyle: CSSProperties | undefined = desktop && position
+    ? { left: position.x, top: position.y, right: "auto", bottom: "auto" }
+    : undefined;
+
   return (
-    <div className="fixed inset-0 z-[59] bg-black/15 md:pointer-events-none md:bg-transparent" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-label="仪表盘组件" className="gary-glass gary-glass--thick pointer-events-auto absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-[28px] border border-border/60 bg-background/92 text-card-foreground shadow-2xl md:inset-auto md:bottom-24 md:right-6 md:w-[440px] md:max-h-[calc(100dvh-8rem)] md:rounded-[24px]">
-        <header className="flex items-center justify-between border-b border-border/50 px-4 py-4">
-          <div><h2 className="font-semibold">选择仪表盘组件</h2><p className="mt-0.5 text-xs text-muted-foreground">已选择 {settings.instances.length} / {DASHBOARD_MAX_WIDGETS}</p></div>
+    <div className="fixed inset-0 z-[59] bg-black/15 md:bg-black/[0.04]" onPointerDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="dashboard-widget-picker-title" style={desktopPositionStyle} className="gary-glass gary-glass--thick pointer-events-auto !absolute inset-x-0 bottom-0 flex max-h-[min(82dvh,720px)] flex-col overflow-hidden rounded-t-[28px] border border-border/60 bg-background/92 text-card-foreground shadow-2xl outline-none md:inset-auto md:bottom-24 md:right-6 md:w-[440px] md:max-h-[calc(100dvh-7.5rem)] md:rounded-[24px]">
+        <header onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} className={cn("relative flex shrink-0 items-center justify-between border-b border-border/50 px-4 py-4", desktop && "cursor-grab touch-none select-none active:cursor-grabbing")}>
+          <div><h2 id="dashboard-widget-picker-title" className="font-semibold">选择仪表盘组件</h2><p className="mt-0.5 text-xs text-muted-foreground">已选择 {settings.instances.length} / {DASHBOARD_MAX_WIDGETS}<span className="hidden md:inline"> · 拖动标题栏可移动</span></p></div>
+          <GripHorizontal className="pointer-events-none absolute left-1/2 top-2 hidden h-3.5 w-5 -translate-x-1/2 text-muted-foreground/45 md:block" aria-hidden="true" />
           <button type="button" onClick={onClose} aria-label="关闭组件面板" className="gary-icon-button h-9 w-9 rounded-xl border-0 bg-transparent shadow-none"><X className="h-4 w-4" /></button>
         </header>
-        <div className="max-h-[calc(82dvh-9rem)] space-y-5 overflow-y-auto px-4 py-4 md:max-h-[calc(100dvh-17rem)]">
+        <div className="scrollbar-hide min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4">
           {(["system", "mosdns", "mihomo"] as const).map((category) => (
             <section key={category} aria-labelledby={`widget-category-${category}`}>
               <h3 id={`widget-category-${category}`} className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{widgetCategoryLabels[category]}</h3>
@@ -53,7 +164,7 @@ export function DashboardWidgetPicker({ settings, editing, onChange, onCommand, 
           ))}
           {atLimit ? <p role="status" className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">最多启用 15 个组件，取消任意组件后可继续添加。</p> : null}
         </div>
-        <footer className="grid grid-cols-3 gap-2 border-t border-border/50 px-4 py-3">
+        <footer className="grid shrink-0 grid-cols-3 gap-2 border-t border-border/50 px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
           <button type="button" onClick={() => onCommand(editing ? "done" : "edit")} className="gary-glass-button gap-1.5 rounded-xl px-2 py-2 text-xs font-medium text-primary">{editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}{editing ? "完成编辑" : "编辑布局"}</button>
           <button type="button" disabled={!editing} onClick={() => onCommand("undo")} className="gary-glass-button gap-1.5 rounded-xl px-2 py-2 text-xs disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />撤销调整</button>
           <button type="button" onClick={() => onCommand("reset")} className="gary-glass-button gap-1.5 rounded-xl px-2 py-2 text-xs"><RotateCcw className="h-3.5 w-3.5" />默认布局</button>

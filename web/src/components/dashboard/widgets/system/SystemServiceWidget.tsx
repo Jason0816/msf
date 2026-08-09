@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Box, Play, RotateCw, Server, Square, Zap, type LucideIcon } from "lucide-react";
+import { Play, RotateCw, Server, Square, Zap, type LucideIcon } from "lucide-react";
 import { formatBytes, formatPercent } from "@/lib/api";
 import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { useSystemDashboardData, type ServiceAction } from "../../data";
 
 export type SystemServiceWidgetProps = {
-  serviceKey: "mosdns" | "mihomo" | "singbox";
+  serviceKey: "mosdns" | "mihomo";
   label: string;
   icon?: LucideIcon;
   onMessage?: (message: string) => void;
@@ -81,4 +81,3 @@ export function SystemServiceWidget({ serviceKey, label, icon: Icon = Server, on
 export type ServiceWidgetProps = Omit<SystemServiceWidgetProps, "serviceKey" | "label" | "icon">;
 export function MosdnsServiceWidget(props: ServiceWidgetProps) { return <SystemServiceWidget {...props} serviceKey="mosdns" label="MosDNS" icon={Server} />; }
 export function MihomoServiceWidget(props: ServiceWidgetProps) { return <SystemServiceWidget {...props} serviceKey="mihomo" label="Mihomo" icon={Zap} />; }
-export function SingboxServiceWidget(props: ServiceWidgetProps) { return <SystemServiceWidget {...props} serviceKey="singbox" label="Sing-Box" icon={Box} />; }

@@ -119,7 +119,9 @@ export function DashboardGrid({ settings, editing, onChange, renderWidget }: {
       </Responsive> : <div className="min-h-52" aria-hidden="true" />}
       <style>{`
         .dashboard-grid .react-grid-placeholder { background: oklch(82% 0.08 235 / .42); border: 1px solid oklch(72% 0.12 235 / .7); border-radius: 24px; opacity: 1; }
-        .dashboard-grid .react-grid-item > .react-resizable-handle::after { border-color: oklch(65% .14 235); width: 9px; height: 9px; right: 8px; bottom: 8px; }
+        .dashboard-grid .react-grid-item > .react-resizable-handle { opacity: .48; transition: opacity 150ms ease; }
+        .dashboard-grid .react-grid-item > .react-resizable-handle:hover { opacity: .82; }
+        .dashboard-grid .react-grid-item > .react-resizable-handle::after { border-color: oklch(65% .08 235 / .75); border-width: 0 1.5px 1.5px 0; width: 7px; height: 7px; right: 9px; bottom: 9px; }
         .dashboard-grid:not([data-editing]) .react-resizable-handle { display: none; }
         .dashboard-grid .react-grid-item.react-draggable-dragging { z-index: 50; filter: drop-shadow(0 18px 24px rgb(15 23 42 / .18)); }
       `}</style>

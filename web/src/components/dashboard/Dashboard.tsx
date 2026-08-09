@@ -38,7 +38,6 @@ import {
 import {
   MihomoServiceWidget,
   MosdnsServiceWidget,
-  SingboxServiceWidget,
   SystemInfoCollectionWidget,
   SystemRateWidget,
   SystemResourcesWidget,
@@ -63,6 +62,14 @@ function cloneSettings(settings: DashboardSettings) {
 function storedPage<T extends string>(instance: DashboardWidgetInstance, allowed: readonly T[], fallback: T): T {
   const page = instance.settings?.activePage;
   return typeof page === "string" && allowed.includes(page as T) ? page as T : fallback;
+}
+
+function storedPages<T extends string>(instance: DashboardWidgetInstance, allowed: readonly T[]): T[] {
+  const pages = Array.isArray(instance.settings?.pages)
+    ? instance.settings.pages.filter((page): page is T => typeof page === "string" && allowed.includes(page as T))
+    : [];
+  const unique = [...new Set(pages)];
+  return unique.length ? unique : [allowed[0]];
 }
 
 function ConnectedGlobeWidget({ size, editing }: { size: "m" | "l"; editing: boolean }) {
@@ -146,22 +153,38 @@ export function Dashboard() {
     const standardSize = size === "xs" ? "s" : size;
     switch (instance.type) {
       case "system-info": {
-        const page = (["device", "hardware", "stats"] as const).includes(instance.settings?.tab as SystemInfoPage) ? instance.settings?.tab as SystemInfoPage : "device";
-        return <SystemInfoCollectionWidget activePage={page} onActivePageChange={(tab) => updateInstanceSettings(instance, { tab })} size={standardSize} />;
+        const allowed = ["device", "hardware", "stats"] as const;
+        const pages = storedPages<SystemInfoPage>(instance, allowed);
+        const activePage = storedPage<SystemInfoPage>(instance, allowed, pages[0]);
+        return <SystemInfoCollectionWidget pages={pages} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} onPagesChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} size={standardSize} />;
       }
+      case "system-device": return <SystemInfoCollectionWidget pages={["device"]} activePage="device" size={standardSize} />;
+      case "system-hardware": return <SystemInfoCollectionWidget pages={["hardware"]} activePage="hardware" size={standardSize} />;
+      case "system-stats": return <SystemInfoCollectionWidget pages={["stats"]} activePage="stats" size={standardSize} />;
       case "system-resources": return <SystemResourcesWidget size={standardSize} />;
       case "system-rate": return <SystemRateWidget size={standardSize} />;
-      case "singbox-service": return <SingboxServiceWidget />;
       case "mosdns-service": return <MosdnsServiceWidget />;
       case "mosdns-query": return <MosdnsQueryWidget size={size} />;
       case "mosdns-info": {
-        const activePage = storedPage<MosdnsInfoPage>(instance, ["split", "domains", "slowest", "clients"], "split");
-        return <MosdnsInfoWidget size={size} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} />;
+        const allowed = ["split", "domains", "slowest", "clients"] as const;
+        const pages = storedPages<MosdnsInfoPage>(instance, allowed);
+        const activePage = storedPage<MosdnsInfoPage>(instance, allowed, pages[0]);
+        return <MosdnsInfoWidget size={size} pages={pages} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} onPagesChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} />;
       }
+      case "mosdns-info-split": return <MosdnsInfoWidget size={size} pages={["split"]} activePage="split" />;
+      case "mosdns-info-domains": return <MosdnsInfoWidget size={size} pages={["domains"]} activePage="domains" />;
+      case "mosdns-info-slowest": return <MosdnsInfoWidget size={size} pages={["slowest"]} activePage="slowest" />;
+      case "mosdns-info-clients": return <MosdnsInfoWidget size={size} pages={["clients"]} activePage="clients" />;
       case "mosdns-cache-stats": {
-        const activePage = storedPage<MosdnsCachePage>(instance, ["all", "domestic", "foreign", "node"], "all");
-        return <MosdnsCacheStatsWidget size={size} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} />;
+        const allowed = ["all", "domestic", "foreign", "node"] as const;
+        const pages = storedPages<MosdnsCachePage>(instance, allowed);
+        const activePage = storedPage<MosdnsCachePage>(instance, allowed, pages[0]);
+        return <MosdnsCacheStatsWidget size={size} pages={pages} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} onPagesChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} />;
       }
+      case "mosdns-cache-all": return <MosdnsCacheStatsWidget size={size} pages={["all"]} activePage="all" />;
+      case "mosdns-cache-domestic": return <MosdnsCacheStatsWidget size={size} pages={["domestic"]} activePage="domestic" />;
+      case "mosdns-cache-foreign": return <MosdnsCacheStatsWidget size={size} pages={["foreign"]} activePage="foreign" />;
+      case "mosdns-cache-node": return <MosdnsCacheStatsWidget size={size} pages={["node"]} activePage="node" />;
       case "mosdns-runtime": {
         const activePage = storedPage<MosdnsRuntimePage>(instance, ["overview", "memory", "system"], "overview");
         return <MosdnsRuntimeWidget size={size} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} />;

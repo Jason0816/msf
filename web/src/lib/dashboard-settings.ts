@@ -1,9 +1,10 @@
 "use client";
 
-export const DASHBOARD_SETTINGS_VERSION = 2 as const;
+export const DASHBOARD_SETTINGS_VERSION = 3 as const;
 export const DASHBOARD_MAX_WIDGETS = 15;
 export const DASHBOARD_SETTINGS_EVENT = "msf:dashboard-settings";
-export const DASHBOARD_SETTINGS_STORAGE_KEY = "msf.dashboard.settings.v2";
+export const DASHBOARD_SETTINGS_STORAGE_KEY = "msf.dashboard.settings.v3";
+export const V2_DASHBOARD_SETTINGS_STORAGE_KEY = "msf.dashboard.settings.v2";
 export const LEGACY_DASHBOARD_SETTINGS_STORAGE_KEY = "msf.dashboard.settings.v1";
 export const DASHBOARD_CORRUPT_BACKUP_PREFIX = "msf.dashboard.settings.corrupt";
 export const DASHBOARD_LAYOUT_COMMAND_EVENT = "msf:dashboard-layout-command";
@@ -14,13 +15,23 @@ export type DashboardWidgetCategory = "system" | "mosdns" | "mihomo";
 
 export type DashboardWidgetType =
   | "system-info"
+  | "system-device"
+  | "system-hardware"
+  | "system-stats"
   | "system-resources"
   | "system-rate"
-  | "singbox-service"
   | "mosdns-service"
   | "mosdns-query"
   | "mosdns-info"
+  | "mosdns-info-split"
+  | "mosdns-info-domains"
+  | "mosdns-info-slowest"
+  | "mosdns-info-clients"
   | "mosdns-cache-stats"
+  | "mosdns-cache-all"
+  | "mosdns-cache-domestic"
+  | "mosdns-cache-foreign"
+  | "mosdns-cache-node"
   | "mosdns-runtime"
   | "mosdns-resolution-policy"
   | "mosdns-cache-system"
@@ -70,8 +81,10 @@ export interface DashboardStorage {
 }
 
 const KNOWN_WIDGET_TYPES: ReadonlySet<string> = new Set<DashboardWidgetType>([
-  "system-info", "system-resources", "system-rate", "singbox-service",
-  "mosdns-service", "mosdns-query", "mosdns-info", "mosdns-cache-stats",
+  "system-info", "system-device", "system-hardware", "system-stats", "system-resources", "system-rate",
+  "mosdns-service", "mosdns-query", "mosdns-info", "mosdns-info-split",
+  "mosdns-info-domains", "mosdns-info-slowest", "mosdns-info-clients", "mosdns-cache-stats",
+  "mosdns-cache-all", "mosdns-cache-domestic", "mosdns-cache-foreign", "mosdns-cache-node",
   "mosdns-runtime", "mosdns-resolution-policy", "mosdns-cache-system",
   "mihomo-service", "mihomo-traffic", "mihomo-latency", "mihomo-globe",
   "mihomo-topology", "mihomo-provider-traffic", "mihomo-connection-stats",
@@ -79,22 +92,24 @@ const KNOWN_WIDGET_TYPES: ReadonlySet<string> = new Set<DashboardWidgetType>([
 ]);
 
 const DEFAULT_INSTANCES: DashboardWidgetInstance[] = [
-  { id: "system-info", type: "system-info", settings: { tab: "device" } },
+  { id: "system-device", type: "system-device" },
+  { id: "system-hardware", type: "system-hardware" },
   { id: "system-resources", type: "system-resources" },
   { id: "system-rate", type: "system-rate" },
+  { id: "system-stats", type: "system-stats" },
   { id: "mosdns-service", type: "mosdns-service" },
-  { id: "singbox-service", type: "singbox-service" },
   { id: "mihomo-service", type: "mihomo-service" },
 ];
 
 function createDefaultLayouts(): DashboardLayouts {
   return {
     desktop: [
-      { i: "system-info", x: 0, y: 0, w: 6, h: 5 },
+      { i: "system-device", x: 0, y: 0, w: 3, h: 5 },
+      { i: "system-hardware", x: 3, y: 0, w: 3, h: 5 },
       { i: "system-resources", x: 6, y: 0, w: 6, h: 5 },
       { i: "system-rate", x: 0, y: 5, w: 6, h: 6 },
-      { i: "mosdns-service", x: 6, y: 5, w: 4, h: 5 },
-      { i: "singbox-service", x: 0, y: 11, w: 4, h: 5 },
+      { i: "system-stats", x: 6, y: 5, w: 6, h: 5 },
+      { i: "mosdns-service", x: 0, y: 11, w: 4, h: 5 },
       { i: "mihomo-service", x: 4, y: 11, w: 4, h: 5 },
     ],
     tablet: DEFAULT_INSTANCES.map((item, index) => ({ i: item.id, x: (index % 2) * 3, y: Math.floor(index / 2) * 5, w: 3, h: 5 })),
@@ -125,11 +140,12 @@ function finiteInteger(value: unknown, fallback: number) {
 function sanitizeInstance(value: unknown): DashboardWidgetInstance | null {
   if (!isRecord(value) || typeof value.id !== "string" || !value.id.trim()) return null;
   if (typeof value.type !== "string" || !KNOWN_WIDGET_TYPES.has(value.type)) return null;
-  return {
+  const instance: DashboardWidgetInstance = {
     id: value.id.slice(0, 128),
     type: value.type as DashboardWidgetType,
     ...(isRecord(value.settings) ? { settings: value.settings } : {}),
   };
+  return { ...instance, settings: collectionSettings(instance.type, instance.settings) };
 }
 
 function sanitizeLayout(value: unknown, instanceIds: Set<string>, columns: number): DashboardLayoutItem[] {
@@ -186,21 +202,73 @@ export function normalizeDashboardSettings(value: unknown): DashboardSettings | 
   };
 }
 
+function selectedCollectionPages(settings: Record<string, unknown> | undefined, allowed: readonly string[]) {
+  const requested = Array.isArray(settings?.pages) ? settings.pages : allowed;
+  const pages = [...new Set(requested.filter((page): page is string => typeof page === "string" && allowed.includes(page)))];
+  return pages.length ? pages : [allowed[0]];
+}
+
+function collectionSettings(type: DashboardWidgetType, settings: Record<string, unknown> | undefined) {
+  if (type === "system-info") {
+    const allowed = ["device", "hardware", "stats"] as const;
+    const pages = selectedCollectionPages(settings, allowed);
+    const requestedActive = typeof settings?.activePage === "string" ? settings.activePage : settings?.tab;
+    const activePage = typeof requestedActive === "string" && pages.includes(requestedActive) ? requestedActive : pages[0];
+    const { tab: _legacyTab, ...rest } = settings ?? {};
+    return { ...rest, pages, activePage };
+  }
+  if (type === "mosdns-info") {
+    const allowed = ["split", "domains", "slowest", "clients"] as const;
+    const pages = selectedCollectionPages(settings, allowed);
+    const activePage = typeof settings?.activePage === "string" && pages.includes(settings.activePage) ? settings.activePage : pages[0];
+    return { ...settings, pages, activePage };
+  }
+  if (type === "mosdns-cache-stats") {
+    const allowed = ["all", "domestic", "foreign", "node"] as const;
+    const pages = selectedCollectionPages(settings, allowed);
+    const activePage = typeof settings?.activePage === "string" && pages.includes(settings.activePage) ? settings.activePage : pages[0];
+    return { ...settings, pages, activePage };
+  }
+  return settings;
+}
+
+export function migrateV2DashboardSettings(value: unknown): DashboardSettings | null {
+  if (!isRecord(value) || value.version !== 2 || !Array.isArray(value.instances) || !isRecord(value.layouts)) return null;
+  const instances: DashboardWidgetInstance[] = [];
+  const seenIds = new Set<string>();
+  for (const candidate of value.instances) {
+    if (!isRecord(candidate) || candidate.type === "singbox-service") continue;
+    const instance = sanitizeInstance(candidate);
+    if (!instance || seenIds.has(instance.id)) continue;
+    instances.push({ ...instance, settings: collectionSettings(instance.type, instance.settings) });
+    seenIds.add(instance.id);
+    if (instances.length >= DASHBOARD_MAX_WIDGETS) break;
+  }
+  const ids = new Set(instances.map((instance) => instance.id));
+  return {
+    version: DASHBOARD_SETTINGS_VERSION,
+    compact: Boolean(value.compact),
+    instances,
+    layouts: {
+      desktop: fillMissingLayout(sanitizeLayout(value.layouts.desktop, ids, 12), instances, 12),
+      tablet: fillMissingLayout(sanitizeLayout(value.layouts.tablet, ids, 6), instances, 6),
+      mobile: fillMissingLayout(sanitizeLayout(value.layouts.mobile, ids, 1), instances, 1),
+    },
+  };
+}
+
 export function migrateLegacyDashboardSettings(value: unknown): DashboardSettings | null {
   if (!isRecord(value)) return null;
   const legacy = value as LegacyDashboardSettings;
   const visible = isRecord(legacy.visible) ? legacy.visible : {};
   const instances: DashboardWidgetInstance[] = [];
   const add = (id: string, type: DashboardWidgetType, settings?: Record<string, unknown>) => instances.push({ id, type, ...(settings ? { settings } : {}) });
-  const legacyInfoVisible = ["device", "hardware", "stats"].some((key) => visible[key] !== false);
-  if (legacyInfoVisible) {
-    const tab = visible.device !== false ? "device" : visible.hardware !== false ? "hardware" : "stats";
-    add("system-info", "system-info", { tab });
-  }
+  if (visible.device !== false) add("system-device", "system-device");
+  if (visible.hardware !== false) add("system-hardware", "system-hardware");
+  if (visible.stats !== false) add("system-stats", "system-stats");
   if (visible.resources !== false) add("system-resources", "system-resources");
   if (visible.rate !== false) add("system-rate", "system-rate");
   if (visible.mosdns !== false) add("mosdns-service", "mosdns-service");
-  if (visible.singbox !== false) add("singbox-service", "singbox-service");
   if (visible.mihomo !== false) add("mihomo-service", "mihomo-service");
   const defaults = createDefaultDashboardSettings();
   const ids = new Set(instances.map((instance) => instance.id));
@@ -218,25 +286,42 @@ export function migrateLegacyDashboardSettings(value: unknown): DashboardSetting
 
 function backupCorruptValue(storage: DashboardStorage, key: string, raw: string) {
   try {
-    storage.setItem(`${DASHBOARD_CORRUPT_BACKUP_PREFIX}.${Date.now()}.${key.endsWith("v1") ? "v1" : "v2"}`, raw);
+    const suffix = key.endsWith("v1") ? "v1" : key.endsWith("v2") ? "v2" : "v3";
+    storage.setItem(`${DASHBOARD_CORRUPT_BACKUP_PREFIX}.${Date.now()}.${suffix}`, raw);
   } catch {
     // A full or restricted storage must not prevent the dashboard from opening.
   }
 }
 
 export function loadDashboardSettingsFromStorage(storage: DashboardStorage): DashboardSettings {
-  const v2Raw = storage.getItem(DASHBOARD_SETTINGS_STORAGE_KEY);
+  const v3Raw = storage.getItem(DASHBOARD_SETTINGS_STORAGE_KEY);
+  if (v3Raw !== null) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(v3Raw);
+    } catch {
+      backupCorruptValue(storage, DASHBOARD_SETTINGS_STORAGE_KEY, v3Raw);
+      parsed = null;
+    }
+    const normalized = normalizeDashboardSettings(parsed);
+    if (normalized) return normalized;
+    if (parsed !== null) backupCorruptValue(storage, DASHBOARD_SETTINGS_STORAGE_KEY, v3Raw);
+  }
+  const v2Raw = storage.getItem(V2_DASHBOARD_SETTINGS_STORAGE_KEY);
   if (v2Raw !== null) {
     let parsed: unknown;
     try {
       parsed = JSON.parse(v2Raw);
     } catch {
-      backupCorruptValue(storage, DASHBOARD_SETTINGS_STORAGE_KEY, v2Raw);
+      backupCorruptValue(storage, V2_DASHBOARD_SETTINGS_STORAGE_KEY, v2Raw);
       parsed = null;
     }
-    const normalized = normalizeDashboardSettings(parsed);
-    if (normalized) return normalized;
-    if (parsed !== null) backupCorruptValue(storage, DASHBOARD_SETTINGS_STORAGE_KEY, v2Raw);
+    const migrated = migrateV2DashboardSettings(parsed);
+    if (migrated) {
+      storage.setItem(DASHBOARD_SETTINGS_STORAGE_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+    if (parsed !== null) backupCorruptValue(storage, V2_DASHBOARD_SETTINGS_STORAGE_KEY, v2Raw);
   }
   const legacyRaw = storage.getItem(LEGACY_DASHBOARD_SETTINGS_STORAGE_KEY);
   if (legacyRaw !== null) {
@@ -275,5 +360,6 @@ export function createWidgetInstance(type: DashboardWidgetType, existing: Dashbo
   let suffix = 1;
   let id: string = type;
   while (used.has(id)) id = `${type}-${++suffix}`;
-  return { id, type };
+  const settings = collectionSettings(type, undefined);
+  return { id, type, ...(settings ? { settings } : {}) };
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { GlassSurface } from "./GlassSurface";
 
@@ -13,15 +13,17 @@ export function GlassSegmentedControl<T extends string>({
   onChange,
   className,
   ariaLabel,
+  style,
 }: {
   value: T;
   options: Array<GlassSegmentedOption<T>>;
   onChange: (value: T) => void;
   className?: string;
   ariaLabel: string;
+  style?: CSSProperties;
 }) {
   return (
-    <GlassSurface material="regular" flat className={cn("gary-segmented", className)} role="tablist" aria-label={ariaLabel}>
+    <GlassSurface material="regular" flat className={cn("gary-segmented", className)} role="tablist" aria-label={ariaLabel} style={style}>
       {options.map((option) => (
         <button
           key={option.id}

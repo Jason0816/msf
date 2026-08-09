@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check, LayoutGrid } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import {
@@ -20,6 +20,7 @@ export function Fab() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [settings, setSettings] = useState<DashboardSettings>(() => loadDashboardSettings());
+  const closePicker = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     const sync = () => setSettings(loadDashboardSettings());
@@ -52,7 +53,7 @@ export function Fab() {
 
   return (
     <>
-      {open ? <DashboardWidgetPicker settings={settings} editing={editing} onChange={update} onCommand={command} onClose={() => setOpen(false)} /> : null}
+      {open ? <DashboardWidgetPicker settings={settings} editing={editing} onChange={update} onCommand={command} onClose={closePicker} /> : null}
       <button type="button" onClick={handleFabClick} aria-label={editing ? "完成仪表盘编辑" : "打开仪表盘组件"} aria-expanded={open} className={cn("fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[60] grid h-12 w-12 place-items-center rounded-full border border-sky-300/70 bg-sky-200/90 text-sky-800 shadow-[0_12px_32px_rgb(56_189_248_/_0.28)] backdrop-blur-xl transition hover:bg-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 md:bottom-6 md:right-6 md:h-[52px] md:w-[52px]", editing && "bg-sky-400 text-white", open && "scale-105")} title={editing ? "完成仪表盘编辑" : "仪表盘组件"}>
         {editing ? <Check className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
       </button>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { activeProxyTestJob, resolveDashboardProxyGroup } from "@/components/dashboard/widgets/mihomo/MihomoProxyGroupWidget";
+import { activeProxyTestingKeys, activeProxyTestJob, dashboardProxyGroupView, resolveDashboardProxyGroup } from "@/components/dashboard/widgets/mihomo/MihomoProxyGroupWidget";
+import { proxyGroupManagementActionsVisible } from "@/components/mihomo/proxies/ProxyGroupCard";
 import { createEmptyProxyStore, patchProxySelection } from "./proxyStore";
 import type { ProxyEntity, ProxyKey, ProxyStore } from "./types";
 import type { ProxyRuntimeTestJob } from "./useProxyRuntime";
@@ -44,5 +45,29 @@ describe("dashboard proxy runtime view model", () => {
     expect(activeProxyTestJob({ g: groupJob }, groupKey)?.completed).toBe(2);
     expect(activeProxyTestJob({ n: nodeJob }, firstKey)?.id).toBe("n");
     expect(activeProxyTestJob({ g: { ...groupJob, status: "done" } }, groupKey)).toBeUndefined();
+    expect(activeProxyTestingKeys({ g: groupJob, n: nodeJob })).toEqual(new Set([groupKey, firstKey]));
+  });
+
+  it("adapts runtime state to the same card model as the proxy page", () => {
+    const current = store();
+    current.entities[firstKey] = { ...current.entities[firstKey], delay: 28, icon: "/node-a.svg", providerName: "Airport A" };
+    const view = dashboardProxyGroupView(current, current.entities[groupKey], { pendingSelection: secondKey, trafficSpeed: 2048 });
+
+    expect(view).toMatchObject({
+      key: groupKey,
+      selectedKey: secondKey,
+      selectedName: "Node B",
+      trafficSpeed: 2048,
+      readOnly: true,
+    });
+    expect(view.nodes).toEqual([
+      expect.objectContaining({ key: firstKey, delay: 28, icon: "/node-a.svg", providerName: "Airport A" }),
+      expect.objectContaining({ key: secondKey, name: "Node B" }),
+    ]);
+  });
+
+  it("suppresses the proxy page's three management actions in embedded dashboard cards", () => {
+    expect(proxyGroupManagementActionsVisible(false)).toBe(true);
+    expect(proxyGroupManagementActionsVisible(true)).toBe(false);
   });
 });
