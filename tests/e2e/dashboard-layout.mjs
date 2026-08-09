@@ -183,9 +183,9 @@ async function main() {
     const desktopResizeHandle = page.locator(".react-resizable-handle").first();
     await desktopResizeHandle.waitFor();
     assert.notEqual(await desktopResizeHandle.evaluate((element) => getComputedStyle(element).display), "none", "desktop edit mode should show resize handles");
-    await dialog.getByRole("button", { name: "完成编辑" }).click();
+    await page.getByRole("button", { name: "完成仪表盘编辑" }).click();
     await page.locator('.dashboard-grid[data-editing="true"]').waitFor({ state: "detached" });
-    await dialog.getByRole("button", { name: "关闭组件面板" }).dispatchEvent("click");
+    await dialog.waitFor({ state: "detached" });
 
     const beforeReload = await page.evaluate(() => localStorage.getItem("msf.dashboard.settings.v2"));
     await page.reload();

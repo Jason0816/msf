@@ -20,7 +20,8 @@ export type {
 export { MosdnsDashboardProvider, normalizeMosdnsControl, normalizeMosdnsSwitches } from "./MosdnsDashboardProvider";
 export { useMosdnsDashboardData } from "./useMosdnsDashboardData";
 export type { MosdnsDashboardData, MosdnsDataScope } from "./useMosdnsDashboardData";
-export { MihomoDashboardProvider } from "./MihomoDashboardProvider";
+export { MihomoDashboardProvider, mihomoDashboardScopesForWidgetTypes } from "./MihomoDashboardProvider";
+export type { MihomoDashboardScope } from "./MihomoDashboardProvider";
 export {
   mergeMihomoTrafficHistory,
   normalizeMihomoConnections,

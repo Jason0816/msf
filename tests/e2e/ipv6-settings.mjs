@@ -177,7 +177,7 @@ async function main() {
     assert.equal(await ipv6.getAttribute("aria-checked"), "true");
 
     await page.reload();
-    await ipv6.waitFor();
+    await page.getByRole("radio", { name: "IPv6 优先", exact: true, checked: true }).waitFor();
     assert.equal(await ipv6.getAttribute("aria-checked"), "true", "saved priority should survive refresh");
 
     failNextPriority = true;

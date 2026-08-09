@@ -41,11 +41,19 @@ export function Fab() {
     saveDashboardSettings(next);
   };
   const command = (value: DashboardLayoutCommand) => window.dispatchEvent(new CustomEvent(DASHBOARD_LAYOUT_COMMAND_EVENT, { detail: { command: value } }));
+  const handleFabClick = () => {
+    if (editing) {
+      command("done");
+      setOpen(false);
+      return;
+    }
+    setOpen((value) => !value);
+  };
 
   return (
     <>
       {open ? <DashboardWidgetPicker settings={settings} editing={editing} onChange={update} onCommand={command} onClose={() => setOpen(false)} /> : null}
-      <button type="button" onClick={() => setOpen((value) => !value)} aria-label={editing ? "完成仪表盘编辑" : "打开仪表盘组件"} aria-expanded={open} className={cn("fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[60] grid h-12 w-12 place-items-center rounded-full border border-sky-300/70 bg-sky-200/90 text-sky-800 shadow-[0_12px_32px_rgb(56_189_248_/_0.28)] backdrop-blur-xl transition hover:bg-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 md:bottom-6 md:right-6 md:h-[52px] md:w-[52px]", editing && "bg-sky-400 text-white", open && "scale-105")} title={editing ? "布局编辑中" : "仪表盘组件"}>
+      <button type="button" onClick={handleFabClick} aria-label={editing ? "完成仪表盘编辑" : "打开仪表盘组件"} aria-expanded={open} className={cn("fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[60] grid h-12 w-12 place-items-center rounded-full border border-sky-300/70 bg-sky-200/90 text-sky-800 shadow-[0_12px_32px_rgb(56_189_248_/_0.28)] backdrop-blur-xl transition hover:bg-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 md:bottom-6 md:right-6 md:h-[52px] md:w-[52px]", editing && "bg-sky-400 text-white", open && "scale-105")} title={editing ? "完成仪表盘编辑" : "仪表盘组件"}>
         {editing ? <Check className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
       </button>
     </>

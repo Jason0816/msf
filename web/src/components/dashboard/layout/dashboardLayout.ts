@@ -15,6 +15,45 @@ export function closestAllowedWidth(width: number, allowed: number[]) {
   return allowed.reduce((best, candidate) => Math.abs(candidate - width) < Math.abs(best - width) ? candidate : best, allowed[0]);
 }
 
+function collides(left: DashboardLayoutItem, right: DashboardLayoutItem) {
+  return left.x < right.x + right.w
+    && left.x + left.w > right.x
+    && left.y < right.y + right.h
+    && left.y + left.h > right.y;
+}
+
+/** Finds the first top-to-bottom, left-to-right grid position that fits. */
+export function findFirstDashboardSlot(layout: DashboardLayoutItem[], width: number, height: number, columns: number) {
+  const w = Math.max(1, Math.min(columns, Math.round(width)));
+  const h = Math.max(1, Math.round(height));
+  const maxY = layout.reduce((value, item) => Math.max(value, item.y + item.h), 0);
+  const rowStarts = [...new Set([
+    0,
+    ...layout.map((item) => Math.max(0, item.y)),
+    ...layout.map((item) => Math.max(0, item.y + item.h)),
+    maxY,
+  ])].sort((left, right) => left - right);
+  for (const y of rowStarts) {
+    for (let x = 0; x <= columns - w; x += 1) {
+      const candidate: DashboardLayoutItem = { i: "__candidate__", x, y, w, h };
+      if (!layout.some((item) => collides(candidate, item))) return { x, y };
+    }
+  }
+  return { x: 0, y: maxY };
+}
+
+/** Deterministic first-fit packing used by defaults and acceptance fixtures. */
+export function packDashboardLayout(items: DashboardLayoutItem[], columns: number): DashboardLayoutItem[] {
+  const packed: DashboardLayoutItem[] = [];
+  for (const item of items) {
+    const width = Math.max(1, Math.min(columns, Math.round(item.w)));
+    const height = Math.max(1, Math.round(item.h));
+    const position = findFirstDashboardSlot(packed, width, height, columns);
+    packed.push({ ...item, ...position, w: width, h: height });
+  }
+  return packed;
+}
+
 export function snapDashboardItem(item: DashboardLayoutItem, instance: DashboardWidgetInstance, breakpoint: DashboardBreakpoint): DashboardLayoutItem {
   const definition = getWidgetDefinition(instance.type);
   const columns = BREAKPOINT_COLUMNS[breakpoint];
@@ -38,22 +77,12 @@ function defaultWidth(instance: DashboardWidgetInstance, breakpoint: DashboardBr
 
 export function buildDefaultLayout(instances: DashboardWidgetInstance[], breakpoint: DashboardBreakpoint): DashboardLayoutItem[] {
   const columns = BREAKPOINT_COLUMNS[breakpoint];
-  let x = 0;
-  let y = 0;
-  let rowHeight = 0;
-  return instances.map((instance) => {
+  const items = instances.map((instance) => {
     const definition = getWidgetDefinition(instance.type);
     const width = defaultWidth(instance, breakpoint);
-    if (x + width > columns) {
-      y += rowHeight;
-      x = 0;
-      rowHeight = 0;
-    }
-    const item = { i: instance.id, x, y, w: width, h: definition.defaultHeight };
-    x += width;
-    rowHeight = Math.max(rowHeight, item.h);
-    return item;
+    return { i: instance.id, x: 0, y: 0, w: width, h: definition.defaultHeight };
   });
+  return packDashboardLayout(items, columns);
 }
 
 export function resetDashboardLayouts(settings: DashboardSettings): DashboardSettings {
@@ -74,13 +103,20 @@ export function addDashboardWidget(settings: DashboardSettings, type: DashboardW
   const instance = createWidgetInstance(type, settings.instances);
   if (!instance) return null;
   const instances = [...settings.instances, instance];
+  const appendAtFirstSlot = (layout: DashboardLayoutItem[], breakpoint: DashboardBreakpoint) => {
+    const definition = getWidgetDefinition(instance.type);
+    const width = defaultWidth(instance, breakpoint);
+    const columns = BREAKPOINT_COLUMNS[breakpoint];
+    const position = findFirstDashboardSlot(layout, width, definition.defaultHeight, columns);
+    return [...layout, { i: instance.id, ...position, w: width, h: definition.defaultHeight }];
+  };
   return {
     ...settings,
     instances,
     layouts: {
-      desktop: [...settings.layouts.desktop, ...buildDefaultLayout([instance], "desktop").map((item) => ({ ...item, y: bottom(settings.layouts.desktop) }))],
-      tablet: [...settings.layouts.tablet, ...buildDefaultLayout([instance], "tablet").map((item) => ({ ...item, y: bottom(settings.layouts.tablet) }))],
-      mobile: [...settings.layouts.mobile, ...buildDefaultLayout([instance], "mobile").map((item) => ({ ...item, y: bottom(settings.layouts.mobile) }))],
+      desktop: appendAtFirstSlot(settings.layouts.desktop, "desktop"),
+      tablet: appendAtFirstSlot(settings.layouts.tablet, "tablet"),
+      mobile: appendAtFirstSlot(settings.layouts.mobile, "mobile"),
     },
   };
 }
@@ -95,8 +131,4 @@ export function removeDashboardWidget(settings: DashboardSettings, instanceId: s
       mobile: settings.layouts.mobile.filter((item) => item.i !== instanceId),
     },
   };
-}
-
-function bottom(layout: DashboardLayoutItem[]) {
-  return layout.reduce((value, item) => Math.max(value, item.y + item.h), 0);
 }

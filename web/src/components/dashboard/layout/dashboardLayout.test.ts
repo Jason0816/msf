@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultDashboardSettings } from "@/lib/dashboard-settings";
-import { addDashboardWidget, buildDefaultLayout, closestAllowedWidth, removeDashboardWidget, snapDashboardItem } from "./dashboardLayout";
+import { addDashboardWidget, buildDefaultLayout, closestAllowedWidth, packDashboardLayout, removeDashboardWidget, snapDashboardItem } from "./dashboardLayout";
 
 describe("dashboard layout", () => {
   it("snaps desktop widths to the four registered sizes", () => {
@@ -29,5 +29,56 @@ describe("dashboard layout", () => {
     while (settings.instances.length < 15) settings = addDashboardWidget(settings, "mihomo-proxy-group")!;
     expect(settings.instances).toHaveLength(15);
     expect(addDashboardWidget(settings, "mihomo-proxy-group")).toBeNull();
+  });
+
+  it("packs four XS widgets into one desktop row", () => {
+    const packed = packDashboardLayout(Array.from({ length: 4 }, (_, index) => ({ i: `xs-${index}`, x: 0, y: 0, w: 3, h: 4 })), 12);
+    expect(packed.map(({ x, y }) => [x, y])).toEqual([[0, 0], [3, 0], [6, 0], [9, 0]]);
+  });
+
+  it("packs three S widgets into one desktop row", () => {
+    const packed = packDashboardLayout(Array.from({ length: 3 }, (_, index) => ({ i: `s-${index}`, x: 0, y: 0, w: 4, h: 4 })), 12);
+    expect(packed.map(({ x, y }) => [x, y])).toEqual([[0, 0], [4, 0], [8, 0]]);
+  });
+
+  it("packs two M widgets into one desktop row", () => {
+    const packed = packDashboardLayout(Array.from({ length: 2 }, (_, index) => ({ i: `m-${index}`, x: 0, y: 0, w: 6, h: 5 })), 12);
+    expect(packed.map(({ x, y }) => [x, y])).toEqual([[0, 0], [6, 0]]);
+  });
+
+  it("fills the first mixed-size hole before starting a new row", () => {
+    const packed = packDashboardLayout([
+      { i: "m", x: 0, y: 0, w: 6, h: 5 },
+      { i: "xs-1", x: 0, y: 0, w: 3, h: 4 },
+      { i: "xs-2", x: 0, y: 0, w: 3, h: 4 },
+      { i: "s", x: 0, y: 0, w: 4, h: 4 },
+      { i: "m-2", x: 0, y: 0, w: 6, h: 5 },
+    ], 12);
+    expect(packed.map(({ x, y }) => [x, y])).toEqual([[0, 0], [6, 0], [9, 0], [6, 4], [0, 5]]);
+  });
+
+  it("fills vertical space below a short card before the tallest column ends", () => {
+    const packed = packDashboardLayout([
+      { i: "tall", x: 0, y: 0, w: 6, h: 10 },
+      { i: "short", x: 0, y: 0, w: 6, h: 4 },
+      { i: "fill", x: 0, y: 0, w: 6, h: 5 },
+    ], 12);
+    expect(packed.map(({ x, y }) => [x, y])).toEqual([[0, 0], [6, 0], [6, 4]]);
+  });
+
+  it("adds a widget into an existing row gap without moving customized items", () => {
+    const settings = createDefaultDashboardSettings();
+    settings.instances = [{ id: "left", type: "singbox-service" }, { id: "right", type: "mihomo-service" }];
+    settings.layouts.desktop = [
+      { i: "left", x: 0, y: 0, w: 4, h: 5 },
+      { i: "right", x: 8, y: 0, w: 4, h: 5 },
+    ];
+    settings.layouts.tablet = [];
+    settings.layouts.mobile = [];
+    const added = addDashboardWidget(settings, "mosdns-service")!;
+    expect(added.layouts.desktop).toEqual([
+      ...settings.layouts.desktop,
+      { i: "mosdns-service", x: 4, y: 0, w: 4, h: 5 },
+    ]);
   });
 });

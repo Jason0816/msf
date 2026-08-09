@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Puzzle } from "lucide-react";
 import {
   DASHBOARD_LAYOUT_COMMAND_EVENT,
@@ -12,7 +12,7 @@ import {
   type DashboardSettings,
   type DashboardWidgetInstance,
 } from "@/lib/dashboard-settings";
-import { DashboardDataProvider, DashboardProxyRuntimeProvider, MihomoDashboardProvider, MosdnsDashboardProvider, useMihomoDashboardData } from "./data";
+import { DashboardDataProvider, DashboardProxyRuntimeProvider, MihomoDashboardProvider, MosdnsDashboardProvider, mihomoDashboardScopesForWidgetTypes, useMihomoDashboardData } from "./data";
 import {
   MosdnsCacheStatsWidget,
   MosdnsCacheSystemWidget,
@@ -80,6 +80,8 @@ export function Dashboard() {
   const [editing, setEditing] = useState(false);
   const settingsRef = useRef(settings);
   const editSnapshotRef = useRef<DashboardSettings["layouts"] | null>(null);
+  const mihomoScopes = useMemo(() => mihomoDashboardScopesForWidgetTypes(settings.instances.map((instance) => instance.type)), [settings.instances]);
+  const connectionHistoryRequested = settings.instances.some((instance) => instance.type === "mihomo-connection-stats");
 
   const applySettings = useCallback((next: DashboardSettings, persist = true) => {
     settingsRef.current = next;
@@ -193,7 +195,7 @@ export function Dashboard() {
   return (
     <DashboardDataProvider>
       <MosdnsDashboardProvider>
-        <MihomoDashboardProvider>
+        <MihomoDashboardProvider enabledScopes={mihomoScopes} connectionHistoryRequested={connectionHistoryRequested}>
           {content}
         </MihomoDashboardProvider>
       </MosdnsDashboardProvider>

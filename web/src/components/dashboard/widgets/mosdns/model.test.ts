@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildMosdnsTrend, freezeMosdnsTrend, normalizeMosdnsCaches, safePercent } from "./model";
+import { taskProgressPercent } from "./MosdnsCacheSystemWidget";
+import { assertMosdnsActionSuccess, normalizeMosdnsTaskStatus } from "../../data/MosdnsDashboardProvider";
 
 describe("MosDNS dashboard model", () => {
   it("never produces NaN for empty cache payloads", () => {
@@ -26,5 +28,32 @@ describe("MosDNS dashboard model", () => {
     expect(rows.every((row) => Number.isFinite(row.durationMs))).toBe(true);
     const changed = rows.map((row) => ({ ...row, queries: row.queries + 10 }));
     expect(freezeMosdnsTrend(rows, changed)).toEqual(rows);
+  });
+
+  it("keeps cache task status, progress, duration and recent records", () => {
+    const status = normalizeMosdnsTaskStatus({
+      task_status: {
+        running: true,
+        progress: 37.5,
+        last_run_at: "2026-08-09 19:00:00",
+        last_run_duration: "12 秒",
+        records: [{ time: "19:00:01", message: "已生成国内缓存" }, "完成国外缓存"],
+      },
+    });
+    expect(status).toEqual({
+      currentStatus: "运行中",
+      lastRunTime: "2026-08-09 19:00:00",
+      lastRunRelative: "进度 37.5%",
+      lastRunDuration: "12 秒",
+      records: ["19:00:01 已生成国内缓存", "完成国外缓存"],
+    });
+    expect(taskProgressPercent(status.lastRunRelative)).toBe(37.5);
+    expect(taskProgressPercent("5 分钟前")).toBeNull();
+  });
+
+  it("treats HTTP 200 with success false as a failed cache action", () => {
+    expect(() => assertMosdnsActionSuccess({ success: false, error: "规则生成失败" })).toThrow("规则生成失败");
+    expect(() => assertMosdnsActionSuccess({ data: { success: false, message: "写入失败" } })).toThrow("写入失败");
+    expect(assertMosdnsActionSuccess({ success: true })).toEqual({ success: true });
   });
 });
