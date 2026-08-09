@@ -21,11 +21,12 @@ const pageMeta: Record<MosdnsCachePage, { icon: ComponentType<{ className?: stri
   node: { icon: Server, iconClass: "text-emerald-500", surfaceClass: "bg-emerald-500/10" },
 };
 
-export function MosdnsCacheStatsWidget({ activePage, onActivePageChange, pages = ["all", "domestic", "foreign", "node"], onPagesChange, size = "s" }: {
+export function MosdnsCacheStatsWidget({ activePage, onActivePageChange, pages = ["all", "domestic", "foreign", "node"], onPagesChange, showNavigation = true, size = "s" }: {
   activePage?: MosdnsCachePage;
   onActivePageChange?: (page: MosdnsCachePage) => void;
   pages?: MosdnsCachePage[];
   onPagesChange?: (pages: MosdnsCachePage[]) => void;
+  showNavigation?: boolean;
   size?: MosdnsWidgetSize;
 }) {
   const { overview } = useMosdnsDashboardData(["overview"]);
@@ -46,7 +47,7 @@ export function MosdnsCacheStatsWidget({ activePage, onActivePageChange, pages =
     { label: "缓存条目数", value: card.entries.toLocaleString(), tone: "text-foreground" },
   ];
   return <div className="@container flex h-full min-h-0 flex-col gap-3">
-    {selectedPages.length > 1 || onPagesChange ? <DashboardCollectionTabs options={MOSDNS_CACHE_OPTIONS} selected={selectedPages} active={page} onSelectedChange={onPagesChange} onActiveChange={setPage} ariaLabel="缓存类型" /> : null}
+    {showNavigation && (selectedPages.length > 1 || onPagesChange) ? <DashboardCollectionTabs options={MOSDNS_CACHE_OPTIONS} selected={selectedPages} active={page} onSelectedChange={onPagesChange} onActiveChange={setPage} ariaLabel="缓存类型" /> : null}
     <div className="flex items-center gap-3"><span className={`grid h-9 w-9 place-items-center rounded-xl ${meta.surfaceClass}`}><Icon className={`h-4 w-4 ${meta.iconClass}`} /></span><div><p className="text-sm font-semibold">{card.label}缓存</p><p className="text-[10px] text-muted-foreground">实时命中与缓存分布</p></div></div>
     <div className="grid grid-cols-2 gap-2 @min-[520px]:grid-cols-3">{rows.map((row) => <SolidPlate key={row.label} tone="regular" className="min-w-0 px-3 py-2"><p className="truncate text-[10px] text-muted-foreground">{row.label}</p><p className={`mt-1 truncate text-sm font-semibold tabular-nums ${row.tone}`}>{row.value}</p></SolidPlate>)}</div>
     <div className="mt-auto space-y-2.5"><div><div className="mb-1 flex justify-between text-[10px]"><span className="text-muted-foreground">命中</span><span className="font-medium tabular-nums text-sky-500">{card.hitRate.toFixed(2)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-sky-500 transition-[width] duration-300" style={{ width: `${card.hitRate}%` }} /></div></div><div><div className="mb-1 flex justify-between text-[10px]"><span className="text-muted-foreground">过期命中</span><span className="font-medium tabular-nums text-amber-500">{card.staleRate.toFixed(2)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-amber-500 transition-[width] duration-300" style={{ width: `${card.staleRate}%` }} /></div></div></div>

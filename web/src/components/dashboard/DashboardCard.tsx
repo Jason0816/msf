@@ -33,13 +33,13 @@ export function DashboardCard({
         "flex items-center justify-between border-b border-border/35",
         editing && "dashboard-widget-drag-handle cursor-grab select-none active:cursor-grabbing",
         compact ? "p-3" : "p-4"
-      )}>
-        <div className="flex items-center gap-2">
+      )} data-dashboard-card-header>
+        <div className="flex min-w-0 items-center gap-2">
           {editing ? <GripVertical className="h-4 w-4 text-muted-foreground/65" aria-hidden="true" /> : null}
-          <Icon className="h-5 w-5 text-primary" />
-          <h3 className={cn("font-semibold", compact && "text-sm")}>{title}</h3>
+          <Icon className="h-5 w-5 shrink-0 text-primary" />
+          <h3 className={cn("truncate font-semibold", compact && "text-sm")} title={title}>{title}</h3>
         </div>
-        {headerRight}
+        {headerRight ? <div className="ml-2 flex shrink-0 items-center">{headerRight}</div> : null}
       </div>
       <div className={cn("min-h-0 flex-1 overflow-hidden", compact ? "p-3" : "p-4")}>{children}</div>
     </GlassSurface>

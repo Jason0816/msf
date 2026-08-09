@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { Check, GripHorizontal, Pencil, RotateCcw, Undo2, X } from "lucide-react";
+import { Check, GripHorizontal, RotateCcw, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_MAX_WIDGETS, type DashboardSettings } from "@/lib/dashboard-settings";
 import { addDashboardWidget, removeDashboardWidget } from "./layout/dashboardLayout";
@@ -19,9 +19,9 @@ function loadPickerPosition(): WidgetPickerPosition | null {
   }
 }
 
-export function DashboardWidgetPicker({ settings, editing, onChange, onCommand, onClose }: {
+export function DashboardWidgetPicker({ settings, canUndo, onChange, onCommand, onClose }: {
   settings: DashboardSettings;
-  editing: boolean;
+  canUndo: boolean;
   onChange: (settings: DashboardSettings) => void;
   onCommand: (command: "edit" | "done" | "undo" | "reset") => void;
   onClose: () => void;
@@ -57,7 +57,7 @@ export function DashboardWidgetPicker({ settings, editing, onChange, onCommand, 
         onClose();
         return;
       }
-      if (event.key !== "Tab") return;
+      if (event.key !== "Tab" || desktop) return;
       const dialog = dialogRef.current;
       if (!dialog) return;
       const focusable = Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])"))
@@ -90,7 +90,7 @@ export function DashboardWidgetPicker({ settings, editing, onChange, onCommand, 
       document.removeEventListener("keydown", closeOnEscape);
       previousFocusRef.current?.focus({ preventScroll: true });
     };
-  }, [onClose]);
+  }, [desktop, onClose]);
 
   const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
     if (!desktop || event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
@@ -123,10 +123,10 @@ export function DashboardWidgetPicker({ settings, editing, onChange, onCommand, 
     : undefined;
 
   return (
-    <div className="fixed inset-0 z-[59] bg-black/15 md:bg-black/[0.04]" onPointerDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="dashboard-widget-picker-title" style={desktopPositionStyle} className="gary-glass gary-glass--thick pointer-events-auto !absolute inset-x-0 bottom-0 flex max-h-[min(82dvh,720px)] flex-col overflow-hidden rounded-t-[28px] border border-border/60 bg-background/92 text-card-foreground shadow-2xl outline-none md:inset-auto md:bottom-24 md:right-6 md:w-[440px] md:max-h-[calc(100dvh-7.5rem)] md:rounded-[24px]">
+    <div className={cn("fixed inset-0 z-[59] bg-black/15", desktop && "pointer-events-none bg-transparent")} onPointerDown={(event) => { if (!desktop && event.currentTarget === event.target) onClose(); }}>
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal={desktop ? undefined : true} aria-labelledby="dashboard-widget-picker-title" style={desktopPositionStyle} className="gary-glass gary-glass--thick pointer-events-auto !absolute inset-x-0 bottom-0 flex max-h-[min(82dvh,720px)] flex-col overflow-hidden rounded-t-[28px] border border-border/60 bg-background/92 text-card-foreground shadow-2xl outline-none md:inset-auto md:bottom-24 md:right-6 md:w-[440px] md:max-h-[calc(100dvh-7.5rem)] md:rounded-[24px]">
         <header onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} className={cn("relative flex shrink-0 items-center justify-between border-b border-border/50 px-4 py-4", desktop && "cursor-grab touch-none select-none active:cursor-grabbing")}>
-          <div><h2 id="dashboard-widget-picker-title" className="font-semibold">选择仪表盘组件</h2><p className="mt-0.5 text-xs text-muted-foreground">已选择 {settings.instances.length} / {DASHBOARD_MAX_WIDGETS}<span className="hidden md:inline"> · 拖动标题栏可移动</span></p></div>
+          <div><h2 id="dashboard-widget-picker-title" className="font-semibold">选择仪表盘组件</h2><p className="mt-0.5 text-xs text-muted-foreground">已选择 {settings.instances.length} / {DASHBOARD_MAX_WIDGETS}<span className="hidden md:inline"> · 卡片可直接拖动和缩放</span></p></div>
           <GripHorizontal className="pointer-events-none absolute left-1/2 top-2 hidden h-3.5 w-5 -translate-x-1/2 text-muted-foreground/45 md:block" aria-hidden="true" />
           <button type="button" onClick={onClose} aria-label="关闭组件面板" className="gary-icon-button h-9 w-9 rounded-xl border-0 bg-transparent shadow-none"><X className="h-4 w-4" /></button>
         </header>
@@ -164,9 +164,8 @@ export function DashboardWidgetPicker({ settings, editing, onChange, onCommand, 
           ))}
           {atLimit ? <p role="status" className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">最多启用 15 个组件，取消任意组件后可继续添加。</p> : null}
         </div>
-        <footer className="grid shrink-0 grid-cols-3 gap-2 border-t border-border/50 px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
-          <button type="button" onClick={() => onCommand(editing ? "done" : "edit")} className="gary-glass-button gap-1.5 rounded-xl px-2 py-2 text-xs font-medium text-primary">{editing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}{editing ? "完成编辑" : "编辑布局"}</button>
-          <button type="button" disabled={!editing} onClick={() => onCommand("undo")} className="gary-glass-button gap-1.5 rounded-xl px-2 py-2 text-xs disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />撤销调整</button>
+        <footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-border/50 px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
+          <button type="button" disabled={!canUndo} onClick={() => onCommand("undo")} className="gary-glass-button gap-1.5 rounded-xl px-2 py-2 text-xs disabled:opacity-40"><Undo2 className="h-3.5 w-3.5" />撤销调整</button>
           <button type="button" onClick={() => onCommand("reset")} className="gary-glass-button gap-1.5 rounded-xl px-2 py-2 text-xs"><RotateCcw className="h-3.5 w-3.5" />默认布局</button>
         </footer>
       </section>

@@ -1,6 +1,6 @@
 export { MosdnsQueryWidget } from "./MosdnsQueryWidget";
-export { MosdnsInfoWidget } from "./MosdnsInfoWidget";
-export { MosdnsCacheStatsWidget } from "./MosdnsCacheStatsWidget";
+export { MOSDNS_INFO_OPTIONS, MosdnsInfoWidget } from "./MosdnsInfoWidget";
+export { MOSDNS_CACHE_OPTIONS, MosdnsCacheStatsWidget } from "./MosdnsCacheStatsWidget";
 export { MosdnsRuntimeWidget } from "./MosdnsRuntimeWidget";
 export { MosdnsResolutionPolicyWidget } from "./MosdnsResolutionPolicyWidget";
 export { MosdnsCacheSystemWidget } from "./MosdnsCacheSystemWidget";

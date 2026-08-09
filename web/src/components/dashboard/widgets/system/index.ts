@@ -1,4 +1,4 @@
-export { SystemInfoCollectionWidget } from "./SystemInfoCollectionWidget";
+export { SYSTEM_INFO_OPTIONS, SystemInfoCollectionWidget } from "./SystemInfoCollectionWidget";
 export type { SystemInfoCollectionWidgetProps, SystemInfoPage, SystemWidgetSize } from "./SystemInfoCollectionWidget";
 export { SystemResourcesWidget, systemPercentScale } from "./SystemResourcesWidget";
 export type { SystemResourcesWidgetProps } from "./SystemResourcesWidget";

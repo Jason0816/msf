@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Waypoints } from "lucide-react";
 import { SolidPlate } from "@/components/liquid-glass/SolidPlate";
 import { ProxyGroupCard } from "@/components/mihomo/proxies/ProxyGroupCard";
@@ -15,8 +15,19 @@ import { useDashboardProxyRuntime } from "../../data/useDashboardProxyRuntime";
 export type MihomoProxyGroupWidgetProps = {
   groupKey?: string;
   onGroupKeyChange?: (groupKey: string) => void;
+  showGroupSelector?: boolean;
   size?: "s" | "m" | "l";
 };
+
+export function MihomoProxyGroupSelector({ groupKey, onGroupKeyChange }: { groupKey?: string; onGroupKeyChange: (groupKey: string) => void }) {
+  const { store, loading } = useDashboardProxyRuntime();
+  const groups = useMemo(() => selectGroups(store), [store]);
+  const selected = resolveDashboardProxyGroup(store, groupKey);
+  return <select aria-label="选择策略组" value={selected?.key ?? ""} onChange={(event) => onGroupKeyChange(event.target.value)} disabled={loading || !groups.length} className="gary-field h-8 max-w-28 rounded-lg pl-2 pr-7 text-[11px] sm:max-w-40">
+    <option value="">{loading ? "正在加载…" : groups.length ? "选择策略组" : "暂无策略组"}</option>
+    {groups.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}
+  </select>;
+}
 
 export function resolveDashboardProxyGroup(store: ProxyStore, groupKey?: string): ProxyEntity | undefined {
   if (!groupKey) return undefined;
@@ -89,7 +100,7 @@ export function activeProxyTestingKeys(jobs: Record<string, ProxyRuntimeTestJob>
   return keys;
 }
 
-export function MihomoProxyGroupWidget({ groupKey, onGroupKeyChange, size = "m" }: MihomoProxyGroupWidgetProps) {
+export function MihomoProxyGroupWidget({ groupKey, onGroupKeyChange, showGroupSelector = true, size = "m" }: MihomoProxyGroupWidgetProps) {
   const runtime = useDashboardProxyRuntime();
   const { store, loading, refreshing, testingJobs, pendingSelections } = runtime;
   const [internalKey, setInternalKey] = useState("");
@@ -103,6 +114,11 @@ export function MihomoProxyGroupWidget({ groupKey, onGroupKeyChange, size = "m" 
   const { groupTraffic, error: trafficError } = useProxyGroupTraffic({ enabled: Boolean(group), intervalMs: 2_000 });
   const proxySettings = readProxySettings();
 
+  useEffect(() => {
+    setCollapsed(true);
+    setMessage("");
+  }, [groupKey]);
+
   const choose = (value: string) => {
     if (groupKey === undefined) setInternalKey(value);
     onGroupKeyChange?.(value);
@@ -114,7 +130,7 @@ export function MihomoProxyGroupWidget({ groupKey, onGroupKeyChange, size = "m" 
     return <div className="flex h-full min-h-36 flex-col items-center justify-center gap-3 text-center">
       <SolidPlate tone="subtle" className="flex h-11 w-11 items-center justify-center rounded-full"><Waypoints className="h-5 w-5 text-muted-foreground" /></SolidPlate>
       <div><p className="text-sm font-medium">{missing ? "原策略组已删除或改名" : "选择要控制的策略组"}</p><p className="mt-1 text-xs text-muted-foreground">{missing ? "请重新选择，组件不会自动绑定到其他组" : "多个组件可以选择相同或不同策略组"}</p></div>
-      <select aria-label="选择策略组" value={missing ? "" : selectedKey} onChange={(event) => choose(event.target.value)} disabled={loading || !groups.length} className="gary-field h-9 w-full max-w-64 rounded-xl px-3 text-xs"><option value="">{loading ? "正在加载…" : groups.length ? "请选择策略组" : "暂无可用策略组"}</option>{groups.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select>
+      {showGroupSelector ? <select aria-label="选择策略组" value={missing ? "" : selectedKey} onChange={(event) => choose(event.target.value)} disabled={loading || !groups.length} className="gary-field h-9 w-full max-w-64 rounded-xl px-3 text-xs"><option value="">{loading ? "正在加载…" : groups.length ? "请选择策略组" : "暂无可用策略组"}</option>{groups.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select> : null}
     </div>;
   }
 
@@ -157,12 +173,12 @@ export function MihomoProxyGroupWidget({ groupKey, onGroupKeyChange, size = "m" 
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="flex shrink-0 justify-end">
+    <div className="flex h-full min-h-0 w-full flex-col items-stretch gap-2 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {showGroupSelector ? <div className="flex shrink-0 justify-end">
         <select aria-label="更换策略组" value={group.key} onChange={(event) => choose(event.target.value)} className="gary-field h-7 max-w-44 rounded-lg px-2 text-[10px]">
           {groups.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}
         </select>
-      </div>
+      </div> : null}
       <ProxyGroupCard
         embedded
         group={cardGroup}

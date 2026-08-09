@@ -74,6 +74,25 @@ async function mockApi(page) {
     if (pathname === "/api/v1/monitor/resources") return json(route, { data: { cpu_percent: 23, memory_percent: 41, cpu_model: "Virtual CPU", cpu_cores: 4, memory_total: 8 * 1024 ** 3, disk_total: 64 * 1024 ** 3, disk_percent: 37 } });
     if (pathname === "/api/v1/monitor/network") return json(route, { data: { download_speed: 245760, upload_speed: 98304, connections: 36, total_download: 16 * 1024 ** 3, total_upload: 4 * 1024 ** 3 } });
     if (pathname === "/api/v1/monitor/history") return json(route, { data: [0, 1, 2, 3].map((offset) => ({ timestamp: Date.now() - (3 - offset) * 1000, cpu_percent: 20 + offset, memory_percent: 40 + offset, download_speed: 200000 + offset * 10000, upload_speed: 80000 + offset * 5000, connections: 30 + offset })) });
+    if (pathname === "/api/v1/mihomo/proxies") return json(route, { data: {
+      groups: [{ name: "节点选择", type: "Selector", all: ["香港节点", "新加坡节点", "韩国节点", "台湾节点", "日本节点", "美国节点", "德国节点", "英国节点"], now: "美国节点", order: 0 }],
+      proxies: {
+        "节点选择": { name: "节点选择", type: "Selector", all: ["香港节点", "新加坡节点", "韩国节点", "台湾节点", "日本节点", "美国节点", "德国节点", "英国节点"], now: "美国节点" },
+        "香港节点": { name: "香港节点", type: "URLTest", delay: 190, alive: true },
+        "新加坡节点": { name: "新加坡节点", type: "URLTest", delay: 147, alive: true },
+        "韩国节点": { name: "韩国节点", type: "URLTest", delay: 0, alive: true },
+        "台湾节点": { name: "台湾节点", type: "URLTest", delay: 220, alive: true },
+        "日本节点": { name: "日本节点", type: "URLTest", delay: 204, alive: true },
+        "美国节点": { name: "美国节点", type: "URLTest", delay: 169, alive: true },
+        "德国节点": { name: "德国节点", type: "URLTest", delay: 182, alive: true },
+        "英国节点": { name: "英国节点", type: "URLTest", delay: 176, alive: true },
+      },
+    } });
+    if (pathname === "/api/v1/mihomo/overview") return json(route, { data: {} });
+    if (pathname === "/api/v1/mihomo/proxy-providers") return json(route, { data: { providers: {} } });
+    if (pathname === "/api/v1/mihomo/config/mode") return json(route, { data: { mode: "custom", can_edit_groups: true } });
+    if (pathname === "/api/v1/mihomo/connections") return json(route, { data: { connections: [] } });
+    if (pathname.startsWith("/api/v1/mihomo/proxies/") && route.request().method() === "PUT") return json(route, { success: true });
     if (pathname === "/api/v1/services") return json(route, { data: [
       { name: "mosdns", display_name: "MosDNS", running: true, installed: true, cpu_percent: 1.2, memory_bytes: 32 * 1024 ** 2, uptime_seconds: 3600 },
       { name: "singbox", display_name: "Sing-Box", running: false, installed: false },
@@ -169,22 +188,33 @@ async function main() {
       return { rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom }, position: style.position, left: style.left, right: style.right, top: style.top, bottom: style.bottom, parent: parentRect ? { x: parentRect.x, y: parentRect.y, width: parentRect.width, height: parentRect.height } : null };
     });
     assert.ok(initialPickerGeometry.rect.y >= 0 && initialPickerGeometry.rect.bottom <= 1000 && initialPickerGeometry.rect.x >= 0 && initialPickerGeometry.rect.right <= 1440, `desktop picker must stay in the viewport: ${JSON.stringify(initialPickerGeometry)}`);
-    await dialog.focus();
-    await page.keyboard.press("Shift+Tab");
-    assert.equal(await dialog.evaluate((element) => element.contains(document.activeElement)), true, "modal focus must stay inside the picker");
+    await page.locator('.dashboard-grid[data-editing="true"]').waitFor();
+    await page.locator("[data-dashboard-card-header]").first().click();
+    await dialog.waitFor();
+    assert.equal(await dialog.getAttribute("aria-modal"), null, "desktop picker should stay non-modal while cards are edited behind it");
     assert.equal(await dialog.locator('input[type="search"], input[placeholder*="搜索"]').count(), 0, "picker must not contain search");
     assert.equal(await selectedCount(page), 5);
 
     const systemCollectionButton = dialog.getByRole("button", { name: /系统信息集合/ }).first();
     assert.equal(await systemCollectionButton.getAttribute("aria-pressed"), "false");
     await systemCollectionButton.click();
+    await dialog.waitFor();
     await dialog.getByRole("button", { name: "关闭组件面板" }).click();
     await dialog.waitFor({ state: "detached" });
     assert.equal(await page.getByRole("button", { name: "打开仪表盘组件" }).evaluate((element) => document.activeElement === element), true, "closing the picker should restore focus to the FAB");
     const systemCollection = page.locator('[data-widget-type="system-info"]');
     await systemCollection.waitFor();
+    assert.equal(await systemCollection.getByRole("tablist").count(), 0, "collection navigation should no longer consume content height");
+    const systemHeader = systemCollection.locator("[data-dashboard-card-header]");
+    await systemHeader.getByRole("combobox", { name: "系统信息页面" }).waitFor();
     await systemCollection.getByRole("button", { name: "选择集合内容" }).click();
-    await systemCollection.getByRole("button", { name: "统计信息", exact: true }).click();
+    const collectionDialog = page.getByRole("dialog", { name: "系统信息页面内容设置" });
+    assert.equal(await collectionDialog.evaluate((element) => element.contains(document.activeElement)), true, "collection settings should receive focus when opened");
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(await collectionDialog.evaluate((element) => element.contains(document.activeElement)), true, "initial reverse tab should stay inside collection settings");
+    await collectionDialog.getByRole("button", { name: "统计信息", exact: true }).click();
+    await collectionDialog.getByRole("button", { name: "关闭集合设置" }).click();
+    assert.equal(await systemCollection.getByRole("button", { name: "选择集合内容" }).evaluate((element) => document.activeElement === element), true, "closing collection settings should restore its trigger focus");
     const collectionState = await page.evaluate(() => {
       const stored = JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}");
       return {
@@ -195,6 +225,13 @@ async function main() {
     assert.deepEqual(collectionState.pages, ["device", "hardware"], "a collection should save multiple selected pages and keep paginated tabs");
     assert.equal(collectionState.hasIndependentHardware, true, "an independent info card must coexist with the merged collection");
     dialog = await openPicker(page);
+    await systemCollection.getByRole("button", { name: "选择集合内容" }).evaluate((element) => element.click());
+    const escapeCollectionDialog = page.getByRole("dialog", { name: "系统信息页面内容设置" });
+    await escapeCollectionDialog.waitFor();
+    await page.keyboard.press("Escape");
+    await escapeCollectionDialog.waitFor({ state: "detached" });
+    await dialog.waitFor();
+    await page.locator('.dashboard-grid[data-editing="true"]').waitFor();
 
     while ((await selectedCount(page)) < 15) {
       const candidate = dialog.locator('button[aria-pressed="false"]:not([disabled])').first();
@@ -211,11 +248,47 @@ async function main() {
     await restoredCandidate.click();
     assert.equal(await selectedCount(page), 15, "the restored slot should accept a fifteenth widget");
 
-    await dialog.getByRole("button", { name: "编辑布局" }).click();
-    await page.locator('.dashboard-grid[data-editing="true"]').waitFor();
     const desktopResizeHandle = page.locator(".react-resizable-handle").first();
     await desktopResizeHandle.waitFor();
-    assert.notEqual(await desktopResizeHandle.evaluate((element) => getComputedStyle(element).display), "none", "desktop edit mode should show resize handles");
+    assert.notEqual(await desktopResizeHandle.evaluate((element) => getComputedStyle(element).display), "none", "opening the picker should immediately show desktop resize handles");
+    const resizeTarget = page.locator(".react-grid-item").first();
+    const resizeTargetId = await resizeTarget.getAttribute("data-widget-id");
+    assert.ok(resizeTargetId, "the resize target should have a widget id");
+    const beforeResize = await page.evaluate((id) => {
+      const settings = JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}");
+      return settings.layouts.desktop.find((item) => item.i === id);
+    }, resizeTargetId);
+    const resizeBox = await desktopResizeHandle.boundingBox();
+    assert.ok(resizeBox, "desktop resize handle should have a bounding box");
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 170, resizeBox.y + resizeBox.height / 2 + 70, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(250);
+    const afterResize = await page.evaluate((id) => {
+      const settings = JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}");
+      return settings.layouts.desktop.find((item) => item.i === id);
+    }, resizeTargetId);
+    assert.notDeepEqual(afterResize, beforeResize, "resizing a card should persist a changed layout item");
+    await systemHeader.getByRole("combobox", { name: "系统信息页面" }).selectOption("hardware");
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}").instances.find((item) => item.type === "system-info")?.settings?.activePage === "hardware");
+    await dialog.getByRole("button", { name: "撤销调整" }).click();
+    await page.waitForFunction(({ id, expected }) => {
+      const settings = JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}");
+      return JSON.stringify(settings.layouts.desktop.find((item) => item.i === id)) === JSON.stringify(expected);
+    }, { id: resizeTargetId, expected: beforeResize });
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}").instances.find((item) => item.type === "system-info")?.settings?.activePage), "hardware", "undoing a layout adjustment must preserve later widget settings changes");
+    await dialog.waitFor();
+
+    const beforeDefaultLayout = await page.evaluate(() => localStorage.getItem("msf.dashboard.settings.v3"));
+    await dialog.getByRole("button", { name: "默认布局" }).click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}").instances?.length === 7);
+    const defaultTypes = await page.evaluate(() => JSON.parse(localStorage.getItem("msf.dashboard.settings.v3") || "{}").instances.map((item) => item.type));
+    assert.deepEqual(defaultTypes, ["system-device", "system-hardware", "system-resources", "system-rate", "system-stats", "mosdns-service", "mihomo-service"], "default layout should restore the original seven-card homepage");
+    await dialog.waitFor();
+    await dialog.getByRole("button", { name: "撤销调整" }).click();
+    await page.waitForFunction((expected) => localStorage.getItem("msf.dashboard.settings.v3") === expected, beforeDefaultLayout);
+    assert.equal(await selectedCount(page), 15, "undo should restore the dashboard that existed before default layout");
     await page.getByRole("button", { name: "完成仪表盘编辑" }).click();
     await page.locator('.dashboard-grid[data-editing="true"]').waitFor({ state: "detached" });
     await dialog.waitFor({ state: "detached" });
@@ -262,16 +335,17 @@ async function main() {
 
     await page.setViewportSize({ width: 390, height: 844 });
     dialog = await openPicker(page);
-    await dialog.getByRole("button", { name: "编辑布局" }).click();
     await page.locator('.dashboard-grid[data-breakpoint="mobile"][data-editing="true"]').waitFor();
     const mobileHandles = page.locator(".react-resizable-handle");
     for (let index = 0; index < await mobileHandles.count(); index += 1) {
       assert.equal(await mobileHandles.nth(index).evaluate((element) => getComputedStyle(element).display), "none", "mobile must hide resize handles");
     }
-    await dialog.getByRole("button", { name: "完成编辑" }).click();
+    await dialog.getByRole("button", { name: "关闭组件面板" }).click();
+    await dialog.waitFor({ state: "detached" });
 
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.locator('.dashboard-grid[data-breakpoint="desktop"]').waitFor();
+    dialog = await openPicker(page);
     const requiredMihomoLabels = ["全球连接", "连接拓扑", "订阅流量统计", "连接统计", "规则命中统计", "自定义策略组控制"];
     let removedNonTarget = true;
     while (removedNonTarget) {
@@ -296,7 +370,39 @@ async function main() {
     for (const type of ["mihomo-globe", "mihomo-topology", "mihomo-provider-traffic", "mihomo-connection-stats", "mihomo-rule-hits", "mihomo-proxy-group"]) {
       await page.locator(`[data-widget-type="${type}"]`).waitFor();
     }
-    await page.getByText("选择要控制的策略组", { exact: true }).waitFor();
+    const proxyGroupWidget = page.locator('[data-widget-type="mihomo-proxy-group"]');
+    const proxyGroupHeader = proxyGroupWidget.locator("[data-dashboard-card-header]");
+    const proxyGroupSelector = proxyGroupHeader.getByRole("combobox", { name: "选择策略组" });
+    await proxyGroupSelector.waitFor();
+    assert.equal(await proxyGroupWidget.locator(':scope > div > div:last-child select[aria-label="选择策略组"], :scope > div > div:last-child select[aria-label="更换策略组"]').count(), 0, "the strategy-group selector must not consume card content height");
+    const proxyGroupValue = await proxyGroupSelector.locator("option").filter({ hasText: "节点选择" }).getAttribute("value");
+    assert.ok(proxyGroupValue, "the mocked strategy group should be available in the title bar selector");
+    await proxyGroupSelector.selectOption(proxyGroupValue);
+    const embeddedProxyGroup = proxyGroupWidget.locator('[data-proxy-group-card="embedded"]');
+    await embeddedProxyGroup.waitFor();
+    await embeddedProxyGroup.getByRole("button", { name: "展开 节点选择" }).click();
+    const nodePlate = embeddedProxyGroup.locator(".gary-solid-plate").first();
+    await nodePlate.waitFor();
+    const proxyGeometry = await proxyGroupWidget.evaluate((widget) => {
+      const header = widget.querySelector("[data-dashboard-card-header]");
+      const selector = header?.querySelector('select[aria-label="选择策略组"]');
+      const embedded = widget.querySelector('[data-proxy-group-card="embedded"]');
+      const root = embedded?.parentElement;
+      const plate = embedded?.querySelector(".gary-solid-plate");
+      if (!header || !selector || !embedded || !root || !plate) return null;
+      const embeddedRect = embedded.getBoundingClientRect();
+      const rootRect = root.getBoundingClientRect();
+      const plateRect = plate.getBoundingClientRect();
+      return {
+        selectorInHeader: header.contains(selector),
+        rootWidth: rootRect.width,
+        embeddedWidth: embeddedRect.width,
+        plateWidth: plateRect.width,
+      };
+    });
+    assert.ok(proxyGeometry?.selectorInHeader, "the strategy-group selector should live in the dashboard title bar");
+    assert.ok(Math.abs(proxyGeometry.embeddedWidth - proxyGeometry.rootWidth) <= 2, `the strategy card should fill its content width: ${JSON.stringify(proxyGeometry)}`);
+    assert.ok(proxyGeometry.plateWidth >= proxyGeometry.embeddedWidth - 32, `the expanded node area should adapt to the strategy card width: ${JSON.stringify(proxyGeometry)}`);
     assert.equal(await page.getByText(/组件正在接入/).count(), 0);
     await page.screenshot({ path: path.join(screenshotDir, "dashboard-mihomo-complete-1440.png"), fullPage: true });
 

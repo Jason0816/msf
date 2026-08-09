@@ -6,6 +6,7 @@ import {
   DASHBOARD_LAYOUT_COMMAND_EVENT,
   DASHBOARD_LAYOUT_STATE_EVENT,
   DASHBOARD_SETTINGS_EVENT,
+  createDefaultDashboardSettings,
   loadDashboardSettings,
   saveDashboardSettings,
   type DashboardLayoutCommand,
@@ -20,6 +21,8 @@ import {
   MosdnsQueryWidget,
   MosdnsResolutionPolicyWidget,
   MosdnsRuntimeWidget,
+  MOSDNS_CACHE_OPTIONS,
+  MOSDNS_INFO_OPTIONS,
   type MosdnsCachePage,
   type MosdnsCacheSystemPage,
   type MosdnsInfoPage,
@@ -30,6 +33,7 @@ import {
   MihomoGlobeWidget,
   MihomoLatencyWidget,
   MihomoProviderTrafficWidget,
+  MihomoProxyGroupSelector,
   MihomoProxyGroupWidget,
   MihomoRuleHitsWidget,
   MihomoTopologyWidget,
@@ -41,10 +45,11 @@ import {
   SystemInfoCollectionWidget,
   SystemRateWidget,
   SystemResourcesWidget,
+  SYSTEM_INFO_OPTIONS,
   type SystemInfoPage,
 } from "./widgets/system";
 import { DashboardGrid, type DashboardRenderSize } from "./DashboardGrid";
-import { resetDashboardLayouts } from "./layout/dashboardLayout";
+import { DashboardCollectionHeaderControl } from "./DashboardCollectionTabs";
 
 function MissingWidget({ type }: { type: string }) {
   return (
@@ -58,6 +63,14 @@ function MissingWidget({ type }: { type: string }) {
 function cloneSettings(settings: DashboardSettings) {
   return JSON.parse(JSON.stringify(settings)) as DashboardSettings;
 }
+
+function cloneLayouts(layouts: DashboardSettings["layouts"]) {
+  return JSON.parse(JSON.stringify(layouts)) as DashboardSettings["layouts"];
+}
+
+type DashboardEditHistoryEntry =
+  | { kind: "layouts"; layouts: DashboardSettings["layouts"] }
+  | { kind: "settings"; settings: DashboardSettings };
 
 function storedPage<T extends string>(instance: DashboardWidgetInstance, allowed: readonly T[], fallback: T): T {
   const page = instance.settings?.activePage;
@@ -86,7 +99,7 @@ export function Dashboard() {
   const [settings, setSettings] = useState<DashboardSettings>(() => loadDashboardSettings());
   const [editing, setEditing] = useState(false);
   const settingsRef = useRef(settings);
-  const editSnapshotRef = useRef<DashboardSettings["layouts"] | null>(null);
+  const editHistoryRef = useRef<DashboardEditHistoryEntry[]>([]);
   const mihomoScopes = useMemo(() => mihomoDashboardScopesForWidgetTypes(settings.instances.map((instance) => instance.type)), [settings.instances]);
   const connectionHistoryRequested = settings.instances.some((instance) => instance.type === "mihomo-connection-stats");
 
@@ -95,6 +108,17 @@ export function Dashboard() {
     setSettings(next);
     if (persist) saveDashboardSettings(next);
   }, []);
+
+  const publishLayoutState = useCallback((isEditing: boolean, canUndo = editHistoryRef.current.length > 0) => {
+    window.dispatchEvent(new CustomEvent(DASHBOARD_LAYOUT_STATE_EVENT, { detail: { editing: isEditing, canUndo } }));
+  }, []);
+
+  const rememberLayoutInteraction = useCallback(() => {
+    const history = editHistoryRef.current;
+    history.push({ kind: "layouts", layouts: cloneLayouts(settingsRef.current.layouts) });
+    if (history.length > 50) history.shift();
+    publishLayoutState(true, true);
+  }, [publishLayoutState]);
 
   useEffect(() => {
     const syncSettings = () => {
@@ -111,36 +135,52 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const publishEditing = (value: boolean) => window.dispatchEvent(new CustomEvent(DASHBOARD_LAYOUT_STATE_EVENT, { detail: { editing: value } }));
     const onCommand = (event: Event) => {
       const command = (event as CustomEvent<{ command?: DashboardLayoutCommand }>).detail?.command;
       if (command === "edit") {
-        editSnapshotRef.current = cloneSettings(settingsRef.current).layouts;
+        editHistoryRef.current = [];
         setEditing(true);
-        publishEditing(true);
+        publishLayoutState(true, false);
       } else if (command === "done") {
-        editSnapshotRef.current = null;
+        editHistoryRef.current = [];
         setEditing(false);
-        publishEditing(false);
+        publishLayoutState(false, false);
       } else if (command === "undo") {
-        if (editSnapshotRef.current) {
+        const previous = editHistoryRef.current.pop();
+        if (previous?.kind === "settings") {
+          applySettings(previous.settings);
+        } else if (previous?.kind === "layouts") {
           const current = settingsRef.current;
           const currentIds = new Set(current.instances.map((instance) => instance.id));
           const mergeBreakpoint = (key: keyof DashboardSettings["layouts"]) => {
-            const snapshotItems = editSnapshotRef.current![key].filter((item) => currentIds.has(item.i));
-            const snapshotIds = new Set(snapshotItems.map((item) => item.i));
-            return [...snapshotItems, ...current.layouts[key].filter((item) => !snapshotIds.has(item.i))];
+            const restored = previous.layouts[key].filter((item) => currentIds.has(item.i));
+            const restoredIds = new Set(restored.map((item) => item.i));
+            return [...restored, ...current.layouts[key].filter((item) => !restoredIds.has(item.i))];
           };
-          applySettings({ ...current, layouts: { desktop: mergeBreakpoint("desktop"), tablet: mergeBreakpoint("tablet"), mobile: mergeBreakpoint("mobile") } });
+          applySettings({
+            ...current,
+            layouts: {
+              desktop: mergeBreakpoint("desktop"),
+              tablet: mergeBreakpoint("tablet"),
+              mobile: mergeBreakpoint("mobile"),
+            },
+          });
         }
+        publishLayoutState(true, editHistoryRef.current.length > 0);
       } else if (command === "reset") {
-        applySettings(resetDashboardLayouts(settingsRef.current));
+        const initial = createDefaultDashboardSettings();
+        if (JSON.stringify(settingsRef.current) !== JSON.stringify(initial)) {
+          editHistoryRef.current.push({ kind: "settings", settings: cloneSettings(settingsRef.current) });
+          if (editHistoryRef.current.length > 50) editHistoryRef.current.shift();
+          applySettings(initial);
+        }
+        publishLayoutState(true, editHistoryRef.current.length > 0);
       }
     };
     window.addEventListener(DASHBOARD_LAYOUT_COMMAND_EVENT, onCommand);
-    publishEditing(false);
+    publishLayoutState(false, false);
     return () => window.removeEventListener(DASHBOARD_LAYOUT_COMMAND_EVENT, onCommand);
-  }, [applySettings]);
+  }, [applySettings, publishLayoutState]);
 
   const updateInstanceSettings = (instance: DashboardWidgetInstance, patch: Record<string, unknown>) => {
     applySettings({
@@ -156,7 +196,7 @@ export function Dashboard() {
         const allowed = ["device", "hardware", "stats"] as const;
         const pages = storedPages<SystemInfoPage>(instance, allowed);
         const activePage = storedPage<SystemInfoPage>(instance, allowed, pages[0]);
-        return <SystemInfoCollectionWidget pages={pages} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} onPagesChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} size={standardSize} />;
+        return <SystemInfoCollectionWidget pages={pages} activePage={activePage} showNavigation={false} size={standardSize} />;
       }
       case "system-device": return <SystemInfoCollectionWidget pages={["device"]} activePage="device" size={standardSize} />;
       case "system-hardware": return <SystemInfoCollectionWidget pages={["hardware"]} activePage="hardware" size={standardSize} />;
@@ -169,7 +209,7 @@ export function Dashboard() {
         const allowed = ["split", "domains", "slowest", "clients"] as const;
         const pages = storedPages<MosdnsInfoPage>(instance, allowed);
         const activePage = storedPage<MosdnsInfoPage>(instance, allowed, pages[0]);
-        return <MosdnsInfoWidget size={size} pages={pages} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} onPagesChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} />;
+        return <MosdnsInfoWidget size={size} pages={pages} activePage={activePage} showNavigation={false} />;
       }
       case "mosdns-info-split": return <MosdnsInfoWidget size={size} pages={["split"]} activePage="split" />;
       case "mosdns-info-domains": return <MosdnsInfoWidget size={size} pages={["domains"]} activePage="domains" />;
@@ -179,7 +219,7 @@ export function Dashboard() {
         const allowed = ["all", "domestic", "foreign", "node"] as const;
         const pages = storedPages<MosdnsCachePage>(instance, allowed);
         const activePage = storedPage<MosdnsCachePage>(instance, allowed, pages[0]);
-        return <MosdnsCacheStatsWidget size={size} pages={pages} activePage={activePage} onActivePageChange={(next) => updateInstanceSettings(instance, { activePage: next })} onPagesChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} />;
+        return <MosdnsCacheStatsWidget size={size} pages={pages} activePage={activePage} showNavigation={false} />;
       }
       case "mosdns-cache-all": return <MosdnsCacheStatsWidget size={size} pages={["all"]} activePage="all" />;
       case "mosdns-cache-domestic": return <MosdnsCacheStatsWidget size={size} pages={["domestic"]} activePage="domestic" />;
@@ -204,13 +244,39 @@ export function Dashboard() {
       case "mihomo-topology": return <ConnectedTopologyWidget size={size === "l" ? "l" : "m"} editing={editing} />;
       case "mihomo-proxy-group": {
         const groupKey = typeof instance.settings?.groupKey === "string" ? instance.settings.groupKey : undefined;
-        return <MihomoProxyGroupWidget groupKey={groupKey} onGroupKeyChange={(next) => updateInstanceSettings(instance, { groupKey: next })} size={standardSize} />;
+        return <MihomoProxyGroupWidget groupKey={groupKey} onGroupKeyChange={(next) => updateInstanceSettings(instance, { groupKey: next })} showGroupSelector={false} size={standardSize} />;
       }
       default: return <MissingWidget type={instance.type} />;
     }
   };
 
-  const grid = <DashboardGrid settings={settings} editing={editing} onChange={applySettings} renderWidget={renderWidget} />;
+  const renderWidgetHeader = (instance: DashboardWidgetInstance, _size: DashboardRenderSize) => {
+    if (instance.type === "system-info") {
+      const allowed = ["device", "hardware", "stats"] as const;
+      const pages = storedPages<SystemInfoPage>(instance, allowed);
+      const activePage = storedPage<SystemInfoPage>(instance, allowed, pages[0]);
+      return <DashboardCollectionHeaderControl options={SYSTEM_INFO_OPTIONS} selected={pages} active={activePage} onActiveChange={(next) => updateInstanceSettings(instance, { activePage: next })} onSelectedChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} ariaLabel="系统信息页面" />;
+    }
+    if (instance.type === "mosdns-info") {
+      const allowed = ["split", "domains", "slowest", "clients"] as const;
+      const pages = storedPages<MosdnsInfoPage>(instance, allowed);
+      const activePage = storedPage<MosdnsInfoPage>(instance, allowed, pages[0]);
+      return <DashboardCollectionHeaderControl options={MOSDNS_INFO_OPTIONS} selected={pages} active={activePage} onActiveChange={(next) => updateInstanceSettings(instance, { activePage: next })} onSelectedChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} ariaLabel="MosDNS 信息页面" />;
+    }
+    if (instance.type === "mosdns-cache-stats") {
+      const allowed = ["all", "domestic", "foreign", "node"] as const;
+      const pages = storedPages<MosdnsCachePage>(instance, allowed);
+      const activePage = storedPage<MosdnsCachePage>(instance, allowed, pages[0]);
+      return <DashboardCollectionHeaderControl options={MOSDNS_CACHE_OPTIONS} selected={pages} active={activePage} onActiveChange={(next) => updateInstanceSettings(instance, { activePage: next })} onSelectedChange={(next) => updateInstanceSettings(instance, { pages: next, activePage: next.includes(activePage) ? activePage : next[0] })} ariaLabel="缓存类型" />;
+    }
+    if (instance.type === "mihomo-proxy-group") {
+      const groupKey = typeof instance.settings?.groupKey === "string" ? instance.settings.groupKey : undefined;
+      return <MihomoProxyGroupSelector groupKey={groupKey} onGroupKeyChange={(next) => updateInstanceSettings(instance, { groupKey: next })} />;
+    }
+    return null;
+  };
+
+  const grid = <DashboardGrid settings={settings} editing={editing} onChange={applySettings} onInteractionStart={rememberLayoutInteraction} renderWidget={renderWidget} renderWidgetHeader={renderWidgetHeader} />;
   const content = settings.instances.some((instance) => instance.type === "mihomo-proxy-group")
     ? <DashboardProxyRuntimeProvider>{grid}</DashboardProxyRuntimeProvider>
     : grid;

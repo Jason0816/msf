@@ -12,5 +12,5 @@ export { MihomoGlobeWidget } from "./MihomoGlobeWidget";
 export type { MihomoGlobeWidgetProps } from "./MihomoGlobeWidget";
 export { MihomoTopologyWidget } from "./MihomoTopologyWidget";
 export type { MihomoTopologyWidgetProps } from "./MihomoTopologyWidget";
-export { MihomoProxyGroupWidget, activeProxyTestJob, resolveDashboardProxyGroup } from "./MihomoProxyGroupWidget";
+export { MihomoProxyGroupSelector, MihomoProxyGroupWidget, activeProxyTestJob, resolveDashboardProxyGroup } from "./MihomoProxyGroupWidget";
 export type { MihomoProxyGroupWidgetProps } from "./MihomoProxyGroupWidget";

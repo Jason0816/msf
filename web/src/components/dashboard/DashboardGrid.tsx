@@ -38,11 +38,13 @@ function persistentLayout(layout: readonly LayoutItem[], instances: DashboardWid
   });
 }
 
-export function DashboardGrid({ settings, editing, onChange, renderWidget }: {
+export function DashboardGrid({ settings, editing, onChange, onInteractionStart, renderWidget, renderWidgetHeader }: {
   settings: DashboardSettings;
   editing: boolean;
   onChange: (settings: DashboardSettings) => void;
+  onInteractionStart?: () => void;
   renderWidget: (instance: DashboardWidgetInstance, size: DashboardRenderSize) => ReactNode;
+  renderWidgetHeader?: (instance: DashboardWidgetInstance, size: DashboardRenderSize) => ReactNode;
 }) {
   const [breakpoint, setBreakpoint] = useState<DashboardBreakpoint>("desktop");
   const [containerWidth, setContainerWidth] = useState(0);
@@ -105,13 +107,15 @@ export function DashboardGrid({ settings, editing, onChange, renderWidget }: {
         draggableHandle=".dashboard-widget-drag-handle"
         draggableCancel="button,input,select,textarea,a,[role='button']"
         resizeHandles={["se"]}
+        onDragStart={() => onInteractionStart?.()}
+        onResizeStart={() => onInteractionStart?.()}
         onBreakpointChange={(next) => setBreakpoint(next as DashboardBreakpoint)}
         onLayoutChange={commitLayouts}
         useCSSTransforms
       >
         {settings.instances.map((instance) => (
           <div key={instance.id} data-widget-id={instance.id} data-widget-type={instance.type}>
-            <DashboardWidgetFrame instance={instance} editing={editing} compact={settings.compact}>
+            <DashboardWidgetFrame instance={instance} editing={editing} compact={settings.compact} headerRight={renderWidgetHeader?.(instance, widgetSize(layoutById.get(instance.id), breakpoint))}>
               {renderWidget(instance, widgetSize(layoutById.get(instance.id), breakpoint))}
             </DashboardWidgetFrame>
           </div>

@@ -20,6 +20,7 @@ export type SystemInfoCollectionWidgetProps = {
   onActivePageChange?: (page: SystemInfoPage) => void;
   pages?: SystemInfoPage[];
   onPagesChange?: (pages: SystemInfoPage[]) => void;
+  showNavigation?: boolean;
   size?: SystemWidgetSize;
 };
 
@@ -44,7 +45,7 @@ function InfoRows({ rows, allowColumns }: { rows: Array<{ label: string; value: 
   return <div className={`grid gap-2 ${allowColumns ? "@min-[620px]:grid-cols-2" : ""}`}>{rows.map((row) => <SolidPlate key={row.label} tone="regular" className="flex min-h-10 items-center justify-between gap-3 px-3 py-2.5"><span className="shrink-0 text-sm text-muted-foreground">{row.label}</span><span className="min-w-0 break-words text-right text-sm font-medium tabular-nums">{row.value}</span></SolidPlate>)}</div>;
 }
 
-export function SystemInfoCollectionWidget({ activePage, onActivePageChange, pages = ["device", "hardware", "stats"], onPagesChange, size = "m" }: SystemInfoCollectionWidgetProps) {
+export function SystemInfoCollectionWidget({ activePage, onActivePageChange, pages = ["device", "hardware", "stats"], onPagesChange, showNavigation = true, size = "m" }: SystemInfoCollectionWidgetProps) {
   const { system, resources, network } = useSystemDashboardData();
   const [internalPage, setInternalPage] = useState<SystemInfoPage>(pages[0] ?? "device");
   const selectedPages: SystemInfoPage[] = pages.length ? pages : ["device"];
@@ -73,7 +74,7 @@ export function SystemInfoCollectionWidget({ activePage, onActivePageChange, pag
   }), [network, resources, system]);
 
   return <div className="@container flex h-full min-h-0 flex-col gap-3">
-    {selectedPages.length > 1 || onPagesChange ? <DashboardCollectionTabs options={SYSTEM_INFO_OPTIONS} selected={selectedPages} active={page} onSelectedChange={onPagesChange} onActiveChange={setPage} ariaLabel="系统信息页面" /> : null}
+    {showNavigation && (selectedPages.length > 1 || onPagesChange) ? <DashboardCollectionTabs options={SYSTEM_INFO_OPTIONS} selected={selectedPages} active={page} onSelectedChange={onPagesChange} onActiveChange={setPage} ariaLabel="系统信息页面" /> : null}
     <div className="min-h-0 flex-1" role="tabpanel"><InfoRows rows={rows[page]} allowColumns={selectedPages.length > 1} />{page === "hardware" ? <SolidPlate tone="regular" className="mt-2 px-3 py-2.5"><div className="mb-1.5 flex items-center justify-between"><span className="text-sm text-muted-foreground">硬盘使用率</span><span className="text-sm font-medium tabular-nums">{formatPercent(resources.disk_percent)}</span></div><div className="h-2 overflow-hidden rounded-full bg-muted/50"><div className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70" style={{ width: `${Math.min(Number(resources.disk_percent || 0), 100)}%` }} /></div></SolidPlate> : null}</div>
     {size === "s" && selectedPages.length > 1 ? <p className="text-[10px] text-muted-foreground">已合并 {selectedPages.length} 个信息页</p> : null}
   </div>;

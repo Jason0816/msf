@@ -226,7 +226,8 @@ export function ProxyGroupCard({
   );
 
   const surfaceClassName = cn(
-    "min-w-0 self-start overflow-hidden rounded-2xl p-0 transition-[box-shadow,transform,opacity] duration-250",
+    "min-w-0 overflow-hidden rounded-2xl p-0 transition-[box-shadow,transform,opacity] duration-250",
+    embedded ? "w-full self-stretch" : "self-start",
     reorderEnabled && "cursor-grab active:cursor-grabbing",
     disableTextSelect && "select-none",
     group.userHidden && "opacity-65",
