@@ -343,7 +343,13 @@ func (a *App) mosDNSRuleSources() []mosDNSRuleSource {
 		out[i].hydrateRuntimeFields()
 		if out[i].LocalPath != "" {
 			if path, err := a.safePath(out[i].LocalPath); err == nil {
-				out[i].FileSize = fileSize(path)
+				if info, statErr := os.Stat(path); statErr == nil {
+					out[i].FileSize = info.Size()
+					// The local rule artifact is the authoritative evidence of when
+					// this source was actually installed or refreshed. Template JSON
+					// can carry an old build-time last_updated value indefinitely.
+					out[i].LastUpdated = info.ModTime().Format(time.RFC3339Nano)
+				}
 				if count, ok := countRuleFile(path); ok && count > 0 {
 					out[i].RuleCount = count
 				}
@@ -505,6 +511,19 @@ func (s *mosDNSRuleSource) hydrateRuntimeFields() {
 	if s.LocalPath == "" {
 		s.LocalPath = mosDNSRuleSourceLocalRel(*s)
 	}
+	s.URL = currentBuiltInMosDNSRuleSourceURL(s.URL)
+}
+
+func currentBuiltInMosDNSRuleSourceURL(raw string) string {
+	legacy := map[string]string{
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-geolocation-!cn%40cn.srs": "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geolocation-!cn%40cn.srs",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":                  "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-tiktok.srs":                    "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/tiktok.srs",
+	}
+	if current := legacy[strings.TrimSpace(raw)]; current != "" {
+		return current
+	}
+	return raw
 }
 
 func mosDNSRuleSourceID(s mosDNSRuleSource) string {

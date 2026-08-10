@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "@/App";
 import { AuthProvider } from "@/lib/auth";
+import { LanguageProvider } from "@/lib/localization";
 import {
   CONTENT_PLATE_SETTINGS_STORAGE_KEY,
   DEFAULT_CONTENT_PLATE_OPACITY,
@@ -15,6 +16,8 @@ import {
 import "@/app/globals.css";
 
 const root = document.documentElement;
+const savedLanguage = localStorage.getItem("msf-language");
+root.lang = savedLanguage === "en-US" || savedLanguage === "en" ? "en-US" : "zh-CN";
 const savedTheme = localStorage.getItem("msf-theme");
 const useDarkTheme = savedTheme === "dark" || (savedTheme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 root.classList.toggle("dark", useDarkTheme);
@@ -48,7 +51,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

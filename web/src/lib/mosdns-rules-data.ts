@@ -92,9 +92,9 @@ export interface SubscriptionRule {
 }
 
 export const adblockLists: SubscriptionRule[] = [
-  { name: "httpdns", url: "https://example.invalid/rules/httpdns.txt", ruleCount: "64", updatedAt: "2025/12/19 16:33:45", enabled: true },
-  { name: "pcdn1", url: "https://example.invalid/rules/pcdn-primary.txt", ruleCount: "20", updatedAt: "2025/12/19 16:33:45", enabled: true },
-  { name: "pcdn2", url: "https://example.invalid/rules/pcdn-secondary.txt", ruleCount: "33", updatedAt: "2025/12/19 16:33:45", enabled: true },
+  { name: "httpdns", url: "", ruleCount: "0", updatedAt: "", enabled: true },
+  { name: "pcdn1", url: "", ruleCount: "0", updatedAt: "", enabled: true },
+  { name: "pcdn2", url: "", ruleCount: "0", updatedAt: "", enabled: true },
 ];
 
 export interface RoutingRule extends SubscriptionRule {
@@ -113,10 +113,10 @@ export const routingTypes = [
 ];
 
 export const routingLists: RoutingRule[] = [
-  { name: "geosite_cn", typeLabel: "中国域名 (geositecn)", typeKey: "geositecn", color: "blue", url: "https://example.invalid/rules/geosite-cn.srs", ruleCount: "117,508", updatedAt: "2025/12/19 16:33:02", enabled: true },
-  { name: "geosite_no_cn", typeLabel: "非中国域名 (geositenocn)", typeKey: "geositenocn", color: "purple", url: "https://example.invalid/rules/geosite-geolocation-not-cn.srs", ruleCount: "26,329", updatedAt: "2025/12/19 16:33:09", enabled: true },
-  { name: "geoip_cn", typeLabel: "中国IP (geoipcn)", typeKey: "geoipcn", color: "green", url: "https://example.invalid/rules/geoip-cn.srs", ruleCount: "19,543", updatedAt: "2025/12/19 16:32:54", enabled: true },
-  { name: "cuscn", typeLabel: "国内加速域名 (!cn@cn)", typeKey: "!cn@cn", color: "orange", url: "https://example.invalid/rules/geosite-custom-cn.srs", ruleCount: "1,089", updatedAt: "2025/12/19 16:32:42", enabled: true },
-  { name: "cusnocn", typeLabel: "国外专属域名 (cn@!cn)", typeKey: "cn@!cn", color: "pink", url: "https://example.invalid/rules/geosite-custom-not-cn.srs", ruleCount: "262", updatedAt: "2025/12/19 16:32:48", enabled: true },
-  { name: "tiktok", typeLabel: "国外专属域名 (cn@!cn)", typeKey: "cn@!cn", color: "pink", url: "https://example.invalid/rules/geosite-video.srs", ruleCount: "30", updatedAt: "2025/12/19 16:33:29", enabled: true },
+  { name: "geosite_cn", typeLabel: "中国域名 (geositecn)", typeKey: "geositecn", color: "blue", url: "", ruleCount: "0", updatedAt: "", enabled: true },
+  { name: "geosite_no_cn", typeLabel: "非中国域名 (geositenocn)", typeKey: "geositenocn", color: "purple", url: "", ruleCount: "0", updatedAt: "", enabled: true },
+  { name: "geoip_cn", typeLabel: "中国IP (geoipcn)", typeKey: "geoipcn", color: "green", url: "", ruleCount: "0", updatedAt: "", enabled: true },
+  { name: "cuscn", typeLabel: "国内加速域名 (!cn@cn)", typeKey: "!cn@cn", color: "orange", url: "", ruleCount: "0", updatedAt: "", enabled: true },
+  { name: "cusnocn", typeLabel: "国外专属域名 (cn@!cn)", typeKey: "cn@!cn", color: "pink", url: "", ruleCount: "0", updatedAt: "", enabled: true },
+  { name: "tiktok", typeLabel: "国外专属域名 (cn@!cn)", typeKey: "cn@!cn", color: "pink", url: "", ruleCount: "0", updatedAt: "", enabled: true },
 ];

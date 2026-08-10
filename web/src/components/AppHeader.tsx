@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { api, apiData, getToken } from "@/lib/api";
+import { useLanguage, type AppLanguage } from "@/lib/localization";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -28,7 +30,10 @@ const themeOptions: { id: ThemeMode; label: string; Icon: typeof Sun }[] = [
   { id: "system", label: "跟随系统", Icon: Monitor },
 ];
 
-const languageOptions = ["简体中文", "English"];
+const languageOptions: Array<{ id: AppLanguage; label: string }> = [
+  { id: "zh-CN", label: "简体中文" },
+  { id: "en-US", label: "English" },
+];
 const README_URL = "https://github.com/scoltzero/msf/blob/main/README.md";
 
 function getInitialTheme(): ThemeMode {
@@ -53,11 +58,11 @@ function applyTheme(mode: ThemeMode) {
 export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onToggleSidebar?: () => void; sidebarCollapsed?: boolean }) {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { language, setLanguage } = useLanguage();
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [themeOpen, setThemeOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
-  const [lang, setLang] = useState("简体中文");
 
   const isDark = theme === "dark" || (theme === "system" && prefersDarkMode());
   const ThemeIcon = theme === "system" ? Monitor : isDark ? Moon : Sun;
@@ -75,6 +80,26 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
     media.addEventListener("change", handleChange);
     return () => media.removeEventListener("change", handleChange);
   }, [theme]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    api("/api/v1/settings/appearance")
+      .then((payload) => {
+        const data = apiData<Record<string, string>>(payload, {});
+        if (data.language === "en-US" || data.language === "en") setLanguage("en-US");
+        if (data.language === "zh-CN" || data.language === "zh") setLanguage("zh-CN");
+      })
+      .catch(() => undefined);
+  }, [setLanguage]);
+
+  const selectLanguage = (next: AppLanguage) => {
+    setLanguage(next);
+    setLangOpen(false);
+    void api("/api/v1/settings/appearance", {
+      method: "PUT",
+      body: JSON.stringify({ language: next }),
+    }).catch(() => undefined);
+  };
 
   useEffect(() => {
     const close = () => {
@@ -178,15 +203,12 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
               >
                 {languageOptions.map((item) => (
                   <button
-                    key={item}
-                    onClick={() => {
-                      setLang(item);
-                      setLangOpen(false);
-                    }}
+                    key={item.id}
+                    onClick={() => selectLanguage(item.id)}
                     className="gary-popover__item flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground"
                   >
-                    {item}
-                    {lang === item && <Check className="h-4 w-4 text-primary" />}
+                    {item.label}
+                    {language === item.id && <Check className="h-4 w-4 text-primary" />}
                   </button>
                 ))}
               </div>

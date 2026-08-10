@@ -250,4 +250,13 @@ describe("settings dialog semantic guardrails", () => {
     expect(nodeGrid).toContain('cardSize === "compact" ? "gap-1" : "gap-2"');
     expect(nodeGrid).toContain('cardSize === "compact" ? "space-y-2 p-1.5" : "space-y-3 p-2"');
   });
+
+  it("keeps the full node card selectable without turning delay tests into selections", () => {
+    const nodeCard = readFileSync(sourcePath("ProxyNodeCard.tsx"), "utf8");
+
+    expect(nodeCard).toContain('role={onSelect ? "button" : undefined}');
+    expect(nodeCard).toContain("onClick={onSelect}");
+    expect(nodeCard).toContain('event.key === "Enter" || event.key === " "');
+    expect(nodeCard).toContain("event.stopPropagation(); onTest();");
+  });
 });

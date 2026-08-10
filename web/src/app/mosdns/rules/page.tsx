@@ -129,7 +129,8 @@ function formatDate(value?: string) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-CN", { hour12: false });
+  const locale = document.documentElement.lang === "en-US" ? "en-US" : "zh-CN";
+  return date.toLocaleString(locale, { hour12: false });
 }
 
 function normalizeRuleSet(item: RuleSetPayload): RuleSetRow {
@@ -387,7 +388,10 @@ export default function MosdnsRulesPage() {
 
   const updateRuleSet = async (item: RuleSetRow) => {
     try {
-      await api(`/api/v1/mosdns/rule-sets/${encodeURIComponent(item.id)}/update`, { method: "POST" });
+      const payload = await api<any>(`/api/v1/mosdns/rule-sets/${encodeURIComponent(item.id)}/update`, { method: "POST" });
+      if (payload?.success === false) {
+        throw new Error(String(payload.error || "规则源更新失败"));
+      }
       showToast("规则源已更新");
       await loadRuleSets();
       await loadCategories();
@@ -410,8 +414,15 @@ export default function MosdnsRulesPage() {
 
   const updateAllRuleSets = async (sourceType: "adguard" | "srs") => {
     try {
-      await api(`/api/v1/mosdns/rule-sets/update?source_type=${sourceType}`, { method: "POST" });
-      showToast("规则源更新完成");
+      const payload = await api<any>(`/api/v1/mosdns/rule-sets/update?source_type=${sourceType}`, { method: "POST" });
+      const data = apiData<any>(payload, payload);
+      const failures = Array.isArray(data?.failures) ? data.failures : Array.isArray(payload?.failures) ? payload.failures : [];
+      if (failures.length > 0) {
+        const names = failures.map((failure: any) => String(failure.name || failure.id || "未知规则源")).join("、");
+        showToast(`部分规则源更新失败：${names}`);
+      } else {
+        showToast("规则源更新完成");
+      }
       await loadRuleSets();
       await loadCategories();
     } catch (error) {

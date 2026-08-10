@@ -55,6 +55,7 @@ import {
   type ContentPlateOpacity,
   type ContentPlateOpacityKey,
 } from "@/lib/content-plate-opacity";
+import { useLanguage } from "@/lib/localization";
 import { cn } from "@/lib/utils";
 
 type TabId = "profile" | "system" | "appearance" | "update" | "reset";
@@ -1507,7 +1508,7 @@ function effectiveContentPlateOpacity(
 
 function AppearanceTab({ showToast }: { showToast: (message: string) => void }) {
   const [theme, setTheme] = useState<ThemeMode>("system");
-  const [language, setLanguage] = useState("简体中文");
+  const { language, setLanguage } = useLanguage();
   const [scene, setScene] = useState<GlassSceneMode>("dynamic");
   const [quality, setQuality] = useState<GlassQuality>("full");
   const [saved, setSaved] = useState<ContentPlateOpacity>(() => readLocalContentPlateOpacity());
@@ -1690,7 +1691,7 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
         const data = apiData<Record<string, string>>(payload, {});
         const nextTheme = (data.theme === "light" || data.theme === "dark" || data.theme === "system" ? data.theme : "system") as ThemeMode;
         applyThemeMode(nextTheme);
-        setLanguage(data.language === "en-US" || data.language === "en" ? "English" : "简体中文");
+        setLanguage(data.language === "en-US" || data.language === "en" ? "en-US" : "zh-CN");
         const storedScene = data.scene || localStorage.getItem("msf-glass-scene");
         const nextScene: GlassSceneMode = storedScene === "static" || storedScene === "neutral" ? storedScene : "dynamic";
         const storedQuality = data.quality || localStorage.getItem("msf-glass-quality");
@@ -1942,12 +1943,13 @@ function AppearanceTab({ showToast }: { showToast: (message: string) => void }) 
             <button
               key={item}
               onClick={() => {
-                setLanguage(item);
-                void saveAppearance({ language: item === "English" ? "en-US" : "zh-CN" });
+                const nextLanguage = item === "English" ? "en-US" : "zh-CN";
+                setLanguage(nextLanguage);
+                void saveAppearance({ language: nextLanguage });
               }}
               className={cn(
                 "flex h-[84px] items-center justify-center gap-2 rounded-lg border-2 px-4 text-sm font-medium transition-all",
-                language === item ? "border-primary bg-primary/10 text-foreground" : "border-border bg-transparent text-foreground hover:bg-muted/40"
+                language === (item === "English" ? "en-US" : "zh-CN") ? "border-primary bg-primary/10 text-foreground" : "border-border bg-transparent text-foreground hover:bg-muted/40"
               )}
             >
               <Languages className="h-5 w-5" />
