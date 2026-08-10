@@ -26,7 +26,7 @@ export function MihomoTrafficWidget({ size = "m" }: MihomoTrafficWidgetProps) {
   const compact = size !== "l";
   const uploadRate = `${formatBytes(upload)}/s`;
   const downloadRate = `${formatBytes(download)}/s`;
-  const height = size === "s" ? "min-h-[150px]" : size === "l" ? "min-h-[270px]" : "min-h-[205px]";
+  const height = size === "s" ? "min-h-[150px]" : size === "l" ? "min-h-[270px]" : "min-h-[190px]";
   return <div className="@container flex h-full min-h-0 flex-col" data-rate-layout={compact ? "compact" : "standard"}>
     {!compact ? <div className="mb-2 grid grid-cols-3 gap-2 text-[10px] @min-[520px]:text-xs" data-rate-metrics-placement="header">
       <span className="truncate text-muted-foreground">上传 <b className="tabular-nums text-foreground">{uploadRate}</b></span>
@@ -34,14 +34,14 @@ export function MihomoTrafficWidget({ size = "m" }: MihomoTrafficWidgetProps) {
       <span className="truncate text-right text-muted-foreground">连接 <b className="tabular-nums text-foreground">{connections}</b></span>
     </div> : null}
     <div className={`min-w-0 flex-1 ${height}`} data-rate-chart><RateChart points={points} downloadSpeed={download} uploadSpeed={upload} connections={connections} windowSeconds={range} /></div>
-    <div className={`${compact ? "mt-1" : "mt-2"} flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5`} data-rate-footer>
+    <div className={`${compact ? "mt-1 flex flex-col items-stretch gap-1.5" : "mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5"}`} data-rate-footer>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1" data-rate-metrics-placement={compact ? "footer" : undefined}>
         <Legend color={SYSTEM_CHART_COLORS.upload} label="上传" value={compact ? uploadRate : undefined} />
         <Legend color={SYSTEM_CHART_COLORS.download} label="下载" value={compact ? downloadRate : undefined} />
         <Legend color={SYSTEM_CHART_COLORS.connections} label="连接数" value={compact ? String(connections) : undefined} />
         <span className="text-[10px] text-muted-foreground">{trafficConnected ? "WebSocket 实时" : "概览采样兜底"}</span>
       </div>
-      <TimeWindowSelector value={range} onChange={setRange} compact={compact} />
+      <div className="flex min-w-0 justify-end"><TimeWindowSelector value={range} onChange={setRange} /></div>
     </div>
   </div>;
 }

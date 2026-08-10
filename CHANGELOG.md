@@ -1,5 +1,65 @@
 # 更新日志
 
+## v0.4.4 - 2026-08-10
+
+### 中文
+
+> 赠言：事事如意，事事顺遂
+
+#### 说明
+
+- v0.4.4 集中升级仪表盘、Mihomo 管理与实时可观测能力，并统一桌面、分屏和移动端的页面起点、图表布局与 Liquid Glass 内容层级。
+- Linux、Unraid、fnOS、macOS 与 Docker 继续从 `main` 的同一个干净 tag 构建；GitHub Release 发布完整安装资产及 SHA-256 文件，GHCR 同时发布 `v0.4.4` 与 `latest` 多架构镜像。
+- macOS App 仍为未使用 Apple Developer ID 签名或公证的 TUN-only Beta，首次打开需要用户手动允许。
+
+#### 仪表盘与图表
+
+- 新增可组合仪表盘网格、组件选择器、集合切换、拖动缩放、持久化布局和错误隔离，补齐系统、MosDNS、Mihomo 的实时、统计与控制组件。
+- 重构系统资源、主机速率、MosDNS 查询和 Mihomo 连接图的数据采样与时间窗口，稳定 ECharts 生命周期、实时曲线和半宽卡片布局。
+- 统一所有实时图表的时间选择器为等宽六段控件，在桌面双列与移动端均保留安全边距，避免图例、选择栏和卡片外框互相遮挡。
+
+#### Mihomo
+
+- Mihomo UI 重构（包括概览页面）借鉴并复用了 [Zephyruso/zashboard](https://github.com/Zephyruso/zashboard) 的部分源码与交互设计，特此感谢原作者的无私开源。
+- 重建 Mihomo 概览与连接可观测界面，新增全球连接地球、实时流量、连接历史、延迟、拓扑、规则命中和 Provider 流量等视图。
+- 重构代理节点与规则管理，增加配置权威状态、Provider 与手动节点编辑、测速计划、渐进加载、搜索排序、运行规则详情和 YAML 安全处理。
+- 补齐后端代理与规则运行时接口、配置规范化、事务式保存和测试覆盖，并优化连接详情在桌面、平板与移动端的响应式布局。
+
+#### MosDNS、系统与发布
+
+- 新增 MosDNS 客户端和规则变更的运行时热同步，修复状态页版本展示，并统一服务管理页面与内容面板材质。
+- 统一所有页面的桌面起始高度，修复帮助文档导航、图表底栏和内容边界细节；安装文档改为跟随 Latest Release 或版本通配符。
+- 强化 Unraid 资产校验、更新清单生成和发布后自动同步，插件清单改为跟随 Latest Release，Docker CA 模板继续使用多架构 `latest` 镜像。
+
+### English
+
+> Release wish: 事事如意，事事顺遂
+
+#### Notes
+
+- v0.4.4 is a focused upgrade to the dashboard, Mihomo management, and real-time observability, with consistent page offsets, chart layouts, and Liquid Glass content hierarchy across desktop, split-screen, and mobile views.
+- Linux, Unraid, fnOS, macOS, and Docker are built from the same clean tag on `main`. GitHub Release publishes the complete install assets and SHA-256 files, while GHCR publishes multi-architecture `v0.4.4` and `latest` images.
+- The macOS app remains an unsigned and unnotarized TUN-only Beta. Users must explicitly allow its first launch.
+
+#### Dashboard and charts
+
+- Added a composable dashboard grid with widget selection, collections, drag-and-resize editing, persistent layouts, error isolation, and system, MosDNS, and Mihomo monitoring and control widgets.
+- Reworked sampling and time windows for system resources, host rates, MosDNS queries, and Mihomo connections while stabilizing ECharts lifecycles, live curves, and half-width card layouts.
+- Standardized every live-chart time selector as an equal-width six-segment control with safe desktop and mobile insets so legends, selectors, and card frames no longer overlap or clip.
+
+#### Mihomo
+
+- Parts of the Mihomo UI refactor, including the overview page, reference and reuse source code and interaction design from [Zephyruso/zashboard](https://github.com/Zephyruso/zashboard). Special thanks to the original author for generously sharing the project as open source.
+- Rebuilt Mihomo overview and connection observability with a global connection globe, live traffic, connection history, latency, topology, rule-hit, and provider-traffic views.
+- Refactored proxy and rule management with configuration authority state, provider and manual-node editing, speed-test planning, progressive loading, search and ordering, runtime rule details, and YAML safety.
+- Added backend proxy and rule runtime APIs, normalization, transactional persistence, and test coverage, and refined connection details across desktop, tablet, and mobile layouts.
+
+#### MosDNS, system, and release engineering
+
+- Added runtime hot synchronization for MosDNS client and rule changes, fixed status-page version reporting, and unified service-management pages and content materials.
+- Standardized desktop page offsets, fixed README help navigation, chart footers, and content boundaries, and changed installation documentation to Latest Release links or version wildcards.
+- Hardened Unraid asset verification, manifest generation, and post-release synchronization. The plugin follows Latest Release while the Docker CA template continues to use the multi-architecture `latest` image.
+
 ## v0.4.3 - 2026-08-07
 
 ### 中文

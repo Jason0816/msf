@@ -26,7 +26,7 @@ export function SystemResourcesWidget({ size = "m" }: SystemResourcesWidgetProps
   const memory = resources.memory_percent ?? resources.mem_percent ?? 0;
   const points = useMemo(() => withinTimeWindow(history, range), [history, range]);
   const scaleMax = autoScale ? systemPercentScale(points, cpu, memory) : 100;
-  const chartHeight = size === "s" ? "min-h-[130px]" : size === "l" ? "min-h-[260px]" : "min-h-[190px]";
+  const chartHeight = size === "s" ? "min-h-[130px]" : size === "l" ? "min-h-[260px]" : "min-h-[165px]";
 
   return (
     <div className="@container flex h-full min-h-0 flex-col">
@@ -41,7 +41,7 @@ export function SystemResourcesWidget({ size = "m" }: SystemResourcesWidgetProps
         <div className="flex flex-col justify-between py-1 text-[10px] tabular-nums text-muted-foreground"><span>{scaleMax}%</span><span>{Math.round(scaleMax / 2)}%</span><span>0%</span></div>
         <div className="min-w-0 flex-1"><TrendChart points={points} cpuPercent={cpu} memoryPercent={memory} scaleMax={scaleMax} windowSeconds={range} /></div>
       </div>
-      <div className="mt-2 flex justify-end overflow-x-auto"><TimeWindowSelector value={range} onChange={setRange} /></div>
+      <div className="mt-2 flex min-w-0 justify-end"><TimeWindowSelector value={range} onChange={setRange} /></div>
     </div>
   );
 }
