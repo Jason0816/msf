@@ -1,45 +1,25 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.4">
+<!ENTITY version "0.4.5">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.4">
-<!ENTITY packageName "msf-0.4.4-x86_64-1">
+<!ENTITY releaseTag "v0.4.5">
+<!ENTITY packageName "msf-0.4.5-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "f7af18c4a2055108f4b4e87ec1820da716ab7bc8527d059088676779e8130de3">
+<!ENTITY packageSHA256 "1c74c9ccdecf5ef7927d7aaa01240ad4a60a5b0b691d6a23b56b5ace730cbd13">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.4
+### msf 0.4.5
 
-> 赠言：事事如意，事事顺遂
+#### 用户体验小更新
 
-#### 说明
-
-- v0.4.4 集中升级仪表盘、Mihomo 管理与实时可观测能力，并统一桌面、分屏和移动端的页面起点、图表布局与 Liquid Glass 内容层级。
-- Linux、Unraid、fnOS、macOS 与 Docker 继续从 `main` 的同一个干净 tag 构建；GitHub Release 发布完整安装资产及 SHA-256 文件，GHCR 同时发布 `v0.4.4` 与 `latest` 多架构镜像。
-- macOS App 仍为未使用 Apple Developer ID 签名或公证的 TUN-only Beta，首次打开需要用户手动允许。
-
-#### 仪表盘与图表
-
-- 新增可组合仪表盘网格、组件选择器、集合切换、拖动缩放、持久化布局和错误隔离，补齐系统、MosDNS、Mihomo 的实时、统计与控制组件。
-- 重构系统资源、主机速率、MosDNS 查询和 Mihomo 连接图的数据采样与时间窗口，稳定 ECharts 生命周期、实时曲线和半宽卡片布局。
-- 统一所有实时图表的时间选择器为等宽六段控件，在桌面双列与移动端均保留安全边距，避免图例、选择栏和卡片外框互相遮挡。
-
-#### Mihomo
-
-- Mihomo UI 重构（包括概览页面）借鉴并复用了 [Zephyruso/zashboard](https://github.com/Zephyruso/zashboard) 的部分源码与交互设计，特此感谢原作者的无私开源。
-- 重建 Mihomo 概览与连接可观测界面，新增全球连接地球、实时流量、连接历史、延迟、拓扑、规则命中和 Provider 流量等视图。
-- 重构代理节点与规则管理，增加配置权威状态、Provider 与手动节点编辑、测速计划、渐进加载、搜索排序、运行规则详情和 YAML 安全处理。
-- 补齐后端代理与规则运行时接口、配置规范化、事务式保存和测试覆盖，并优化连接详情在桌面、平板与移动端的响应式布局。
-
-#### MosDNS、系统与发布
-
-- 新增 MosDNS 客户端和规则变更的运行时热同步，修复状态页版本展示，并统一服务管理页面与内容面板材质。
-- 统一所有页面的桌面起始高度，修复帮助文档导航、图表底栏和内容边界细节；安装文档改为跟随 Latest Release 或版本通配符。
-- 强化 Unraid 资产校验、更新清单生成和发布后自动同步，插件清单改为跟随 Latest Release，Docker CA 模板继续使用多架构 `latest` 镜像。
+- 修复 Mihomo 代理节点卡片只能点击名称切换的问题，现在整张卡片均可选择节点，并保留延迟测试按钮的独立操作。
+- 恢复完整英文模式，语言选择会同步保存到外观设置，并在页面跳转、刷新和重新登录后继续生效。
+- 修复 MosDNS 在线路由与广告拦截规则显示固定旧日期的问题，更新时间现在取自实际安装的本地规则文件。
+- 修复 3 个已失效的内置路由规则订阅地址；单条或批量更新失败时，界面会准确显示失败状态及对应规则源，不再误报更新成功。
 
     ]]>
   </CHANGES>
@@ -80,8 +60,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.4-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.4-x86_64-1.txz
+removepkg msf-0.4.5-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.5-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
