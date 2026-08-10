@@ -29,6 +29,7 @@ const themeOptions: { id: ThemeMode; label: string; Icon: typeof Sun }[] = [
 ];
 
 const languageOptions = ["简体中文", "English"];
+const README_URL = "https://github.com/scoltzero/msf/blob/main/README.md";
 
 function getInitialTheme(): ThemeMode {
   if (typeof window === "undefined") return "system";
@@ -233,7 +234,7 @@ export function AppHeader({ onToggleSidebar, sidebarCollapsed = false }: { onTog
                   { label: "个人信息", Icon: User, onClick: () => router.push("/settings?tab=profile") },
                   { label: "系统设定", Icon: Settings, onClick: () => router.push("/settings") },
                   { label: "用户管理", Icon: Users, onClick: () => router.push("/users") },
-                  { label: "帮助文档", Icon: CircleHelp, onClick: () => router.push("/system") },
+                  { label: "帮助文档", Icon: CircleHelp, onClick: () => window.location.assign(README_URL) },
                 ].map(({ label, Icon, onClick }) => (
                   <button
                     key={label}

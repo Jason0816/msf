@@ -10,7 +10,7 @@
 
 `msf` is an independent open-source management tool for MosDNS + Mihomo workflows. It provides self-hosted, auditable DNS policy resolution, traffic forwarding, Mihomo management, and platform-native installs for lawful, authorized network environments. Starting with v0.4.1, both the WebUI and project identity use an independent design.
 
-Current release: `v0.4.2`
+Current stable version: [GitHub Latest Release](https://github.com/scoltzero/msf/releases/latest)
 
 > [!IMPORTANT]
 > This project is provided solely for technical research, discussion, and sharing concerning networking, DNS, traffic forwarding, and open-source software deployment and management. It does not provide proxy nodes, subscriptions, accounts, or access credentials, nor does it provide instructions intended to circumvent network regulation, content filtering, or access controls. Users must comply with applicable law and bear the risks and responsibilities arising from their use. Read the full [Disclaimer](DISCLAIMER.md) before downloading, deploying, or using this project.
@@ -58,18 +58,18 @@ Current release: `v0.4.2`
 GitHub Release:
 
 ```text
-https://github.com/scoltzero/msf/releases/tag/v0.4.2
+https://github.com/scoltzero/msf/releases/latest
 ```
 
 | Asset | URL |
 |---|---|
-| Linux x86_64 | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf-linux-amd64.tar.gz` |
-| Linux ARM64 | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf-linux-arm64.tar.gz` |
-| fnOS x86 FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf_0.4.2_x86.fpk` |
-| fnOS ARM FPK | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf_0.4.2_arm.fpk` |
-| Unraid PLG | `https://github.com/scoltzero/msf/releases/download/v0.4.2/msf.plg` |
-| macOS Universal 2 DMG (unsigned Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.2/MSF-0.4.2-macos-universal-unsigned.dmg` |
-| macOS Universal 2 ZIP (unsigned Beta) | `https://github.com/scoltzero/msf/releases/download/v0.4.2/MSF-0.4.2-macos-universal-unsigned.zip` |
+| Linux x86_64 | `https://github.com/scoltzero/msf/releases/latest/download/msf-linux-amd64.tar.gz` |
+| Linux ARM64 | `https://github.com/scoltzero/msf/releases/latest/download/msf-linux-arm64.tar.gz` |
+| fnOS x86 FPK | `msf_*_x86.fpk` from [Latest Release](https://github.com/scoltzero/msf/releases/latest) |
+| fnOS ARM FPK | `msf_*_arm.fpk` from [Latest Release](https://github.com/scoltzero/msf/releases/latest) |
+| Unraid PLG | `https://github.com/scoltzero/msf/releases/latest/download/msf.plg` |
+| macOS Universal 2 DMG (unsigned Beta) | `MSF-*-macos-universal-unsigned.dmg` from [Latest Release](https://github.com/scoltzero/msf/releases/latest) |
+| macOS Universal 2 ZIP (unsigned Beta) | `MSF-*-macos-universal-unsigned.zip` from [Latest Release](https://github.com/scoltzero/msf/releases/latest) |
 
 ## Quick Start
 
