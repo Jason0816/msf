@@ -1,5 +1,25 @@
 # 更新日志
 
+## v0.4.5 - 2026-08-10
+
+### 中文
+
+#### 用户体验小更新
+
+- 修复 Mihomo 代理节点卡片只能点击名称切换的问题，现在整张卡片均可选择节点，并保留延迟测试按钮的独立操作。
+- 恢复完整英文模式，语言选择会同步保存到外观设置，并在页面跳转、刷新和重新登录后继续生效。
+- 修复 MosDNS 在线路由与广告拦截规则显示固定旧日期的问题，更新时间现在取自实际安装的本地规则文件。
+- 修复 3 个已失效的内置路由规则订阅地址；单条或批量更新失败时，界面会准确显示失败状态及对应规则源，不再误报更新成功。
+
+### English
+
+#### User experience update
+
+- Fixed Mihomo proxy selection so the entire node card is clickable while keeping latency tests as a separate action.
+- Restored complete English mode with language preferences persisted across navigation, reloads, and new sessions.
+- Fixed MosDNS routing and ad-blocking sources showing a stale hard-coded date; timestamps now reflect the installed local rule files.
+- Repaired three obsolete built-in routing subscription URLs and made single or batch update failures identify the affected rule sources instead of reporting false success.
+
 ## v0.4.4 - 2026-08-10
 
 ### 中文
