@@ -1,38 +1,45 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.3">
+<!ENTITY version "0.4.4">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.3">
-<!ENTITY packageName "msf-0.4.3-x86_64-1">
+<!ENTITY releaseTag "v0.4.4">
+<!ENTITY packageName "msf-0.4.4-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "d8431d7fde7c422d99201b1c764b7ae51e6be86e72e41c933c716d66bb2ddc0a">
+<!ENTITY packageSHA256 "f7af18c4a2055108f4b4e87ec1820da716ab7bc8527d059088676779e8130de3">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.3
+### msf 0.4.4
+
+> 赠言：事事如意，事事顺遂
 
 #### 说明
 
-- v0.4.3 是针对 v0.4.2 的 MosDNS 主查询链路和 Web 会话路由修复版：恢复 IPv4/IPv6 优先策略，保留真实客户端 IP，并移除未使用的 `127.0.0.1:5656` 回环入口。
-- Linux、Unraid、fnOS、macOS 与 Docker 继续从 `main` 上同一个干净 tag 构建；GitHub Release 提供 20 个安装产物及 SHA-256 文件，GHCR 同时发布 `v0.4.3` 和 `latest` 多架构镜像。
+- v0.4.4 集中升级仪表盘、Mihomo 管理与实时可观测能力，并统一桌面、分屏和移动端的页面起点、图表布局与 Liquid Glass 内容层级。
+- Linux、Unraid、fnOS、macOS 与 Docker 继续从 `main` 的同一个干净 tag 构建；GitHub Release 发布完整安装资产及 SHA-256 文件，GHCR 同时发布 `v0.4.4` 与 `latest` 多架构镜像。
 - macOS App 仍为未使用 Apple Developer ID 签名或公证的 TUN-only Beta，首次打开需要用户手动允许。
 
-#### MosDNS
+#### 仪表盘与图表
 
-- MosDNS 组件更新源切换为 `yyysuo/mosdns` 正式 Release，支持 `v5-ph-srs-*` 版本标签、架构资产选择和 GitHub SHA-256 digest 验证。
-- 修复 v0.4.2 将客户端 `:53` 查询经 `sequence_client` 二次转发到 `127.0.0.1:5656`，导致 MosDNS `client_ip` 只能看到回环地址的问题。UDP/TCP `:53` 现在直接进入 `sequence_6666`。
-- 恢复 `prefer_ipv4` / `prefer_ipv6` 在主分流序列内执行，保留自动、IPv4 优先和 IPv6 优先完整功能，并调整执行顺序，避免 DDNS、客户端直连和真实 AAAA 兜底提前退出而绕过优先策略。
-- 为客户端 UDP `:53` 显式启用新内核 `fast_accel` 落点，并删除未被 include 或正式 sequence 使用的 `forward_2.yaml`、`forward_all_in`、`udp_main/tcp_main` 和 5656 端口。
-- 新增启动兼容迁移，自动备份并清理 v0.4.2 旧入口配置，同时将 IPv4/IPv6 优先规则恢复到正确位置。
+- 新增可组合仪表盘网格、组件选择器、集合切换、拖动缩放、持久化布局和错误隔离，补齐系统、MosDNS、Mihomo 的实时、统计与控制组件。
+- 重构系统资源、主机速率、MosDNS 查询和 Mihomo 连接图的数据采样与时间窗口，稳定 ECharts 生命周期、实时曲线和半宽卡片布局。
+- 统一所有实时图表的时间选择器为等宽六段控件，在桌面双列与移动端均保留安全边距，避免图例、选择栏和卡片外框互相遮挡。
 
-#### WebUI 与认证
+#### Mihomo
 
-- 修复 Token 缺失、过期或无效时被误判为系统未初始化并跳转 `/setup` 的问题；已初始化系统现在正确进入 `/login`，初始化状态检查失败时显示可重试错误页。
-- 新增认证路由 E2E 覆盖，保留登录前的安全站内路径，登录后可返回原页面。
-- 统一设置、规则、客户端、上游 DNS、Mihomo 配置与节点页面的视口级弹窗容器，避免弹窗被页面布局、滚动区域或移动端视口截断。
+- Mihomo UI 重构（包括概览页面）借鉴并复用了 [Zephyruso/zashboard](https://github.com/Zephyruso/zashboard) 的部分源码与交互设计，特此感谢原作者的无私开源。
+- 重建 Mihomo 概览与连接可观测界面，新增全球连接地球、实时流量、连接历史、延迟、拓扑、规则命中和 Provider 流量等视图。
+- 重构代理节点与规则管理，增加配置权威状态、Provider 与手动节点编辑、测速计划、渐进加载、搜索排序、运行规则详情和 YAML 安全处理。
+- 补齐后端代理与规则运行时接口、配置规范化、事务式保存和测试覆盖，并优化连接详情在桌面、平板与移动端的响应式布局。
+
+#### MosDNS、系统与发布
+
+- 新增 MosDNS 客户端和规则变更的运行时热同步，修复状态页版本展示，并统一服务管理页面与内容面板材质。
+- 统一所有页面的桌面起始高度，修复帮助文档导航、图表底栏和内容边界细节；安装文档改为跟随 Latest Release 或版本通配符。
+- 强化 Unraid 资产校验、更新清单生成和发布后自动同步，插件清单改为跟随 Latest Release，Docker CA 模板继续使用多架构 `latest` 镜像。
 
     ]]>
   </CHANGES>
@@ -73,8 +80,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.3-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.3-x86_64-1.txz
+removepkg msf-0.4.4-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.4-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
