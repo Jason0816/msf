@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import {
   Users,
   ShieldOff,
@@ -148,6 +148,60 @@ function clientKey(client: Client) {
   return client.id || client.ip || client.mac;
 }
 
+function createClientDragPreview(client: Client, directionLabel: string) {
+  const preview = document.createElement("div");
+  preview.dataset.clientDragPreview = "true";
+  preview.style.cssText = [
+    "position:fixed",
+    "left:-10000px",
+    "top:-10000px",
+    "width:320px",
+    "display:flex",
+    "align-items:center",
+    "gap:10px",
+    "padding:10px 12px",
+    "border:1px solid hsl(var(--border))",
+    "border-radius:10px",
+    "background:hsl(var(--card) / 0.88)",
+    "color:hsl(var(--card-foreground))",
+    "box-shadow:0 14px 32px hsl(var(--foreground) / 0.18)",
+    "backdrop-filter:blur(10px)",
+    "-webkit-backdrop-filter:blur(10px)",
+    "opacity:0.92",
+    "pointer-events:none",
+    "z-index:2147483647",
+  ].join(";");
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    preview.style.transform = "rotate(1deg) scale(0.985)";
+  }
+
+  const onlineDot = document.createElement("span");
+  onlineDot.style.cssText = [
+    "width:9px",
+    "height:9px",
+    "flex:0 0 auto",
+    "border-radius:999px",
+    `background:${client.online ? "#22c55e" : "#9ca3af"}`,
+    "box-shadow:0 0 0 3px hsl(var(--card) / 0.8)",
+  ].join(";");
+
+  const content = document.createElement("span");
+  content.style.cssText = "display:flex;min-width:0;flex:1;flex-direction:column;gap:2px";
+
+  const title = document.createElement("strong");
+  title.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:18px";
+  title.textContent = client.name || client.ip || client.hostname || "未知客户端";
+
+  const detail = document.createElement("span");
+  detail.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:hsl(var(--muted-foreground))";
+  detail.textContent = [client.ip, directionLabel].filter(Boolean).join("  ·  ");
+
+  content.append(title, detail);
+  preview.append(onlineDot, content);
+  document.body.append(preview);
+  return preview;
+}
+
 function ClientCard({
   client,
   inList,
@@ -158,6 +212,9 @@ function ClientCard({
   selected,
   onSelect,
   busy,
+  dragging,
+  onDragStart,
+  onDragEnd,
 }: {
   client: Client;
   inList?: boolean;
@@ -168,6 +225,9 @@ function ClientCard({
   selected?: boolean;
   onSelect?: () => void;
   busy?: boolean;
+  dragging?: boolean;
+  onDragStart?: (event: DragEvent<HTMLSpanElement>) => void;
+  onDragEnd?: () => void;
 }) {
   const badge = statusBadge(client.status);
   const source = sourceBadge(client.source);
@@ -179,7 +239,13 @@ function ClientCard({
   ].filter(Boolean).join("  ·  ");
 
   return (
-    <div className="relative group">
+    <div
+      className={cn(
+        "relative group transition-[opacity,transform] duration-150 motion-reduce:transition-none",
+        dragging && "opacity-45 scale-[0.985]"
+      )}
+      data-client-dragging={dragging || undefined}
+    >
       <SolidPlate
         tone="subtle"
         onClick={multiSelect ? onSelect : undefined}
@@ -235,7 +301,19 @@ function ClientCard({
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
-              <GripVertical className="h-3.5 w-3.5 text-muted-foreground/60 cursor-grab" />
+              {onDragStart ? (
+                <span
+                  draggable
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  className="inline-flex h-6 w-5 cursor-grab items-center justify-center rounded text-muted-foreground/60 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                  title={variant === "list" ? "拖动到当前名单" : "拖回客户端列表"}
+                  aria-label={variant === "list" ? `拖动 ${title} 到当前名单` : `拖动 ${title} 回客户端列表`}
+                  data-client-drag-handle
+                >
+                  <GripVertical className="h-3.5 w-3.5" />
+                </span>
+              ) : null}
             </div>
           )}
         </div>
@@ -255,6 +333,8 @@ export default function MosdnsClientsPage() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState("");
+  const [draggedKey, setDraggedKey] = useState("");
+  const [dragOrigin, setDragOrigin] = useState<"list" | "active" | "">("");
   const [requiresScan, setRequiresScan] = useState(false);
   const [lastScanAt, setLastScanAt] = useState("");
 
@@ -352,6 +432,38 @@ export default function MosdnsClientsPage() {
       setBusyKey("");
     }
   };
+
+  const startClientDrag = (event: DragEvent<HTMLSpanElement>, client: Client, origin: "list" | "active") => {
+    const key = clientKey(client);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", key);
+    const directionLabel = origin === "active"
+      ? "移出当前名单"
+      : `加入${mode === "black" ? "黑名单" : "白名单"}`;
+    const preview = createClientDragPreview(client, directionLabel);
+    event.dataTransfer.setDragImage(preview, 28, 24);
+    window.setTimeout(() => preview.remove(), 0);
+    setDraggedKey(key);
+    setDragOrigin(origin);
+  };
+
+  const endClientDrag = () => {
+    setDraggedKey("");
+    setDragOrigin("");
+  };
+
+  const dropClient = (event: DragEvent<HTMLDivElement>, status: ClientStatus) => {
+    event.preventDefault();
+    const key = event.dataTransfer.getData("text/plain") || draggedKey;
+    const client = clients.find((item) => clientKey(item) === key);
+    endClientDrag();
+    if (!client) return;
+    const movingIntoList = status !== "unscanned";
+    if (client.inClientList === movingIntoList) return;
+    void moveClient(client, status);
+  };
+
+  const draggedClient = draggedKey ? clients.find((client) => clientKey(client) === draggedKey) : undefined;
 
   const moveSelected = async (status: ClientStatus) => {
     const targets = clients.filter((client) => selected.has(clientKey(client)));
@@ -522,7 +634,18 @@ export default function MosdnsClientsPage() {
               <span className="font-medium text-foreground">客户端列表 <span className="text-muted-foreground">({filtered.length} / {clients.length})</span></span>
               <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] text-muted-foreground">在线优先 · IP 正序</span>
             </div>
-            <div className="space-y-1.5">
+            <div
+              className={cn(
+                "min-h-16 space-y-1.5 rounded-md transition-[background-color,box-shadow]",
+                draggedClient?.inClientList && "bg-primary/5 ring-2 ring-primary/35"
+              )}
+              onDragOver={(event) => {
+                if (!draggedClient?.inClientList) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(event) => dropClient(event, "unscanned")}
+            >
               {loading && clients.length === 0 ? (
                 <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">正在加载客户端...</div>
               ) : filtered.length === 0 ? (
@@ -541,6 +664,9 @@ export default function MosdnsClientsPage() {
                       selected={selected.has(key)}
                       onSelect={() => toggleSelect(key)}
                       busy={busyKey === key}
+                      dragging={draggedKey === key && dragOrigin === "list"}
+                      onDragStart={multiSelect || c.inClientList ? undefined : (event) => startClientDrag(event, c, "list")}
+                      onDragEnd={endClientDrag}
                     />
                   );
                 })
@@ -559,7 +685,20 @@ export default function MosdnsClientsPage() {
               </p>
             </div>
           ) : (
-            <div className={cn("rounded-md border-2 border-dashed p-2.5 space-y-2", activeMeta.border, activeMeta.bg)}>
+            <div
+              className={cn(
+                "rounded-md border-2 border-dashed p-2.5 space-y-2 transition-[background-color,box-shadow]",
+                activeMeta.border,
+                activeMeta.bg,
+                draggedClient && !draggedClient.inClientList && "ring-2 ring-primary/45"
+              )}
+              onDragOver={(event) => {
+                if (!draggedClient || draggedClient.inClientList) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(event) => dropClient(event, activeListStatus)}
+            >
               <div className="flex items-center gap-2">
                 <ActiveListIcon className={cn("h-4 w-4", activeMeta.iconClass)} />
                 <h2 className="text-sm font-semibold text-foreground">{activeMeta.title}</h2>
@@ -578,6 +717,9 @@ export default function MosdnsClientsPage() {
                         variant="active"
                         onRemove={() => void moveClient(c, "unscanned")}
                         busy={busyKey === key}
+                        dragging={draggedKey === key && dragOrigin === "active"}
+                        onDragStart={(event) => startClientDrag(event, c, "active")}
+                        onDragEnd={endClientDrag}
                       />
                     );
                   })
