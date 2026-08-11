@@ -1494,7 +1494,7 @@ func normalizeProviderRequest(name string, req map[string]any, section string) (
 	if provider["url"] == nil && u != "" {
 		provider["url"] = u
 	}
-	if provider["path"] == nil {
+	if strings.TrimSpace(stringMapValue(provider, "path")) == "" {
 		dir := "proxy_providers"
 		ext := ".yaml"
 		if section == "rule-providers" {
@@ -1508,7 +1508,7 @@ func normalizeProviderRequest(name string, req map[string]any, section string) (
 				ext = ".yaml"
 			}
 		}
-		provider["path"] = filepath.ToSlash(filepath.Join("./"+dir, sanitizeProviderName(name)+ext))
+		provider["path"] = "./" + filepath.ToSlash(filepath.Join(dir, sanitizeProviderName(name)+ext))
 	}
 	if provider["interval"] == nil {
 		provider["interval"] = 86400

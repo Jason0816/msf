@@ -182,6 +182,22 @@ func TestMihomoProviderCollectionAndManualProxyPersistence(t *testing.T) {
 	}
 }
 
+func TestNormalizeProviderRequestDefaultsBlankProxyProviderPath(t *testing.T) {
+	for _, path := range []any{nil, "", "   "} {
+		req := map[string]any{"type": "http", "url": "https://example.com/sub.yaml"}
+		if path != nil {
+			req["path"] = path
+		}
+		provider, err := normalizeProviderRequest("Home Lab", req, "proxy-providers")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := stringMapValue(provider, "path"); got != "./proxy_providers/home-lab.yaml" {
+			t.Fatalf("blank path %q normalized to %q", path, got)
+		}
+	}
+}
+
 func TestMihomoProviderPatchPreservesUnexposedFields(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")

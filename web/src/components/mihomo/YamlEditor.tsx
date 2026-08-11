@@ -43,11 +43,13 @@ export function YamlEditor({
   onChange,
   maxHeight = 460,
   className,
+  readOnly = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   maxHeight?: CSSProperties["maxHeight"];
   className?: string;
+  readOnly?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -80,6 +82,8 @@ export function YamlEditor({
           autocompletion(),
           highlightSelectionMatches(),
           yaml(),
+          EditorState.readOnly.of(readOnly),
+          EditorView.editable.of(!readOnly),
           syntaxHighlighting(vscodeDarkYamlHighlight, { fallback: true }),
           keymap.of([
             indentWithTab,
@@ -152,7 +156,7 @@ export function YamlEditor({
       view.destroy();
       if (viewRef.current === view) viewRef.current = null;
     };
-  }, [height]);
+  }, [height, readOnly]);
 
   useEffect(() => {
     const view = viewRef.current;

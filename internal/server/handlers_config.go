@@ -21,12 +21,22 @@ func (a *App) handleConfigTree(w http.ResponseWriter, r *http.Request) {
 	if root == "" {
 		root = "configs"
 	}
-	nodes, err := a.fileTree(root, 4)
+	// Configuration trees contain generated rule and provider directories that
+	// can be deeper than the old four-level UI limit. Symlinked directories are
+	// treated as files by fileTree, so a generous finite depth remains safe.
+	nodes, err := a.fileTree(root, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "path_error", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "tree": nodes, "data": nodes})
+	absolutePath, _ := a.safePath(root)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":       true,
+		"root":          root,
+		"absolute_path": absolutePath,
+		"tree":          nodes,
+		"data":          nodes,
+	})
 }
 
 func (a *App) handleConfigFile(w http.ResponseWriter, r *http.Request) {

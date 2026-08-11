@@ -14,4 +14,9 @@ describe("English localization", () => {
     expect(translateText("上次扫描 5 分钟前")).toBe("Last scan 5 minutes ago");
     expect(translateText("多选 (3)")).toBe("Select multiple (3)");
   });
+
+  it("translates the automatic provider path guidance", () => {
+    expect(translateText("留空时自动使用")).toBe("Leave blank to use");
+    expect(translateText("，也可以自定义相对路径。")).toBe(", or enter a custom relative path.");
+  });
 });

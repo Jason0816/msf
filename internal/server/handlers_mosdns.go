@@ -1043,12 +1043,19 @@ func (a *App) handleMosDNSConfigFilePut(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) handleMosDNSConfigFiles(w http.ResponseWriter, r *http.Request) {
-	nodes, err := a.fileTree("configs/mosdns", 4)
+	const root = "configs/mosdns"
+	nodes, err := a.fileTree(root, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "path_error", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": nodes})
+	absolutePath, _ := a.safePath(root)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":       true,
+		"root":          root,
+		"absolute_path": absolutePath,
+		"data":          nodes,
+	})
 }
 
 func (a *App) handleMosDNSConfigDownload(w http.ResponseWriter, r *http.Request) {

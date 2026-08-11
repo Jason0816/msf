@@ -215,6 +215,8 @@ const manualTranslations: Record<string, string> = {
   "期望:": "Expected:",
   "DNS 服务入口": "DNS service entry",
   "国外转发": "Overseas forwarding",
+  "留空时自动使用": "Leave blank to use",
+  "，也可以自定义相对路径。": ", or enter a custom relative path.",
 };
 
 const translations: Record<string, string> = {

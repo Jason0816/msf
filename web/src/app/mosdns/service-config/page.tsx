@@ -6,31 +6,22 @@ import {
   FileText,
   FileCode,
   ChevronLeft,
-  ChevronRight,
+  ChevronsUpDown,
   Download,
   Upload,
   CircleCheckBig,
   Save,
-  Folder,
   Package,
   CheckCircle2,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ConfigFileTree, collectConfigDirectoryPaths, countConfigFiles, flattenConfigFiles, type ConfigFileNode } from "@/components/config/ConfigFileTree";
 import { YamlEditor } from "@/components/mihomo/YamlEditor";
 import { MosdnsHero } from "@/components/mosdns/MosdnsHero";
 import { ServiceControlCard } from "@/components/mosdns/ServiceControlCard";
 import { useToaster, ToastStack } from "@/components/Toaster";
 import { api, apiData, apiList, formatBytes, formatPercent, getToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-interface FileNode {
-  name: string;
-  path: string;
-  type?: string;
-  size?: number;
-  modified?: string;
-  children?: FileNode[];
-}
 
 interface ServiceInfo {
   name?: string;
@@ -45,14 +36,6 @@ interface ServiceInfo {
 
 const toolBtn =
   "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50";
-
-function isDirectory(node: FileNode) {
-  return node.type === "directory" || node.type === "folder" || Boolean(node.children?.length);
-}
-
-function flattenFiles(nodes: FileNode[]): FileNode[] {
-  return nodes.flatMap((node) => (isDirectory(node) ? flattenFiles(node.children || []) : [node]));
-}
 
 function displayPath(path?: string) {
   return path || "config.yaml";
@@ -74,47 +57,11 @@ function serviceRunning(service?: ServiceInfo) {
   return service?.running === true || ["running", "active", "ok"].includes(status);
 }
 
-function FileTree({
-  nodes,
-  selectedPath,
-  onSelect,
-  depth = 0,
-}: {
-  nodes: FileNode[];
-  selectedPath: string;
-  onSelect: (node: FileNode) => void;
-  depth?: number;
-}) {
-  return (
-    <div className={depth === 0 ? "mt-1 space-y-0.5" : "space-y-0.5"}>
-      {nodes.map((node) => {
-        const directory = isDirectory(node);
-        const active = node.path === selectedPath;
-        return (
-          <div key={node.path || node.name}>
-            <button
-              onClick={() => !directory && onSelect(node)}
-              className={cn(
-                "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-accent/60 transition-colors",
-                active ? "bg-primary/10 text-primary font-medium" : directory ? "text-foreground" : "text-muted-foreground"
-              )}
-              style={{ paddingLeft: `${8 + depth * 14}px` }}
-            >
-              {directory ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" /> : <span className="h-3.5 w-3.5 flex-shrink-0" />}
-              {directory ? <Folder className="h-4 w-4 text-muted-foreground flex-shrink-0" /> : <FileCode className="h-4 w-4 flex-shrink-0" />}
-              <span className="truncate">{node.name}</span>
-            </button>
-            {directory && node.children?.length ? <FileTree nodes={node.children} selectedPath={selectedPath} onSelect={onSelect} depth={depth + 1} /> : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function ServiceConfigPage() {
   const [collapsed, setCollapsed] = useState(false);
-  const [tree, setTree] = useState<FileNode[]>([]);
+  const [tree, setTree] = useState<ConfigFileNode[]>([]);
+  const [treeRoot, setTreeRoot] = useState("configs/mosdns");
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
   const [selectedPath, setSelectedPath] = useState("");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -122,9 +69,12 @@ export default function ServiceConfigPage() {
   const [service, setService] = useState<ServiceInfo | undefined>();
   const [serviceBusy, setServiceBusy] = useState(false);
   const uploadRef = useRef<HTMLInputElement | null>(null);
+  const treeInitialized = useRef(false);
   const { toasts, showToast } = useToaster();
 
-  const files = useMemo(() => flattenFiles(tree), [tree]);
+  const fileCount = useMemo(() => countConfigFiles(tree), [tree]);
+  const directoryPaths = useMemo(() => collectConfigDirectoryPaths(tree), [tree]);
+  const allExpanded = directoryPaths.size > 0 && Array.from(directoryPaths).every((path) => expandedPaths.has(path));
 
   const loadService = useCallback(async () => {
     try {
@@ -152,10 +102,16 @@ export default function ServiceConfigPage() {
     setLoading(true);
     try {
       const [treePayload] = await Promise.all([api("/api/v1/mosdns/config/files"), loadService()]);
-      const data = apiData<FileNode[] | FileNode>(treePayload, treePayload as FileNode[] | FileNode);
+      const data = apiData<ConfigFileNode[] | ConfigFileNode>(treePayload, treePayload as ConfigFileNode[] | ConfigFileNode);
       const nodes = Array.isArray(data) ? data : data?.children || [];
       setTree(nodes);
-      const firstConfig = flattenFiles(nodes).find((file) => file.name === "config.yaml") || flattenFiles(nodes).find((file) => file.name.endsWith(".yaml") || file.name.endsWith(".yml"));
+      setTreeRoot(String((treePayload as any)?.absolute_path || (treePayload as any)?.root || "configs/mosdns"));
+      if (!treeInitialized.current) {
+        setExpandedPaths(collectConfigDirectoryPaths(nodes));
+        treeInitialized.current = true;
+      }
+      const flatFiles = flattenConfigFiles(nodes);
+      const firstConfig = flatFiles.find((file) => file.name === "config.yaml") || flatFiles.find((file) => file.name?.endsWith(".yaml") || file.name?.endsWith(".yml"));
       await loadFile(firstConfig?.path);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "配置文件加载失败");
@@ -257,22 +213,45 @@ export default function ServiceConfigPage() {
 
           <div className="flex flex-col md:flex-row">
             {!collapsed && (
-              <div className="md:w-56 flex-shrink-0 border-b md:border-b-0 md:border-r border-border/50 p-3 bg-gradient-to-b from-muted/40 to-muted/10">
-                <div className="flex items-center gap-2 px-2 py-1.5 text-sm font-medium text-primary">
-                  <Folder className="h-4 w-4" />文件列表
+              <div className="w-full flex-shrink-0 border-b border-border/50 bg-gradient-to-b from-muted/40 to-muted/10 p-3 md:w-72 md:border-b-0 md:border-r">
+                <div className="mb-1.5 flex items-center justify-between gap-2 px-2 py-1">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-primary">MosDNS 配置目录</div>
+                    <div className="truncate text-[11px] text-muted-foreground" title={treeRoot}>{treeRoot} · {fileCount} 个文件</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedPaths(allExpanded ? new Set() : new Set(directoryPaths))}
+                    disabled={directoryPaths.size === 0}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55 disabled:opacity-40"
+                    aria-label={allExpanded ? "收起全部目录" : "展开全部目录"}
+                    title={allExpanded ? "收起全部" : "展开全部"}
+                  >
+                    <ChevronsUpDown className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </div>
-                {tree.length > 0 ? (
-                  <FileTree
-                    nodes={tree}
-                    selectedPath={selectedPath}
-                    onSelect={(node) => {
-                      setSelectedPath(node.path);
-                      void loadFile(node.path).catch((error) => showToast(error instanceof Error ? error.message : "文件读取失败"));
-                    }}
-                  />
-                ) : (
-                  <div className="px-2 py-3 text-xs text-muted-foreground">{loading ? "加载中..." : "没有配置文件"}</div>
-                )}
+                <div className="max-h-[calc(100vh-280px)] overflow-auto pr-1">
+                  {tree.length > 0 ? (
+                    <ConfigFileTree
+                      nodes={tree}
+                      selectedPath={selectedPath}
+                      expandedPaths={expandedPaths}
+                      onToggle={(path) => setExpandedPaths((current) => {
+                        const next = new Set(current);
+                        if (next.has(path)) next.delete(path);
+                        else next.add(path);
+                        return next;
+                      })}
+                      onSelect={(node) => {
+                        const path = node.path || node.name || "";
+                        setSelectedPath(path);
+                        void loadFile(path).catch((error) => showToast(error instanceof Error ? error.message : "文件读取失败"));
+                      }}
+                    />
+                  ) : (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">{loading ? "加载中..." : "没有配置文件"}</div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -353,7 +332,7 @@ export default function ServiceConfigPage() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">文件数</span>
-                <span className="font-mono text-xs text-muted-foreground">{files.length}</span>
+                <span className="font-mono text-xs text-muted-foreground">{fileCount}</span>
               </div>
             </div>
           </div>
