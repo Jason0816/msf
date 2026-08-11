@@ -1,25 +1,25 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.5">
+<!ENTITY version "0.4.6">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.5">
-<!ENTITY packageName "msf-0.4.5-x86_64-1">
+<!ENTITY releaseTag "v0.4.6">
+<!ENTITY packageName "msf-0.4.6-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "1c74c9ccdecf5ef7927d7aaa01240ad4a60a5b0b691d6a23b56b5ace730cbd13">
+<!ENTITY packageSHA256 "861a832a21d417d1f1b7a723fb5d73af2afdfa238f4d169a5beac67e05bc2667">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.5
+### msf 0.4.6
 
 #### 用户体验小更新
 
-- 修复 Mihomo 代理节点卡片只能点击名称切换的问题，现在整张卡片均可选择节点，并保留延迟测试按钮的独立操作。
-- 恢复完整英文模式，语言选择会同步保存到外观设置，并在页面跳转、刷新和重新登录后继续生效。
-- 修复 MosDNS 在线路由与广告拦截规则显示固定旧日期的问题，更新时间现在取自实际安装的本地规则文件。
-- 修复 3 个已失效的内置路由规则订阅地址；单条或批量更新失败时，界面会准确显示失败状态及对应规则源，不再误报更新成功。
+- 修复 Mihomo 订阅 Provider 未填写“本地路径”时把空路径写入配置的问题。现在会根据 Provider 名称自动生成 `./proxy_providers/<名称>.yaml`，避免 Mihomo 回退到 `proxies/` 目录并产生不透明的缓存文件名；自定义相对路径仍会原样保留。
+- Provider 编辑器会随名称实时提示建议保存路径，并明确说明路径可以留空自动生成。旧版本用户升级后，可重新添加订阅，或把已有 Provider 的本地路径手动改为 `./proxy_providers/<名称>.yaml` 后保存并更新订阅。
+- 重构通用配置与 MosDNS 服务配置的文件索引：显示真实数据目录和文件数量，支持逐级展开、收起及一键展开/收起全部目录，并完整展示深层配置文件；Mihomo 运行时配置继续可见但保持只读，避免误改生成文件。
+- 恢复 MosDNS 客户端列表的拖动操作，并增加半透明拖动条幅反馈，让移动目标和落点在拖动过程中保持清晰可见。
 
     ]]>
   </CHANGES>
@@ -60,8 +60,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.5-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.5-x86_64-1.txz
+removepkg msf-0.4.6-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.6-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
