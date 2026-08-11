@@ -1,5 +1,25 @@
 # 更新日志
 
+## v0.4.6 - 2026-08-11
+
+### 中文
+
+#### 用户体验小更新
+
+- 修复 Mihomo 订阅 Provider 未填写“本地路径”时把空路径写入配置的问题。现在会根据 Provider 名称自动生成 `./proxy_providers/<名称>.yaml`，避免 Mihomo 回退到 `proxies/` 目录并产生不透明的缓存文件名；自定义相对路径仍会原样保留。
+- Provider 编辑器会随名称实时提示建议保存路径，并明确说明路径可以留空自动生成。旧版本用户升级后，可重新添加订阅，或把已有 Provider 的本地路径手动改为 `./proxy_providers/<名称>.yaml` 后保存并更新订阅。
+- 重构通用配置与 MosDNS 服务配置的文件索引：显示真实数据目录和文件数量，支持逐级展开、收起及一键展开/收起全部目录，并完整展示深层配置文件；Mihomo 运行时配置继续可见但保持只读，避免误改生成文件。
+- 恢复 MosDNS 客户端列表的拖动操作，并增加半透明拖动条幅反馈，让移动目标和落点在拖动过程中保持清晰可见。
+
+### English
+
+#### User experience update
+
+- Fixed Mihomo subscription Providers persisting an empty local path. A blank path now becomes `./proxy_providers/<provider-name>.yaml`, preventing Mihomo from falling back to opaque cache filenames under `proxies/`; explicitly configured relative paths remain unchanged.
+- Added a live suggested-path placeholder and guidance to the Provider editor. Existing users can re-add a subscription after upgrading or edit its local path to `./proxy_providers/<provider-name>.yaml`, then save and update the Provider.
+- Reworked the general and MosDNS configuration indexes into complete collapsible directory trees with resolved data roots, file counts, deep-file visibility, and expand/collapse-all controls. The generated Mihomo runtime configuration remains visible but read-only.
+- Restored MosDNS client drag-and-drop and added a translucent drag banner so the moving item and destination remain visible throughout the interaction.
+
 ## v0.4.5 - 2026-08-10
 
 ### 中文
