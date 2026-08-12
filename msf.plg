@@ -1,25 +1,26 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.6">
+<!ENTITY version "0.4.7">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.6">
-<!ENTITY packageName "msf-0.4.6-x86_64-1">
+<!ENTITY releaseTag "v0.4.7">
+<!ENTITY packageName "msf-0.4.7-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "861a832a21d417d1f1b7a723fb5d73af2afdfa238f4d169a5beac67e05bc2667">
+<!ENTITY packageSHA256 "ee4a52faa50e174beaf048f7659ecd7561fbc85aeef2c912e726c03bb08339a0">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.6
+### msf 0.4.7
 
-#### 用户体验小更新
+#### 稳定性与配置安全更新
 
-- 修复 Mihomo 订阅 Provider 未填写“本地路径”时把空路径写入配置的问题。现在会根据 Provider 名称自动生成 `./proxy_providers/<名称>.yaml`，避免 Mihomo 回退到 `proxies/` 目录并产生不透明的缓存文件名；自定义相对路径仍会原样保留。
-- Provider 编辑器会随名称实时提示建议保存路径，并明确说明路径可以留空自动生成。旧版本用户升级后，可重新添加订阅，或把已有 Provider 的本地路径手动改为 `./proxy_providers/<名称>.yaml` 后保存并更新订阅。
-- 重构通用配置与 MosDNS 服务配置的文件索引：显示真实数据目录和文件数量，支持逐级展开、收起及一键展开/收起全部目录，并完整展示深层配置文件；Mihomo 运行时配置继续可见但保持只读，避免误改生成文件。
-- 恢复 MosDNS 客户端列表的拖动操作，并增加半透明拖动条幅反馈，让移动目标和落点在拖动过程中保持清晰可见。
+- 修复 Mihomo 代理组结构化编辑可能把 Controller 运行时展开的订阅节点写入静态配置的问题。保存前现在会检查代理组引用，并调用 Mihomo 核心测试候选配置；无效配置会在写入或重启前被拦截并返回实际错误。
+- 修复服务替换期间旧进程退出可能删除新进程 PID 文件或清除新进程状态的问题。启动失败提示现在只读取本次启动新增的标准输出和错误日志，避免旧日志干扰判断。
+- 为 MosDNS 增加安全的 ALIAPI 上游凭据编辑，支持账户 ID、Access Key、服务器地址和 ECS Mask 校验；Secret 不通过 API 回显，编辑时留空可保留原值，凭据文件权限限制为 `0600`。
+- 修复 Mihomo TProxy 与 Redirect 端口健康检查误报和回环告警：透明代理端口改为读取系统监听表并核对服务进程，不再主动连接端口进行探测。
+- 将默认测速和 Provider 健康检查地址统一为 `https://www.gstatic.com/generate_204`；结构化写回 Mihomo 配置时保持默认模板顺序，并始终把 `proxy-providers` 放在顶层配置末尾。
 
     ]]>
   </CHANGES>
@@ -60,8 +61,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.6-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.6-x86_64-1.txz
+removepkg msf-0.4.7-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.7-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
