@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -108,6 +109,8 @@ func (sm *ServiceManager) Start(ctx context.Context, name string) (ServiceStatus
 		stdout.Close()
 		return sm.Status(name), err
 	}
+	stdoutOffset := openedFileSize(stdout)
+	stderrOffset := openedFileSize(stderr)
 	// Managed services must outlive the HTTP request that triggered them.
 	// Stop/Restart owns shutdown through PID files and process signals.
 	cmd := exec.CommandContext(context.Background(), spec.Binary, spec.Args...)
@@ -129,10 +132,12 @@ func (sm *ServiceManager) Start(ctx context.Context, name string) (ServiceStatus
 		_ = cmd.Wait()
 		stdout.Close()
 		stderr.Close()
-		_ = os.Remove(spec.PIDFile)
 		close(waitDone)
 		sm.mu.Lock()
-		delete(sm.procs, name)
+		if sm.procs[name] == cmd {
+			delete(sm.procs, name)
+		}
+		removePIDFileIfMatches(spec.PIDFile, cmd.Process.Pid)
 		sm.mu.Unlock()
 	}()
 	timer := time.NewTimer(300 * time.Millisecond)
@@ -156,7 +161,19 @@ func (sm *ServiceManager) Start(ctx context.Context, name string) (ServiceStatus
 		sm.app.afterServiceStart(name)
 		return st, nil
 	}
-	if lines, err := tailFile(spec.Stderr, 8); err == nil && len(lines) > 0 {
+	lines := make([]string, 0, 8)
+	for _, item := range []struct {
+		path   string
+		offset int64
+	}{{spec.Stdout, stdoutOffset}, {spec.Stderr, stderrOffset}} {
+		if part, err := tailFileSince(item.path, item.offset, 8); err == nil {
+			lines = append(lines, part...)
+		}
+	}
+	if len(lines) > 8 {
+		lines = lines[len(lines)-8:]
+	}
+	if len(lines) > 0 {
 		return st, fmt.Errorf("%s exited after start: %s", name, strings.Join(lines, "\n"))
 	}
 	return st, fmt.Errorf("%s exited after start", name)
@@ -336,6 +353,19 @@ func readPID(path string) int {
 	return pid
 }
 
+func removePIDFileIfMatches(path string, pid int) {
+	if readPID(path) == pid {
+		_ = os.Remove(path)
+	}
+}
+
+func openedFileSize(file *os.File) int64 {
+	if info, err := file.Stat(); err == nil {
+		return info.Size()
+	}
+	return 0
+}
+
 func processAliveCross(pid int) bool {
 	if pid <= 0 {
 		return false
@@ -351,11 +381,21 @@ func processAliveCross(pid int) bool {
 }
 
 func tailFile(path string, maxLines int) ([]string, error) {
+	return tailFileSince(path, 0, maxLines)
+}
+
+func tailFileSince(path string, offset int64, maxLines int) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	if info, statErr := f.Stat(); statErr == nil && offset > info.Size() {
+		offset = 0
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return nil, err
+	}
 	scanner := bufio.NewScanner(f)
 	buf := make([]string, 0, maxLines)
 	for scanner.Scan() {
