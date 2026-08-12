@@ -19,4 +19,11 @@ describe("English localization", () => {
     expect(translateText("留空时自动使用")).toBe("Leave blank to use");
     expect(translateText("，也可以自定义相对路径。")).toBe(", or enter a custom relative path.");
   });
+
+  it("translates the ALIAPI credential editor", () => {
+    expect(translateText("阿里云 API 配置")).toBe("Aliyun API Settings");
+    expect(translateText("账户 ID")).toBe("Account ID");
+    expect(translateText("已设置，留空则保持不变")).toBe("Already set; leave blank to keep it unchanged");
+    expect(translateText("范围 0–128，通常使用 32")).toBe("Range 0–128; 32 is typical");
+  });
 });

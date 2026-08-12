@@ -460,3 +460,14 @@ func (a *App) writeJSONFile(rel string, value any) error {
 	}
 	return os.WriteFile(path, append(b, '\n'), 0644)
 }
+
+func (a *App) writeJSONFilePrivate(rel string, value any) error {
+	if err := a.writeJSONFile(rel, value); err != nil {
+		return err
+	}
+	path, err := a.safePath(rel)
+	if err != nil {
+		return err
+	}
+	return os.Chmod(path, 0600)
+}

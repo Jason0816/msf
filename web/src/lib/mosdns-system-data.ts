@@ -7,6 +7,10 @@ export interface UpstreamServer {
   protocol: string;
   address: string;
   enabled: boolean;
+  accountId?: string;
+  accessKeyId?: string;
+  accessKeySecretSet?: boolean;
+  ecsClientMask?: number;
 }
 
 export interface UpstreamGroup {

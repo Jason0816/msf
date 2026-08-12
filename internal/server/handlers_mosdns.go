@@ -1404,7 +1404,8 @@ func (a *App) setMosDNSSwitchStateAt(key string, enabled bool, now time.Time) {
 }
 
 func (a *App) handleMosDNSUpstreamOverrides(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": a.jsonSettingWithFileFallback("mosdns_upstream_overrides", "configs/mosdns/upstream_overrides.json", map[string]any{})})
+	stored := a.jsonSettingWithFileFallback("mosdns_upstream_overrides", "configs/mosdns/upstream_overrides.json", map[string]any{})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": redactMosDNSUpstreamSecrets(stored)})
 }
 
 func (a *App) handleMosDNSUpstreamOverridesPut(w http.ResponseWriter, r *http.Request) {
@@ -1416,8 +1417,17 @@ func (a *App) handleMosDNSUpstreamOverridesPut(w http.ResponseWriter, r *http.Re
 		return
 	}
 	old := a.jsonSettingWithFileFallback("mosdns_upstream_overrides", "configs/mosdns/upstream_overrides.json", map[string]any{})
-	a.storeJSONSetting("mosdns_upstream_overrides", req)
-	if err := a.writeJSONFile("configs/mosdns/upstream_overrides.json", req); err != nil {
+	merged, err := mergeMosDNSUpstreamSecrets(req, old)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_mosdns_upstreams", err.Error())
+		return
+	}
+	if _, err := normalizeMosDNSUpstreamGroups(merged); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_mosdns_upstreams", err.Error())
+		return
+	}
+	a.storeJSONSetting("mosdns_upstream_overrides", merged)
+	if err := a.writeJSONFilePrivate("configs/mosdns/upstream_overrides.json", merged); err != nil {
 		a.storeJSONSetting("mosdns_upstream_overrides", old)
 		writeError(w, http.StatusInternalServerError, "config_error", err.Error())
 		return
@@ -1425,13 +1435,13 @@ func (a *App) handleMosDNSUpstreamOverridesPut(w http.ResponseWriter, r *http.Re
 	if cfg, ok := a.latestSetupConfig(); ok {
 		if err := a.writeGeneratedConfigs(cfg); err != nil {
 			a.storeJSONSetting("mosdns_upstream_overrides", old)
-			_ = a.writeJSONFile("configs/mosdns/upstream_overrides.json", old)
+			_ = a.writeJSONFilePrivate("configs/mosdns/upstream_overrides.json", old)
 			_ = a.writeGeneratedConfigs(cfg)
 			writeError(w, http.StatusBadRequest, "invalid_mosdns_upstreams", err.Error())
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": req, "saved": true, "generated": true, "restart_required": true})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": redactMosDNSUpstreamSecrets(merged), "saved": true, "generated": true, "restart_required": true})
 }
 
 func (a *App) handleMosDNSRuleCategories(w http.ResponseWriter, r *http.Request) {

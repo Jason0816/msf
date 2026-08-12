@@ -195,7 +195,7 @@ function normalizeUpstreamGroups(payload: unknown): UpstreamGroup[] {
         const address = String(raw.addr || raw.server_addr || raw.address || "");
         const name = normalizeFakeServerName(key, raw.tag || raw.name || `上游 ${index + 1}`);
         if (GROUP_META[key]?.fake) raw.tag = name;
-        const noteParts = [raw.note, raw.socks5 ? `SOCKS5 ${raw.socks5}` : "", raw.dial_addr ? `拨号 ${raw.dial_addr}` : ""].filter(Boolean);
+        const noteParts = [raw.note, raw.account_id ? `账户: ${raw.account_id}` : "", raw.socks5 ? `SOCKS5 ${raw.socks5}` : "", raw.dial_addr ? `拨号 ${raw.dial_addr}` : ""].filter(Boolean);
         return {
           id: `${key}:${index}:${name || address}`,
           name,
@@ -203,6 +203,10 @@ function normalizeUpstreamGroups(payload: unknown): UpstreamGroup[] {
           protocol: String(raw.protocol || "udp"),
           address,
           enabled: asBool(raw.enabled ?? true),
+          accountId: String(raw.account_id || ""),
+          accessKeyId: String(raw.access_key_id || ""),
+          accessKeySecretSet: asBool(raw.access_key_secret_set),
+          ecsClientMask: numberValue(raw.ecs_client_mask ?? 32),
           raw,
         } satisfies EditableServer;
       }),
@@ -228,6 +232,19 @@ function groupsToPayload(groups: UpstreamGroup[], socks5?: string) {
     });
   });
   return payload;
+}
+
+function redactLocalUpstreamSecrets(groups: UpstreamGroup[]) {
+  return groups.map((group) => ({
+    ...group,
+    servers: group.servers.map((server) => {
+      const editable = server as EditableServer;
+      if (!editable.raw?.access_key_secret) return server;
+      const raw: RawRecord = { ...editable.raw, access_key_secret_set: true };
+      delete raw.access_key_secret;
+      return { ...server, accessKeySecretSet: true, raw } satisfies EditableServer;
+    }),
+  }));
 }
 
 function extractSocks5(groups: UpstreamGroup[]) {
@@ -441,11 +458,12 @@ export default function MosdnsSystemPage() {
   };
 
   const persistGroups = async (nextGroups: UpstreamGroup[], message = "上游 DNS 已保存") => {
-    setGroups(sortUpstreamGroups(nextGroups));
+    const payload = groupsToPayload(nextGroups, globalSettings.socks5);
+    setGroups(sortUpstreamGroups(redactLocalUpstreamSecrets(nextGroups)));
     try {
       await api("/api/v1/mosdns/system/upstream-overrides", {
         method: "POST",
-        body: JSON.stringify(groupsToPayload(nextGroups, globalSettings.socks5)),
+        body: JSON.stringify(payload),
       });
       showToast(message);
     } catch (error) {
@@ -494,11 +512,21 @@ export default function MosdnsSystemPage() {
   const rawForServer = (groupId: string, server: UpstreamServer | undefined, values: UpstreamServerFormValues) => {
     const editable = server as EditableServer | undefined;
     const raw = { ...(editable?.raw || {}) };
-    const addressKey = raw.server_addr !== undefined && raw.addr === undefined ? "server_addr" : "addr";
     raw.tag = normalizeFakeServerName(groupId, values.name);
     raw.protocol = values.protocol;
     raw.enabled = values.enabled;
-    raw[addressKey] = values.address;
+    if (values.protocol === "aliapi") {
+      delete raw.addr;
+      raw.server_addr = values.address;
+      raw.account_id = values.accountId;
+      raw.access_key_id = values.accessKeyId;
+      raw.access_key_secret = values.accessKeySecret;
+      raw.access_key_secret_set = values.accessKeySecretSet || Boolean(values.accessKeySecret);
+      raw.ecs_client_mask = values.ecsClientMask;
+    } else {
+      for (const key of ["account_id", "access_key_id", "access_key_secret", "access_key_secret_set", "server_addr", "ecs_client_mask"]) delete raw[key];
+      raw.addr = values.address;
+    }
     return raw;
   };
 
@@ -518,6 +546,10 @@ export default function MosdnsSystemPage() {
                       protocol: values.protocol,
                       address: values.address,
                       enabled: values.enabled,
+                      accountId: values.accountId,
+                      accessKeyId: values.accessKeyId,
+                      accessKeySecretSet: values.accessKeySecretSet || Boolean(values.accessKeySecret),
+                      ecsClientMask: values.ecsClientMask,
                       raw: rawForServer(group.id, server, { ...values, name: canonicalName }),
                     } satisfies EditableServer)
                   : server
@@ -540,6 +572,10 @@ export default function MosdnsSystemPage() {
                 protocol: values.protocol,
                 address: values.address,
                 enabled: values.enabled,
+                accountId: values.accountId,
+                accessKeyId: values.accessKeyId,
+                accessKeySecretSet: Boolean(values.accessKeySecret),
+                ecsClientMask: values.ecsClientMask,
                 raw: rawForServer(group.id, undefined, { ...values, name: canonicalName }),
               } satisfies EditableServer,
             ],
