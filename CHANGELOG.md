@@ -1,5 +1,27 @@
 # 更新日志
 
+## v0.4.7 - 2026-08-13
+
+### 中文
+
+#### 稳定性与配置安全更新
+
+- 修复 Mihomo 代理组结构化编辑可能把 Controller 运行时展开的订阅节点写入静态配置的问题。保存前现在会检查代理组引用，并调用 Mihomo 核心测试候选配置；无效配置会在写入或重启前被拦截并返回实际错误。
+- 修复服务替换期间旧进程退出可能删除新进程 PID 文件或清除新进程状态的问题。启动失败提示现在只读取本次启动新增的标准输出和错误日志，避免旧日志干扰判断。
+- 为 MosDNS 增加安全的 ALIAPI 上游凭据编辑，支持账户 ID、Access Key、服务器地址和 ECS Mask 校验；Secret 不通过 API 回显，编辑时留空可保留原值，凭据文件权限限制为 `0600`。
+- 修复 Mihomo TProxy 与 Redirect 端口健康检查误报和回环告警：透明代理端口改为读取系统监听表并核对服务进程，不再主动连接端口进行探测。
+- 将默认测速和 Provider 健康检查地址统一为 `https://www.gstatic.com/generate_204`；结构化写回 Mihomo 配置时保持默认模板顺序，并始终把 `proxy-providers` 放在顶层配置末尾。
+
+### English
+
+#### Stability and configuration safety update
+
+- Fixed structured Mihomo proxy-group editing accidentally persisting subscription nodes expanded by the Controller into static configuration. Group references are now checked and candidate configurations are tested by the Mihomo core before any write or restart, with real validation errors returned to the user.
+- Fixed a replaced service process losing its PID file or managed state when the previous process exited. Startup failures now report only stdout and stderr produced by the current attempt, preventing stale logs from masking the cause.
+- Added secure MosDNS ALIAPI upstream credential editing with validation for account ID, access keys, server address, and ECS mask. Secrets are never returned by the API, an empty edit preserves the stored value, and the credential file is restricted to mode `0600`.
+- Fixed false Mihomo TProxy and Redirect health results and loopback warnings. Transparent proxy ports are now verified from the system listener table and managed process identity instead of being actively connected to.
+- Standardized default latency tests and Provider health checks on `https://www.gstatic.com/generate_204`. Structured Mihomo writes now follow the default template order and always emit `proxy-providers` as the final top-level section.
+
 ## v0.4.6 - 2026-08-11
 
 ### 中文
