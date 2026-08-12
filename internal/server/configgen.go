@@ -811,7 +811,7 @@ func renderProxyProvidersYAML(providers map[string]string, includeManual bool) s
 	var b strings.Builder
 	b.WriteString("proxy-providers:\n")
 	if includeManual {
-		b.WriteString("  msf_manual:\n    type: file\n    path: './proxy_providers/msf_manual.yaml'\n    health-check:\n      enable: true\n      url: http://detectportal.firefox.com/success.txt\n      interval: 120\n")
+		b.WriteString("  msf_manual:\n    type: file\n    path: './proxy_providers/msf_manual.yaml'\n    health-check:\n      enable: true\n      url: https://www.gstatic.com/generate_204\n      interval: 120\n")
 	}
 	keys := make([]string, 0, len(providers))
 	for k := range providers {
@@ -820,7 +820,7 @@ func renderProxyProvidersYAML(providers map[string]string, includeManual bool) s
 	sort.Strings(keys)
 	for _, tag := range keys {
 		subscriptionURL := providers[tag]
-		b.WriteString(fmt.Sprintf("  %q:\n    type: http\n    url: %q\n    interval: 3600\n    path: './proxy_providers/%s.yaml'\n    health-check:\n      enable: true\n      url: http://detectportal.firefox.com/success.txt\n      interval: 120\n", tag, subscriptionURL, safeFilename(tag)))
+		b.WriteString(fmt.Sprintf("  %q:\n    type: http\n    url: %q\n    interval: 3600\n    path: './proxy_providers/%s.yaml'\n    health-check:\n      enable: true\n      url: https://www.gstatic.com/generate_204\n      interval: 120\n", tag, subscriptionURL, safeFilename(tag)))
 	}
 	return b.String()
 }

@@ -405,6 +405,7 @@ func parseMihomoRulesYAML(content string) (*yaml.Node, error) {
 }
 
 func marshalMihomoRulesYAML(doc *yaml.Node) (string, error) {
+	orderMihomoTopLevelYAML(doc)
 	b, err := yaml.Marshal(doc)
 	if err != nil {
 		return "", err

@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 func (a *App) handleProxyOverview(w http.ResponseWriter, r *http.Request) {
@@ -56,13 +54,14 @@ func (a *App) mihomoFullSnapshot() map[string]any {
 		}
 	}
 	ports := mihomoPortsFromConfig(cfg)
+	transparentHealth := mihomoTransparentPortHealth(service, ports)
 	health := map[string]any{
 		"controller": a.tcpPortOpen("127.0.0.1", ports["controller"]),
 		"http":       a.tcpPortOpen("127.0.0.1", ports["http"]),
 		"socks":      a.tcpPortOpen("127.0.0.1", ports["socks"]),
 		"mixed":      a.tcpPortOpen("127.0.0.1", ports["mixed"]),
-		"redir":      a.tcpPortOpen("127.0.0.1", ports["redir"]),
-		"tproxy":     mihomoTProxyHealthy(service, ports),
+		"redir":      transparentHealth["redir"],
+		"tproxy":     transparentHealth["tproxy"],
 	}
 	proxyProviders := anyMapSlice(providers["proxy_providers"])
 	proxyProviderCount := len(proxyProviders)
@@ -130,13 +129,14 @@ func (a *App) mihomoOverviewSnapshot() map[string]any {
 		}
 	}
 	ports := mihomoPortsFromConfig(cfg)
+	transparentHealth := mihomoTransparentPortHealth(service, ports)
 	health := map[string]any{
 		"controller": a.tcpPortOpen("127.0.0.1", ports["controller"]),
 		"http":       a.tcpPortOpen("127.0.0.1", ports["http"]),
 		"socks":      a.tcpPortOpen("127.0.0.1", ports["socks"]),
 		"mixed":      a.tcpPortOpen("127.0.0.1", ports["mixed"]),
-		"redir":      a.tcpPortOpen("127.0.0.1", ports["redir"]),
-		"tproxy":     mihomoTProxyHealthy(service, ports),
+		"redir":      transparentHealth["redir"],
+		"tproxy":     transparentHealth["tproxy"],
 	}
 	counts := mihomoLocalConfigCounts(cfg)
 	snapshot := map[string]any{
@@ -1548,7 +1548,7 @@ func (a *App) writeMihomoConfigMap(cfg map[string]any, sections ...string) error
 	if err := a.ensureMihomoGeneratedBackup(); err != nil {
 		return err
 	}
-	b, err := yaml.Marshal(cfg)
+	b, err := marshalMihomoConfigMap(cfg)
 	if err != nil {
 		return err
 	}
@@ -2035,10 +2035,6 @@ var mihomoTCPPortOpen = func(host string, port int) bool {
 	}
 	_ = conn.Close()
 	return true
-}
-
-func mihomoTProxyHealthy(service ServiceStatus, ports map[string]int) bool {
-	return service.Running && ports["tproxy"] > 0
 }
 
 func (a *App) tcpPortOpen(host string, port int) bool {

@@ -74,7 +74,7 @@ func (a *App) patchMihomoProxyProvidersInFile(rel, providersYAML, username strin
 		}
 		return "", err
 	}
-	patched := replaceMihomoProxyProviders(content, providersYAML)
+	patched := moveTopLevelYAMLBlockToEnd(replaceMihomoProxyProviders(content, providersYAML), "proxy-providers")
 	if patched == content {
 		return patched, nil
 	}

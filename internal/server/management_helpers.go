@@ -82,7 +82,7 @@ func (a *App) enhancedServiceStatus(name string) map[string]any {
 		"config_path":       st.ConfigPath,
 		"log_path":          st.LogPath,
 		"log_paths":         a.logPathRows(name),
-		"health_ports":      serviceHealthPorts(name),
+		"health_ports":      serviceHealthPorts(name, st),
 		"error":             st.Error,
 	}
 	if spec, err := a.Services.spec(name); err == nil {
@@ -118,7 +118,7 @@ func displayServiceName(name string) string {
 	}
 }
 
-func serviceHealthPorts(name string) []map[string]any {
+func serviceHealthPorts(name string, service ServiceStatus) []map[string]any {
 	defs := map[string][]struct {
 		Port int
 		Name string
@@ -132,9 +132,25 @@ func serviceHealthPorts(name string) []map[string]any {
 			{7896, "tproxy"}, {7877, "redirect"}, {9090, "controller"}, {9099, "dashboard-metrics"},
 		},
 	}
+	transparentHealth := map[string]bool{}
+	if name == "mihomo" {
+		transparentHealth = mihomoTransparentPortHealth(service, map[string]int{
+			"redir":  mihomoRedirectPort,
+			"tproxy": mihomoTProxyPort,
+		})
+	}
 	rows := make([]map[string]any, 0, len(defs[name]))
 	for _, def := range defs[name] {
-		rows = append(rows, map[string]any{"port": def.Port, "name": def.Name, "listening": tcpPortOpen(def.Port)})
+		listening := false
+		switch def.Port {
+		case mihomoRedirectPort:
+			listening = transparentHealth["redir"]
+		case mihomoTProxyPort:
+			listening = transparentHealth["tproxy"]
+		default:
+			listening = tcpPortOpen(def.Port)
+		}
+		rows = append(rows, map[string]any{"port": def.Port, "name": def.Name, "listening": listening})
 	}
 	return rows
 }

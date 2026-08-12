@@ -206,7 +206,7 @@ rules:
 `
 }
 
-func TestMihomoOverviewDoesNotDialTProxyPort(t *testing.T) {
+func TestMihomoOverviewDoesNotDialTransparentProxyPorts(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")
 	api := newFakeMihomoController(t)
@@ -217,8 +217,8 @@ func TestMihomoOverviewDoesNotDialTProxyPort(t *testing.T) {
 	ports := []int{}
 	mihomoTCPPortOpen = func(host string, port int) bool {
 		ports = append(ports, port)
-		if port == 7896 {
-			t.Fatalf("overview should not TCP dial Mihomo TProxy port")
+		if port == mihomoTProxyPort || port == mihomoRedirectPort {
+			t.Fatalf("overview should not TCP dial Mihomo transparent proxy port %d", port)
 		}
 		return true
 	}
@@ -233,8 +233,8 @@ func TestMihomoOverviewDoesNotDialTProxyPort(t *testing.T) {
 		t.Fatalf("full overview should expose tproxy health without dialing it: status=%d body=%s", full.Code, full.Body.String())
 	}
 	for _, port := range ports {
-		if port == 7896 {
-			t.Fatalf("unexpected tproxy dial recorded in ports: %v", ports)
+		if port == mihomoTProxyPort || port == mihomoRedirectPort {
+			t.Fatalf("unexpected transparent proxy dial recorded in ports: %v", ports)
 		}
 	}
 }

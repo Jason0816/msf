@@ -1690,7 +1690,7 @@ export default function MihomoProxiesPage() {
                   <textarea
                     value={group.extra}
                     onChange={(event) => setGroupDrafts((items) => items.map((item, i) => (i === index ? { ...item, extra: event.target.value } : item)))}
-                    placeholder='高级 JSON，例如 {"url":"http://detectportal.firefox.com/success.txt","interval":120}'
+                    placeholder='高级 JSON，例如 {"url":"https://www.gstatic.com/generate_204","interval":120}'
                     className="mt-2 min-h-20 w-full rounded-lg border border-border/60 bg-card px-3 py-2 font-mono text-xs focus:outline-none focus:border-primary/60"
                   />
                 </div>

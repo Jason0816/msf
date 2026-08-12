@@ -478,7 +478,7 @@ func tcpPortOpen(port int) bool {
 	return true
 }
 
-func diagnosticPortRows() []map[string]any {
+func (a *App) diagnosticPortRows() []map[string]any {
 	defs := []struct {
 		Service string
 		Port    int
@@ -499,9 +499,22 @@ func diagnosticPortRows() []map[string]any {
 		{"mihomo", 7877, "Redirect"},
 		{"mihomo", 9090, "Zashboard"},
 	}
+	mihomoService := a.Services.Status("mihomo")
+	transparentHealth := mihomoTransparentPortHealth(mihomoService, map[string]int{
+		"redir":  mihomoRedirectPort,
+		"tproxy": mihomoTProxyPort,
+	})
 	rows := make([]map[string]any, 0, len(defs))
 	for _, def := range defs {
-		inUse := tcpPortOpen(def.Port)
+		inUse := false
+		switch def.Port {
+		case mihomoRedirectPort:
+			inUse = transparentHealth["redir"]
+		case mihomoTProxyPort:
+			inUse = transparentHealth["tproxy"]
+		default:
+			inUse = tcpPortOpen(def.Port)
+		}
 		status := "free"
 		if inUse {
 			status = "ok"

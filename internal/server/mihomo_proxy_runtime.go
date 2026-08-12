@@ -739,7 +739,7 @@ func (a *App) mihomoCandidateConfigContent(req map[string]any) (string, error) {
 			return "", fmt.Errorf("%s", validation.Error)
 		}
 		base["proxies"] = mihomoManualProxyMaps(content)
-		b, err := yaml.Marshal(base)
+		b, err := marshalMihomoConfigMap(base)
 		if err != nil {
 			return "", err
 		}
@@ -760,7 +760,7 @@ func (a *App) mihomoCandidateConfigContent(req map[string]any) (string, error) {
 		return "", fmt.Errorf("draft is required for %s", scope)
 	}
 	base[section] = draft
-	b, err := yaml.Marshal(base)
+	b, err := marshalMihomoConfigMap(base)
 	if err != nil {
 		return "", err
 	}

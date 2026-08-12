@@ -89,7 +89,7 @@ func (a *App) diagnosticsPayload() map[string]any {
 	configDirOK := dirReadable(filepath.Join(a.DataDir, "configs"))
 	configFiles := a.validateConfigFiles()
 	deps := dependencyChecks()
-	ports := diagnosticPortRows()
+	ports := a.diagnosticPortRows()
 	disk := diskUsage(a.DataDir)
 	diskOK := diskHealthy(disk)
 	permissionsOK := dirWritable(a.DataDir) && dirWritable(filepath.Join(a.DataDir, "logs")) && dirWritable(filepath.Join(a.DataDir, "configs"))

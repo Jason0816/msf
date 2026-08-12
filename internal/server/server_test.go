@@ -81,6 +81,12 @@ func TestSetupInitializeLoginAndGeneratedConfigs(t *testing.T) {
 	if strings.Contains(text, "global-client-fingerprint") {
 		t.Fatalf("mihomo config should not contain removed global-client-fingerprint:\n%s", text)
 	}
+	if strings.Contains(text, "detectportal.firefox.com") || !strings.Contains(text, "https://www.gstatic.com/generate_204") {
+		t.Fatalf("mihomo default tests and provider health checks should use the HTTPS gstatic endpoint:\n%s", text)
+	}
+	if index := strings.LastIndex(text, "\nproxy-providers:"); index < 0 || strings.TrimSpace(text[index:]) == "" || strings.Contains(text[index+1:], "\nrules:") {
+		t.Fatalf("proxy-providers should remain the final top-level section:\n%s", text)
+	}
 	manualProvider, err := os.ReadFile(filepath.Join(app.DataDir, "configs/mihomo/proxy_providers/msf_manual.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -2182,7 +2188,7 @@ func TestMihomoCustomConfigModeProtectsGeneratedConfigAndRestoresBackup(t *testi
 
 	groups := requestJSON(t, app, http.MethodPut, "/api/v1/mihomo/proxy-groups-config", token, map[string]any{
 		"proxy-groups": []any{
-			map[string]any{"name": "Edited", "type": "select", "proxies": []any{"DIRECT"}, "url": "http://www.gstatic.com/generate_204", "interval": 300},
+			map[string]any{"name": "Edited", "type": "select", "proxies": []any{"DIRECT"}, "url": "https://www.gstatic.com/generate_204", "interval": 300},
 		},
 	})
 	if groups.Code != http.StatusOK || !strings.Contains(groups.Body.String(), `"restart_required":false`) {
