@@ -1,15 +1,29 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 )
+
+func installTestMihomoBinary(t *testing.T, app *App, body string) {
+	t.Helper()
+	bin := filepath.Join(app.DataDir, "data/binaries/mihomo/mihomo")
+	if err := os.MkdirAll(filepath.Dir(bin), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"+body), 0755); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestMihomoProxyRuntimeRoutesAndTargetedDisconnect(t *testing.T) {
 	app := newTestApp(t)
@@ -103,6 +117,19 @@ func TestMihomoProxyConfigValidateDoesNotWrite(t *testing.T) {
 	}
 }
 
+func TestMihomoCandidateValidationUsesCoreAndReturnsStdout(t *testing.T) {
+	app := newTestApp(t)
+	installTestMihomoBinary(t, app, "echo 'time=test level=fatal msg=Parse config error: proxy group member not found'\nexit 1\n")
+	validation := app.validateMihomoCandidateContent(context.Background(), testMihomoConfigYAML("Runtime"))
+	if validation.Valid || !strings.Contains(validation.Error, "proxy group member not found") {
+		t.Fatalf("core validation should return stdout fatal, got %+v", validation)
+	}
+	matches, err := filepath.Glob(filepath.Join(app.DataDir, "data/tmp/.msf-mihomo-candidate-*.yaml"))
+	if err != nil || len(matches) != 0 {
+		t.Fatalf("candidate validation temp file leaked: matches=%v err=%v", matches, err)
+	}
+}
+
 func TestMihomoProxyGroupWriteHonoursConfigAuthority(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")
@@ -128,6 +155,15 @@ func TestMihomoProxyGroupWriteHonoursConfigAuthority(t *testing.T) {
 	}
 	app.setMihomoConfigMode("custom")
 	app.setSetting(mihomoAppliedUserConfigKey, "configs/mihomo/user_configs/runtime.yaml")
+	invalid := requestJSON(t, app, http.MethodPut, "/api/v1/mihomo/proxy-groups-config", token, map[string]any{
+		"proxy-groups": []any{map[string]any{"name": "Expanded", "type": "select", "proxies": []string{"Provider Runtime Node"}}},
+	})
+	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "references unknown proxy Provider Runtime Node") {
+		t.Fatalf("runtime-only member should be rejected before restart: status=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+	if active, err := app.readTextFile(mihomoActiveConfigRelPath); err != nil || active != custom {
+		t.Fatalf("invalid group write changed active config: err=%v", err)
+	}
 	allowed := requestJSON(t, app, http.MethodPut, "/api/v1/mihomo/proxy-groups-config", token, map[string]any{
 		"proxy-groups": []any{map[string]any{"name": "Edited", "type": "select", "proxies": []string{"DIRECT"}}},
 	})

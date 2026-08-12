@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -642,6 +643,9 @@ func (a *App) updateMihomoConfigSections(req map[string]any, sections ...string)
 		if len(sections) == 1 {
 			cfg[section] = req
 		}
+	}
+	if err := validateMihomoCandidateStructure(cfg); err != nil {
+		return fmt.Errorf("invalid Mihomo configuration: %w", err)
 	}
 	return a.writeMihomoConfigMap(cfg, sections...)
 }

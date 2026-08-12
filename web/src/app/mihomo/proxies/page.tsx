@@ -14,6 +14,7 @@ import { compileSafeSearch } from "@/features/mihomo-proxies/search";
 import { readProxySettings, resetProxySettings, writeProxySettings } from "@/features/mihomo-proxies/settings";
 import { useProxyDisclosure } from "@/features/mihomo-proxies/useProxyDisclosure";
 import { useProxyGroupTraffic } from "@/features/mihomo-proxies/useProxyGroupTraffic";
+import { buildProxyGroupRow, proxyGroupDraft, proxyGroupRows, replaceProxyGroup } from "@/features/mihomo-proxies/groupConfig";
 import type { ProxyEntity, ProxyKey, ProxyPageSettings, ProxyProvider, ProxyStore } from "@/features/mihomo-proxies/types";
 import { ProxyPageHeader } from "@/components/mihomo/proxies/ProxyPageHeader";
 import { ProxyToolbar } from "@/components/mihomo/proxies/ProxyToolbar";
@@ -31,13 +32,13 @@ import type { ProxyConfigStatusView, ProxyGroupView, ProxyNodeView, ProxyProvide
 function nodeView(entity: ProxyEntity, finalEntity?: ProxyEntity): ProxyNodeView { return { key: entity.key, name: entity.name, type: entity.type, kind: entity.kind, delay: finalEntity?.delay ?? entity.delay, alive: finalEntity?.alive ?? entity.alive, hidden: entity.hidden, icon: entity.icon, providerName: entity.providerName }; }
 function providerView(store: ProxyStore, provider: ProxyProvider, keys: Set<ProxyKey>): ProxyProviderView { const nodes = provider.proxyKeys.map((key) => store.entities[key]).filter((entity): entity is ProxyEntity => Boolean(entity && keys.has(entity.key))).map((entity) => nodeView(entity)); const subscription = provider.subscription; const used = subscription?.used ?? provider.used ?? 0; const quota = subscription?.total ?? provider.quota ?? 0; return { id: provider.id, name: provider.name, vehicleType: provider.vehicleType, nodes, alive: provider.alive, total: provider.total ?? nodes.length, used: used ? formatBytes(used) : "-", quota: quota ? formatBytes(quota) : "-", percent: provider.percent ?? (quota ? (used / quota) * 100 : 0), updated: provider.updatedAt || "未更新", expire: subscription?.expire }; }
 function asRecord(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-function validationMessage(payload: unknown) { const row = asRecord(apiData(payload, payload)); if (row.success === false) throw new Error(String(row.message || row.error || "配置校验失败，未写入")); return String(row.message || "配置校验通过，可保存"); }
+function validationMessage(payload: unknown) { const row = asRecord(apiData(payload, payload)); if (row.success === false || row.valid === false) throw new Error(String(row.message || row.error || "配置校验失败，未写入")); return String(row.message || "配置校验通过，可保存"); }
 
 export default function MihomoProxiesPage() {
   const { toasts, showToast } = useToaster();
   const [settings, setSettings] = useState<ProxyPageSettings>(() => readProxySettings());
   const [search, setSearch] = useState(""); const [searchMode, setSearchMode] = useState<ProxySearchMode>("groups"); const [regex, setRegex] = useState(false); const deferredSearch = useDeferredValue(search); const [typeFilter, setTypeFilter] = useState("all"); const [autoRefresh, setAutoRefresh] = useState(true); const [reorderEnabled, setReorderEnabled] = useState(false); const [settingsOpen, setSettingsOpen] = useState(false); const [chainGroup, setChainGroup] = useState<ProxyGroupView | null>(null); const [editor, setEditor] = useState<"provider" | "group" | "manual" | null>(null); const [groupManagerOpen, setGroupManagerOpen] = useState(false); const [providerManagerOpen, setProviderManagerOpen] = useState(false);
-  const [providerDraft, setProviderDraft] = useState<ProxyProviderDraft>(); const [groupDraft, setGroupDraft] = useState<ProxyGroupDraftView>(); const [manualDraft, setManualDraft] = useState<ProxyManualNodeDraft>(); const [editorKey, setEditorKey] = useState(""); const [editorBusy, setEditorBusy] = useState<string | null>(null); const [testingTarget, setTestingTarget] = useState<string | null>(null); const [updatingProvider, setUpdatingProvider] = useState<string | null>(null);
+  const [providerDraft, setProviderDraft] = useState<ProxyProviderDraft>(); const [groupDraft, setGroupDraft] = useState<ProxyGroupDraftView>(); const [groupConfigLoading, setGroupConfigLoading] = useState(false); const [manualDraft, setManualDraft] = useState<ProxyManualNodeDraft>(); const [editorKey, setEditorKey] = useState(""); const [editorBusy, setEditorBusy] = useState<string | null>(null); const [testingTarget, setTestingTarget] = useState<string | null>(null); const [updatingProvider, setUpdatingProvider] = useState<string | null>(null);
   const runtime = useProxyRuntime({ enabled: true, autoRefreshMs: autoRefresh ? 30_000 : 0, pageFallback: { url: settings.delayTestUrl, timeoutMs: settings.delayTimeoutMs }, settings: { autoDisconnectOnSwitch: settings.autoDisconnectOnSwitch } }); const { store, loading, refreshing, error, testingJobs } = runtime; const resolveChain = runtime.resolveChain;
   const { groupTraffic } = useProxyGroupTraffic({ enabled: true, intervalMs: 2_000 });
   useEffect(() => { writeProxySettings(settings); }, [settings]);
@@ -119,12 +120,39 @@ export default function MihomoProxiesPage() {
 
   const openProvider = (provider: ProxyProviderView) => { const original = store.providers[provider.id]?.raw; const raw = asRecord(original); const health = asRecord(raw["health-check"]); setEditorKey(provider.id); setProviderDraft({ name: provider.name, type: provider.vehicleType || "http", url: String(raw.url || ""), path: String(raw.path || ""), interval: Number(raw.interval || 86400), healthCheckEnable: Boolean(health.enable), healthCheckUrl: String(health.url || ""), healthCheckInterval: Number(health.interval || 300), healthCheckLazy: health.lazy !== false, advanced: JSON.stringify(original || {}, null, 2) }); setEditor("provider"); void api(`/api/v1/mihomo/proxy-providers/${encodeURIComponent(provider.name)}`).then((payload) => { const latest = asRecord(apiData(payload, payload)); const latestHealth = asRecord(latest["health-check"]); setProviderDraft((current) => current ? { ...current, name: String(latest.name || current.name), type: String(latest.type || current.type), url: String(latest.url || current.url), path: String(latest.path || current.path), interval: Number(latest.interval || current.interval), healthCheckEnable: latestHealth.enable == null ? current.healthCheckEnable : Boolean(latestHealth.enable), healthCheckUrl: String(latestHealth.url || current.healthCheckUrl), healthCheckInterval: Number(latestHealth.interval || current.healthCheckInterval), healthCheckLazy: latestHealth.lazy == null ? current.healthCheckLazy : Boolean(latestHealth.lazy), advanced: JSON.stringify(latest, null, 2) } : current); }).catch(() => undefined); };
   const openProviderManager = () => setProviderManagerOpen(true);
-  const openGroup = (group: ProxyGroupView) => { const raw = asRecord(store.entities[group.key as ProxyKey]?.raw); setEditorKey(group.key); setGroupDraft({ name: group.name, type: group.type, icon: String(raw.icon || group.icon || ""), proxies: group.nodes.map((node) => node.name).join("\n"), url: String(raw.url || ""), interval: Number(raw.interval || 300), lazy: Boolean(raw.lazy), tolerance: Number(raw.tolerance || 50), strategy: String(raw.strategy || "consistent-hashing"), advanced: JSON.stringify(raw, null, 2) }); setEditor("group"); void api("/api/v1/mihomo/proxy-groups-config").then((payload) => { const data = apiData(payload, payload); const value = Array.isArray(data) ? data : asRecord(data)["proxy-groups"] ?? asRecord(data).proxy_groups ?? asRecord(data).groups; const rows = Array.isArray(value) ? value : []; const latest = rows.map(asRecord).find((row) => String(row.name || "") === group.name); if (latest) setGroupDraft((current) => current ? { ...current, type: String(latest.type || current.type), icon: String(latest.icon || current.icon), proxies: Array.isArray(latest.proxies) ? latest.proxies.map(String).join("\n") : current.proxies, url: String(latest.url || current.url), interval: Number(latest.interval || current.interval), lazy: latest.lazy == null ? current.lazy : Boolean(latest.lazy), tolerance: Number(latest.tolerance || current.tolerance), strategy: String(latest.strategy || current.strategy), advanced: JSON.stringify(latest, null, 2) } : current); }).catch(() => undefined); };
+  const openGroup = (group: ProxyGroupView) => {
+    setEditorKey(group.key);
+    setGroupDraft({ name: group.name, type: group.type, icon: group.icon || "", proxies: "", url: "", interval: 300, lazy: false, tolerance: 50, strategy: "consistent-hashing", advanced: "{}" });
+    setGroupConfigLoading(true);
+    setEditor("group");
+    void api("/api/v1/mihomo/proxy-groups-config").then((payload) => {
+      const latest = proxyGroupRows(payload).find((row) => String(row.name || "") === group.name);
+      if (!latest) throw new Error(`静态配置中未找到策略组 ${group.name}`);
+      setGroupDraft(proxyGroupDraft(latest));
+    }).catch((cause) => {
+      showToast(cause instanceof Error ? cause.message : "读取代理组配置失败");
+      setEditor(null);
+    }).finally(() => setGroupConfigLoading(false));
+  };
   const chooseGroupForEditing = (group: ProxyGroupView) => { setGroupManagerOpen(false); openGroup(group); };
   const deleteProvider = async (item: ProxyCollectionItem) => { if (!status.canEditProviders) throw new Error("当前配置不允许删除订阅供应商"); await api(`/api/v1/mihomo/proxy-providers/${encodeURIComponent(item.name)}`, { method: "DELETE" }); showToast(`已删除供应商 ${item.name}`); await runtime.refresh({ silent: true }); };
   const deleteGroup = async (item: ProxyCollectionItem) => { if (!status.canEditGroups) throw new Error("生成配置中的策略组只读，请切换到自定义配置后再删除"); const currentPayload = await api("/api/v1/mihomo/proxy-groups-config"); const currentData = apiData(currentPayload, currentPayload); const currentValue = Array.isArray(currentData) ? currentData : asRecord(currentData)["proxy-groups"] ?? asRecord(currentData).proxy_groups ?? asRecord(currentData).groups; const currentRows = Array.isArray(currentValue) ? currentValue.map(asRecord) : []; const nextRows = currentRows.filter((row) => String(row.name || "") !== item.name); if (nextRows.length === currentRows.length) throw new Error(`未找到策略组 ${item.name}，未执行删除`); await api("/api/v1/mihomo/proxy-groups-config", { method: "PUT", body: JSON.stringify({ "proxy-groups": nextRows }) }); showToast(`已删除策略组 ${item.name}`); await runtime.refresh({ silent: true }); };
   const openManual = async () => { setEditorKey("manual"); setManualDraft({ mode: "links", links: "", yaml: "" }); setEditor("manual"); try { const payload = await api("/api/v1/mihomo/manual-proxies"); const data = asRecord(apiData(payload, payload)); const mode = data.input_mode === "yaml" ? "yaml" : "links"; const content = String(data.content || ""); setManualDraft({ mode, links: mode === "links" ? content : "", yaml: mode === "yaml" ? content : "" }); } catch { /* empty draft is still useful for first-time setup */ } };
-  const validateDraft = async (scope: string, draft: unknown) => { const row = asRecord(draft); const candidate = scope === "manual-proxies" ? { content: row.mode === "yaml" ? row.yaml : row.links } : draft; const payload = await api("/api/v1/mihomo/proxy-config/validate", { method: "POST", body: JSON.stringify({ scope, draft: candidate }) }); return validationMessage(payload); };
+  const groupMutationPayload = async (draft: unknown) => {
+    const row = asRecord(draft);
+    const name = String(row.name || "").trim();
+    if (!name) throw new Error("策略组名称不能为空");
+    const originalName = editorKey ? parseProxyKey(editorKey as ProxyKey).name : name;
+    const currentRows = proxyGroupRows(await api("/api/v1/mihomo/proxy-groups-config"));
+    const nextRow = buildProxyGroupRow(row as unknown as ProxyGroupDraftView);
+    return { "proxy-groups": replaceProxyGroup(currentRows, originalName, nextRow) };
+  };
+  const validateDraft = async (scope: string, draft: unknown) => {
+    const row = asRecord(draft);
+    const candidate = scope === "manual-proxies" ? { content: row.mode === "yaml" ? row.yaml : row.links } : scope === "proxy-groups" ? await groupMutationPayload(draft) : draft;
+    const payload = await api("/api/v1/mihomo/proxy-config/validate", { method: "POST", body: JSON.stringify({ scope, draft: candidate }) });
+    return validationMessage(payload);
+  };
   const saveEditor = async (scope: "provider" | "group" | "manual", draft: unknown) => {
     setEditorBusy(scope);
     try {
@@ -141,21 +169,7 @@ export default function MihomoProxiesPage() {
         body = { ...advanced, name, type: row.type, url: row.url, path: row.path, interval: row.interval, "health-check": { ...asRecord(advanced["health-check"]), enable: Boolean(row.healthCheckEnable), url: row.healthCheckUrl, interval: row.healthCheckInterval, lazy: Boolean(row.healthCheckLazy) } };
       }
       if (scope === "group") {
-        const row = asRecord(draft);
-        const name = String(row.name || "").trim();
-        if (!name) throw new Error("策略组名称不能为空");
-        const originalName = editorKey ? parseProxyKey(editorKey as ProxyKey).name : name;
-        const advanced = typeof row.advanced === "string" && row.advanced.trim() ? asRecord(JSON.parse(row.advanced)) : {};
-        if (!String(row.icon || "").trim()) delete advanced.icon;
-        const currentPayload = await api("/api/v1/mihomo/proxy-groups-config");
-        const currentData = apiData(currentPayload, currentPayload);
-        const currentValue = Array.isArray(currentData) ? currentData : asRecord(currentData)["proxy-groups"] ?? asRecord(currentData).proxy_groups ?? asRecord(currentData).groups;
-        const currentRows = Array.isArray(currentValue) ? currentValue.map(asRecord) : [];
-        const nextRow = { ...advanced, name, type: row.type, ...(String(row.icon || "").trim() ? { icon: String(row.icon).trim() } : {}), proxies: String(row.proxies || "").split(/\n|,/).map((item) => item.trim()).filter(Boolean), ...(row.url ? { url: row.url } : {}), ...(row.interval ? { interval: row.interval } : {}), lazy: Boolean(row.lazy), ...(row.tolerance ? { tolerance: row.tolerance } : {}), ...(row.strategy ? { strategy: row.strategy } : {}) };
-        const index = currentRows.findIndex((item) => String(item.name || "") === originalName);
-        if (index >= 0) currentRows[index] = nextRow;
-        else currentRows.push(nextRow);
-        body = { "proxy-groups": currentRows };
+        body = await groupMutationPayload(draft);
       }
       if (scope === "manual") {
         const row = asRecord(draft);
@@ -301,7 +315,7 @@ export default function MihomoProxiesPage() {
       <ProxyCollectionManagerDialog open={groupManagerOpen} kind="group" items={groupManagerItems} canCreate={status.canEditGroups} onClose={() => setGroupManagerOpen(false)} onCreate={createGroup} onEdit={(item) => { const group = groups.find((candidate) => candidate.key === item.id); if (group) chooseGroupForEditing(group); }} onDelete={deleteGroup} />
       <ProxyCollectionManagerDialog open={providerManagerOpen} kind="provider" items={providerManagerItems} canCreate={status.canEditProviders} onClose={() => setProviderManagerOpen(false)} onCreate={createProvider} onEdit={(item) => { const provider = providers.find((candidate) => candidate.id === item.id); if (provider) { setProviderManagerOpen(false); openProvider(provider); } }} onDelete={deleteProvider} />
       <ProxyProviderEditorDialog open={editor === "provider"} value={providerDraft} onClose={() => setEditor(null)} onValidate={(draft) => validateDraft("proxy-providers", draft)} onSave={(draft) => saveEditor("provider", draft)} />
-      <ProxyGroupEditorDialog open={editor === "group"} readOnly={!status.canEditGroups} value={groupDraft} onClose={() => setEditor(null)} onValidate={(draft) => validateDraft("proxy-groups", draft)} onSave={(draft) => saveEditor("group", draft)} />
+      <ProxyGroupEditorDialog open={editor === "group"} readOnly={!status.canEditGroups} loading={groupConfigLoading} value={groupDraft} onClose={() => setEditor(null)} onValidate={(draft) => validateDraft("proxy-groups", draft)} onSave={(draft) => saveEditor("group", draft)} />
       <ProxyManualNodeEditorDialog open={editor === "manual"} value={manualDraft} onClose={() => setEditor(null)} onValidate={(draft) => validateDraft("manual-proxies", draft)} onSave={(draft) => saveEditor("manual", draft)} />
       <ToastStack toasts={toasts} />
     </AppShell>

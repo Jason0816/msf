@@ -265,6 +265,15 @@ func (a *App) handleMihomoProxyGroupsConfigPut(w http.ResponseWriter, r *http.Re
 		})
 		return
 	}
+	candidate, err := a.mihomoCandidateConfigContent(req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		return
+	}
+	if validation := a.validateMihomoCandidateContent(r.Context(), candidate); !validation.Valid {
+		writeError(w, http.StatusBadRequest, "invalid_config", validation.Error)
+		return
+	}
 	restarted, err := a.applyMihomoConfigMutation(r.Context(), false, func() error {
 		return a.updateMihomoConfigSections(req, "proxy-groups")
 	})

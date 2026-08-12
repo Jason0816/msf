@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -608,21 +610,86 @@ func (a *App) handleMihomoProxyConfigValidate(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusOK, map[string]any{"success": true, "valid": false, "data": mihomoConfigValidation{Valid: false, Error: err.Error()}})
 		return
 	}
-	validation := a.validateMihomoConfigContent(content)
-	if validation.Valid {
-		var cfg map[string]any
-		if err := yaml.Unmarshal([]byte(content), &cfg); err != nil {
-			validation = mihomoConfigValidation{Valid: false, Error: err.Error()}
-		} else if structuralErr := validateMihomoCandidateStructure(cfg); structuralErr != nil {
-			validation.Valid = false
-			validation.Error = structuralErr.Error()
-		}
-	}
+	validation := a.validateMihomoCandidateContent(r.Context(), content)
 	resp := map[string]any{"success": true, "valid": validation.Valid, "warnings": validation.Warnings, "data": validation}
 	if !validation.Valid {
 		resp["error"] = validation.Error
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (a *App) validateMihomoCandidateContent(ctx context.Context, content string) mihomoConfigValidation {
+	validation := a.validateMihomoConfigContent(content)
+	if !validation.Valid {
+		return validation
+	}
+	var cfg map[string]any
+	if err := yaml.Unmarshal([]byte(content), &cfg); err != nil {
+		return mihomoConfigValidation{Valid: false, Error: err.Error(), Warnings: validation.Warnings}
+	}
+	if err := validateMihomoCandidateStructure(cfg); err != nil {
+		return mihomoConfigValidation{Valid: false, Error: err.Error(), Warnings: validation.Warnings}
+	}
+	if err := a.testMihomoCandidateWithCore(ctx, content); err != nil {
+		return mihomoConfigValidation{Valid: false, Error: err.Error(), Warnings: validation.Warnings}
+	}
+	return validation
+}
+
+func (a *App) testMihomoCandidateWithCore(ctx context.Context, content string) error {
+	spec, err := a.Services.spec("mihomo")
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(spec.Binary); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect Mihomo binary: %w", err)
+	}
+	tmpDir := filepath.Join(a.DataDir, "data", "tmp")
+	if err := os.MkdirAll(tmpDir, 0700); err != nil {
+		return fmt.Errorf("prepare Mihomo validation directory: %w", err)
+	}
+	tmp, err := os.CreateTemp(tmpDir, ".msf-mihomo-candidate-*.yaml")
+	if err != nil {
+		return fmt.Errorf("create Mihomo validation file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.WriteString(content); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write Mihomo validation file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	testCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(testCtx, spec.Binary, "-t", "-d", spec.Dir, "-f", tmpPath)
+	cmd.Dir = spec.Dir
+	output, runErr := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(output))
+	failedOutput := strings.Contains(strings.ToLower(text), "level=fatal") || strings.Contains(text, "Parse config error")
+	if runErr == nil && !failedOutput {
+		return nil
+	}
+	if testCtx.Err() != nil {
+		return fmt.Errorf("Mihomo configuration test timed out: %w", testCtx.Err())
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) > 12 {
+		lines = lines[len(lines)-12:]
+	}
+	message := strings.TrimSpace(strings.Join(lines, "\n"))
+	if message == "" {
+		message = runErr.Error()
+	}
+	return fmt.Errorf("Mihomo configuration test failed: %s", message)
 }
 
 func (a *App) mihomoCandidateConfigContent(req map[string]any) (string, error) {
