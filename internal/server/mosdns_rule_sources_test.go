@@ -24,6 +24,27 @@ func TestValidateMosDNSRuleSourceArtifact(t *testing.T) {
 	if err := validateMosDNSRuleSourceArtifact(validSRS, "srs"); err != nil {
 		t.Fatalf("valid SRS rejected: %v", err)
 	}
+	validRoutingText := filepath.Join(dir, "routing.srs")
+	if err := os.WriteFile(validRoutingText, []byte("full:example.com\ndomain:example.net\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMosDNSRuleSourceArtifact(validRoutingText, "srs"); err != nil {
+		t.Fatalf("valid routing text with SRS extension rejected: %v", err)
+	}
+	validIPText := filepath.Join(dir, "routing-ip.txt")
+	if err := os.WriteFile(validIPText, []byte("192.0.2.0/24\n2001:db8::/32\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMosDNSRuleSourceArtifact(validIPText, "srs", "geoipcn"); err != nil {
+		t.Fatalf("valid IP routing text rejected: %v", err)
+	}
+	validSRSWithTextExtension := filepath.Join(dir, "routing.txt")
+	if err := os.WriteFile(validSRSWithTextExtension, payload.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMosDNSRuleSourceArtifact(validSRSWithTextExtension, "srs"); err != nil {
+		t.Fatalf("valid SRS with text extension rejected: %v", err)
+	}
 	invalidSRS := filepath.Join(dir, "invalid.srs")
 	if err := os.WriteFile(invalidSRS, []byte("not srs"), 0o644); err != nil {
 		t.Fatal(err)
@@ -87,8 +108,10 @@ func TestMosDNSRuleSourcesUseLocalArtifactModificationTime(t *testing.T) {
 
 func TestCurrentBuiltInMosDNSRuleSourceURLRepairsRemovedGeositePrefix(t *testing.T) {
 	cases := map[string]string{
-		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-geolocation-!cn%40cn.srs": "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geolocation-!cn%40cn.srs",
-		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":             "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-geolocation-!cn%40cn.srs": "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-cn.txt",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geolocation-!cn%40cn.srs":         "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-cn.txt",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":             "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-!cn.txt",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs":                     "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-!cn.txt",
 		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-tiktok.srs":               "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/tiktok.srs",
 	}
 	for legacy, want := range cases {

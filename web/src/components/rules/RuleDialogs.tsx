@@ -100,23 +100,24 @@ function sanitizeRuleFileName(value: string) {
   const source = value.trim();
   if (!source) return "rules.srs";
   const fallback = source.replace(/^https?:\/\//, "").split(/[/?#]/)[0] || source;
-  const base = fallback
+  const rawFile = fallback
     .split("/")
     .filter(Boolean)
-    .pop()
-    ?.replace(/\.[a-z0-9]+$/i, "");
+    .pop();
+  const extension = rawFile?.match(/\.(srs|txt)$/i)?.[0]?.toLowerCase() || ".srs";
+  const base = rawFile?.replace(/\.[a-z0-9]+$/i, "");
   const safe = (base || fallback)
     .toLowerCase()
     .replace(/[^a-z0-9._@!-]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `${safe || "rules"}.srs`;
+  return `${safe || "rules"}${extension}`;
 }
 
 function defaultRuleSetFile(name: string, url: string) {
   try {
     const parsed = new URL(url);
     const file = parsed.pathname.split("/").filter(Boolean).pop();
-    if (file) return `srs/${file.endsWith(".srs") ? file : sanitizeRuleFileName(file)}`;
+    if (file) return `srs/${sanitizeRuleFileName(file)}`;
   } catch {
     // fall back to name based path
   }
@@ -222,11 +223,11 @@ export function AddRuleSetModal({
               <input
                 value={url}
                 onChange={(event) => updateUrl(event.target.value)}
-                placeholder={sourceType === "srs" ? "https://example.com/rules.srs" : "https://example.com/rules.txt"}
+                placeholder={sourceType === "srs" ? "https://example.com/rules.srs 或 rules.txt" : "https://example.com/rules.txt"}
                 className={sourceInputCls}
               />
               <p className="text-xs text-muted-foreground">
-                {sourceType === "srs" ? "目前只支持 SRS 格式的规则文件" : "目前支持文本格式的规则文件"}
+                {sourceType === "srs" ? "支持 SRS 二进制或文本规则，以实际内容判定，不限制 URL 扩展名" : "支持文本规则，以实际内容判定，不限制 URL 扩展名"}
               </p>
             </div>
 

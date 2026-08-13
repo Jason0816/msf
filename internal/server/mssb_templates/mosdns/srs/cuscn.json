@@ -2,8 +2,8 @@
   {
     "name": "cuscn",
     "type": "cuscn",
-    "files": "srs/geosite-geolocation-!cn@cn.srs",
-    "url": "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geolocation-!cn%40cn.srs",
+    "files": "srs/geolocation-cn.txt",
+    "url": "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-cn.txt",
     "enabled": true,
     "auto_update": false,
     "update_interval_hours": 24,

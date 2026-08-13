@@ -42,7 +42,6 @@ domain:nflximg.com
 domain:nflximg.net
 domain:nflxsearch.net
 domain:nflxso.net
-domain:nflxvideo.net
 domain:onetrust.com
 domain:us-west-2.amazonaws.com
 domain:store.ui.com.cn
@@ -54,7 +53,6 @@ domain:nav-edge.smartscreen.microsoft.com
 domain:functional.events.data.microsoft.com
 domain:edgeservices.bing.com
 domain:sydney.bing.com
-domain:bing.com
 domain:bing.com.cn
 domain:bing.net
 domain:bingads.com
@@ -68,3 +66,9 @@ keyword:dualstack.apiproxy-
 keyword:dualstack.ichnaea-web-
 keyword:netflixdnstest
 keyword:browserleak
+domain:github.com
+domain:blizzard.com
+domain:akamaized.net
+domain:cloudfront.net
+full:geo.battle.net
+full:rum.battle.net

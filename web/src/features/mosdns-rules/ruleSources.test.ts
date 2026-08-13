@@ -16,6 +16,12 @@ describe("MosDNS rule source freshness", () => {
     expect(page).toContain("failures.length > 0");
   });
 
+  it("accepts routing text or SRS content without forcing the URL extension", () => {
+    expect(dialogs).toContain('match(/\\.(srs|txt)$/i)');
+    expect(dialogs).toContain("支持 SRS 二进制或文本规则");
+    expect(dialogs).toContain("不限制 URL 扩展名");
+  });
+
   it("keeps all MosDNS matcher modes available for DDNS rules", () => {
     expect(dialogs).toContain('useState(isDDNS ? "full" : "domain")');
     expect(dialogs).toContain("onAdd(isDirectIP ? value.trim() : rulePatternFor(mode, value))");

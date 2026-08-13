@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -292,7 +294,7 @@ func (a *App) downloadMosDNSRuleSourceArtifact(source mosDNSRuleSource) (mosDNSR
 		_ = os.Remove(tmp)
 		return source, err
 	}
-	if err := validateMosDNSRuleSourceArtifact(tmp, source.SourceType); err != nil {
+	if err := validateMosDNSRuleSourceArtifact(tmp, source.SourceType, source.Type); err != nil {
 		_ = os.Remove(tmp)
 		return source, err
 	}
@@ -316,7 +318,7 @@ func (a *App) downloadMosDNSRuleSourceArtifact(source mosDNSRuleSource) (mosDNSR
 	return source, nil
 }
 
-func validateMosDNSRuleSourceArtifact(path, sourceType string) error {
+func validateMosDNSRuleSourceArtifact(path, sourceType string, ruleTypes ...string) error {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -324,12 +326,76 @@ func validateMosDNSRuleSourceArtifact(path, sourceType string) error {
 	if len(b) == 0 {
 		return fmt.Errorf("下载的规则文件为空")
 	}
-	if sourceType != "srs" {
-		if !utf8.Valid(b) || strings.ContainsRune(string(b), '\x00') {
-			return fmt.Errorf("下载的广告规则不是有效文本")
+	if len(b) >= 3 && bytes.Equal(b[:3], []byte("SRS")) {
+		if sourceType != "srs" {
+			return fmt.Errorf("下载的广告规则必须是有效文本内容")
 		}
-		return nil
+		return validateMosDNSSRSArtifact(b)
 	}
+	if !utf8.Valid(b) || strings.ContainsRune(string(b), '\x00') {
+		if sourceType == "srs" {
+			return fmt.Errorf("下载的在线分流规则既不是有效 SRS，也不是有效文本")
+		}
+		return fmt.Errorf("下载的广告规则不是有效文本")
+	}
+	if sourceType == "srs" {
+		ruleType := ""
+		if len(ruleTypes) > 0 {
+			ruleType = ruleTypes[0]
+		}
+		if err := validateMosDNSRoutingText(b, ruleType); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateMosDNSRoutingText(b []byte, ruleType string) error {
+	lines := splitNonEmptyLines(string(b))
+	valid := 0
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if normalizeMosDNSGeositeType(ruleType) == "geoipcn" {
+			value := strings.TrimPrefix(line, "ip_cidr:")
+			if strings.ContainsRune(value, '/') {
+				if _, err := netip.ParsePrefix(value); err != nil {
+					return fmt.Errorf("下载的在线分流文本第 %d 行不是有效 IP/CIDR：%s", i+1, line)
+				}
+			} else if _, err := netip.ParseAddr(value); err != nil {
+				return fmt.Errorf("下载的在线分流文本第 %d 行不是有效 IP/CIDR：%s", i+1, line)
+			}
+			valid++
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 || parts[1] == "" {
+			return fmt.Errorf("下载的在线分流文本第 %d 行必须使用 domain/full/keyword/regexp 前缀：%s", i+1, line)
+		}
+		switch parts[0] {
+		case "domain", "full":
+			if !validMosDNSRewriteDomain(parts[1]) {
+				return fmt.Errorf("下载的在线分流文本第 %d 行域名格式无效：%s", i+1, line)
+			}
+		case "keyword":
+		case "regexp":
+			if _, err := regexp.Compile(parts[1]); err != nil {
+				return fmt.Errorf("下载的在线分流文本第 %d 行正则表达式无效：%s", i+1, line)
+			}
+		default:
+			return fmt.Errorf("下载的在线分流文本第 %d 行前缀不受支持：%s", i+1, line)
+		}
+		valid++
+	}
+	if valid == 0 {
+		return fmt.Errorf("下载的在线分流文本不包含有效规则")
+	}
+	return nil
+}
+
+func validateMosDNSSRSArtifact(b []byte) error {
 	if len(b) < 5 || !bytes.Equal(b[:3], []byte("SRS")) || b[3] > 3 {
 		return fmt.Errorf("下载的在线分流规则不是有效 SRS 文件")
 	}
@@ -566,8 +632,10 @@ func (s *mosDNSRuleSource) hydrateRuntimeFields() {
 
 func currentBuiltInMosDNSRuleSourceURL(raw string) string {
 	legacy := map[string]string{
-		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-geolocation-!cn%40cn.srs": "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geolocation-!cn%40cn.srs",
-		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":             "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-geolocation-!cn%40cn.srs": "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-cn.txt",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geolocation-!cn%40cn.srs":         "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-cn.txt",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":             "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-!cn.txt",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs":                     "https://raw.githubusercontent.com/Loyalsoldier/domain-list-custom/release/geolocation-!cn.txt",
 		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-tiktok.srs":               "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/tiktok.srs",
 	}
 	if current := legacy[strings.TrimSpace(raw)]; current != "" {
