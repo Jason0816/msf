@@ -23,9 +23,9 @@ interface QueryRow {
 type ColKey = "domain" | "client" | "type" | "rule" | "status";
 
 const columns: { label: string; key?: ColKey; sort?: boolean; align?: string; className?: string }[] = [
-  { label: "时间", sort: true, className: "w-[150px]" },
-  { label: "域名", key: "domain", className: "w-[220px] max-w-[260px]" },
-  { label: "查询结果", className: "min-w-[190px] max-w-[320px]" },
+  { label: "时间", sort: true },
+  { label: "域名", key: "domain", className: "w-[240px] max-w-[240px]" },
+  { label: "查询结果" },
   { label: "客户端", key: "client" },
   { label: "类型", key: "type" },
   { label: "分流规则", key: "rule" },
@@ -67,11 +67,9 @@ function formatMs(value: unknown) {
 function formatAnswerItem(value: unknown) {
   if (!value || typeof value !== "object") return value ? String(value) : "";
   const answer = value as Record<string, unknown>;
-  const type = textValue(answer, ["type", "record_type", "qtype"]);
   const data = textValue(answer, ["data", "value", "answer", "ip", "target"]);
-  const ttl = textValue(answer, ["ttl"]);
   if (!data) return JSON.stringify(value);
-  return `${type ? `${type}: ` : ""}${data}${ttl ? ` (TTL ${ttl}s)` : ""}`;
+  return data;
 }
 
 function formatAnswer(value: unknown) {
@@ -238,7 +236,7 @@ export default function QueryLogPage() {
 
         <div className="border border-border rounded-lg bg-background overflow-hidden">
           <div className="overflow-x-auto max-h-[calc(100vh-220px)] overflow-y-auto">
-            <table className="w-full min-w-[1120px] table-fixed text-sm">
+            <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-border bg-muted/30 backdrop-blur">
                   {columns.map((c) => {
@@ -302,7 +300,7 @@ export default function QueryLogPage() {
                 {visible.map((r) => (
                   <tr key={r.id} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">{r.time}</td>
-                    <td className="px-3 py-2 max-w-[260px]">
+                    <td className="px-3 py-2 w-[240px] max-w-[240px]">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium truncate" title={r.domain}>{r.domain}</span>
                         <button onClick={() => copy(r.domain)} className="text-muted-foreground hover:text-foreground">
@@ -310,9 +308,9 @@ export default function QueryLogPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-2 max-w-[320px]">
+                    <td className="px-3 py-2">
                       {r.answer ? (
-                        <div className="font-mono text-xs leading-5 break-all line-clamp-2" title={r.answer}>{r.answer}</div>
+                        <div className="font-mono text-xs whitespace-nowrap" title={r.answer}>{r.answer}</div>
                       ) : (
                         <span className="text-xs text-muted-foreground">{emptyAnswerLabel(r.status)}</span>
                       )}

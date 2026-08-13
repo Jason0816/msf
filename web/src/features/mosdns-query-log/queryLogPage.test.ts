@@ -6,10 +6,12 @@ const page = readFileSync(new URL("../../app/mosdns/query-log/page.tsx", import.
 describe("MosDNS query log result visibility", () => {
   it("shows DNS answers in a dedicated compact result column", () => {
     expect(page).toContain('{ label: "查询结果"');
-    expect(page).toContain('className="w-full min-w-[1120px] table-fixed text-sm"');
-    expect(page).toContain('className: "w-[220px] max-w-[260px]"');
+    expect(page).toContain('className="w-full text-sm"');
+    expect(page).toContain('className: "w-[240px] max-w-[240px]"');
     expect(page).toContain("formatAnswerItem");
     expect(page).toContain('textValue(answer, ["data", "value", "answer", "ip", "target"])');
+    expect(page).not.toContain("TTL ${ttl}s");
+    expect(page).not.toContain('textValue(answer, ["type", "record_type", "qtype"])');
     expect(page).toContain("未记录应答");
   });
 
