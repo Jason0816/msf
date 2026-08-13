@@ -249,8 +249,11 @@ func TestFactoryResetRollsBackFilesAndDatabaseOnFailure(t *testing.T) {
 			if string(app.currentSecret()) != secret || !fileExists(filepath.Join(app.DataDir, "configs/mihomo/user_configs/sentinel.yaml")) {
 				t.Fatal("failed reset did not roll back secret/files")
 			}
-			if auth := requestJSON(t, app, http.MethodGet, "/api/v1/users", token, nil); auth.Code != http.StatusOK {
-				t.Fatalf("old JWT should remain valid after rollback: status=%d body=%s", auth.Code, auth.Body.String())
+			if _, err := app.authenticateJWT(token); err != nil {
+				t.Fatalf("old JWT should remain valid in the rolled-back database: %v", err)
+			}
+			if auth := requestJSON(t, app, http.MethodGet, "/api/v1/users", token, nil); auth.Code != http.StatusServiceUnavailable || !strings.Contains(auth.Body.String(), "factory_reset_failed") {
+				t.Fatalf("failed reset should gate normal APIs in safe mode: status=%d body=%s", auth.Code, auth.Body.String())
 			}
 			if !runtimeRestored {
 				t.Fatal("failed reset did not attempt to restore the previous runtime state")

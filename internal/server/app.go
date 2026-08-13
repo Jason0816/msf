@@ -208,6 +208,13 @@ func (a *App) withCommonMiddleware(next http.Handler) http.Handler {
 			rec.WriteHeader(http.StatusNoContent)
 			return
 		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/setup/reset" {
+			phase, _ := a.operations.status()
+			if phase != resetPhaseIdle && phase != resetPhaseFailed {
+				a.writeResetConflict(rec)
+				return
+			}
+		}
 		if requestMutatesState(r) && r.URL.Path != "/api/v1/setup/reset" {
 			var accepted bool
 			var finish func()
