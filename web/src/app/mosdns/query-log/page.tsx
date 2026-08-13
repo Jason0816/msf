@@ -22,9 +22,9 @@ interface QueryRow {
 
 type ColKey = "domain" | "client" | "type" | "rule" | "status";
 
-const columns: { label: string; key?: ColKey; sort?: boolean; align?: string; className?: string }[] = [
+const columns: { label: string; key?: ColKey; sort?: boolean; align?: string }[] = [
   { label: "时间", sort: true },
-  { label: "域名", key: "domain", className: "w-[240px] max-w-[240px]" },
+  { label: "域名", key: "domain" },
   { label: "查询结果" },
   { label: "客户端", key: "client" },
   { label: "类型", key: "type" },
@@ -64,12 +64,18 @@ function formatMs(value: unknown) {
   return ms.toFixed(2);
 }
 
-function formatAnswerItem(value: unknown) {
-  if (!value || typeof value !== "object") return value ? String(value) : "";
+function formatAnswerItem(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") {
+    return value
+      .replace(/^\s*(?:A|AAAA|CNAME|HTTPS|SVCB|TXT|MX|NS|PTR|SOA)\s*:\s*/i, "")
+      .replace(/\s*\(TTL\s*:?\s*\d+(?:\.\d+)?s?\)\s*$/i, "")
+      .trim();
+  }
+  if (typeof value !== "object") return String(value);
   const answer = value as Record<string, unknown>;
   const data = textValue(answer, ["data", "value", "answer", "ip", "target"]);
-  if (!data) return JSON.stringify(value);
-  return data;
+  return data ? formatAnswerItem(data) : "";
 }
 
 function formatAnswer(value: unknown) {
@@ -236,7 +242,17 @@ export default function QueryLogPage() {
 
         <div className="border border-border rounded-lg bg-background overflow-hidden">
           <div className="overflow-x-auto max-h-[calc(100vh-220px)] overflow-y-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1120px] table-fixed text-sm">
+              <colgroup>
+                <col className="w-[14%]" />
+                <col className="w-[24%]" />
+                <col className="w-[11%]" />
+                <col className="w-[12%]" />
+                <col className="w-[7%]" />
+                <col className="w-[14%]" />
+                <col className="w-[12%]" />
+                <col className="w-[6%]" />
+              </colgroup>
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-border bg-muted/30 backdrop-blur">
                   {columns.map((c) => {
@@ -244,7 +260,7 @@ export default function QueryLogPage() {
                     return (
                       <th
                         key={c.label}
-                        className={cn("text-left font-medium text-muted-foreground px-3 py-2 whitespace-nowrap relative bg-muted/30", c.className, c.align === "right" && "text-right")}
+                        className={cn("text-left font-medium text-muted-foreground px-3 py-2 whitespace-nowrap relative bg-muted/30", c.align === "right" && "text-right")}
                       >
                         <span className="inline-flex items-center gap-1.5">
                           {c.label}
@@ -300,7 +316,7 @@ export default function QueryLogPage() {
                 {visible.map((r) => (
                   <tr key={r.id} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">{r.time}</td>
-                    <td className="px-3 py-2 w-[240px] max-w-[240px]">
+                    <td className="px-3 py-2">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium truncate" title={r.domain}>{r.domain}</span>
                         <button onClick={() => copy(r.domain)} className="text-muted-foreground hover:text-foreground">
@@ -308,9 +324,9 @@ export default function QueryLogPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 overflow-hidden">
                       {r.answer ? (
-                        <div className="font-mono text-xs whitespace-nowrap" title={r.answer}>{r.answer}</div>
+                        <div className="font-mono text-xs truncate" title={r.answer}>{r.answer}</div>
                       ) : (
                         <span className="text-xs text-muted-foreground">{emptyAnswerLabel(r.status)}</span>
                       )}
