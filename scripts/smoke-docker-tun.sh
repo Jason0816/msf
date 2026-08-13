@@ -73,7 +73,20 @@ grep -q '"effective_proxy_mode":"tun"' <<<"$INIT"
 LOGIN="$(docker_request POST /api/v1/auth/login '{"username":"root","password":"old-password-123"}')"
 TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])' <<<"$LOGIN")"
 RESET="$(docker_request POST /api/v1/setup/reset '{"current_password":"old-password-123"}' "$TOKEN")"
-grep -q '"factory_reset":true' <<<"$RESET"
+grep -q '"restart_scheduled":true' <<<"$RESET"
+
+attempt=0
+until CHECK="$(docker exec "$NAME" curl -fsS http://127.0.0.1:7777/api/v1/setup/check 2>/dev/null)" && grep -q '"is_initialized":false' <<<"$CHECK"; do
+  if (( attempt >= 200 )); then
+    docker logs "$NAME" >&2
+    exit 1
+  fi
+  attempt=$((attempt + 1))
+  sleep 0.1
+done
+
+OLD_JWT_STATUS="$(docker exec "$NAME" curl -sS -o /tmp/old-jwt-response.json -w '%{http_code}' http://127.0.0.1:7777/api/v1/users -H "Authorization: Bearer $TOKEN")"
+[[ "$OLD_JWT_STATUS" == "401" ]] || { docker exec "$NAME" cat /tmp/old-jwt-response.json >&2; echo "old JWT status=$OLD_JWT_STATUS" >&2; exit 1; }
 
 TUN_NEW='{"username":"root","password":"new-password-456","confirmPassword":"new-password-456","timezone":"Etc/UTC","selected_interface":"eth0","proxyCore":"mihomo","mosdnsEnabled":true,"mihomo_core_type":"meta","linux_proxy_mode":"tun","enableIPv6":false,"auto_set_dns":true}'
 REINIT="$(docker_request POST /api/v1/setup/initialize "$TUN_NEW")"
