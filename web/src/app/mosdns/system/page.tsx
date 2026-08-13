@@ -376,6 +376,7 @@ export default function MosdnsSystemPage() {
   const [filterSettings, setFilterSettings] = useState<FilterSettings>(defaultFilterSettings);
   const [resolutionSettings, setResolutionSettings] = useState<ResolutionSettings>(defaultResolutionSettings);
   const [prioritySaving, setPrioritySaving] = useState(false);
+  const [cacheActionSaving, setCacheActionSaving] = useState(false);
   const [cacheData, setCacheData] = useState<CacheSystemData>(defaultCacheData);
   const [cacheDomains, setCacheDomains] = useState<Partial<Record<"realIp" | "fakeIp" | "noV4" | "noV6", CacheDomainRow[]>>>({});
   const [taskEvents, setTaskEvents] = useState<string[]>([]);
@@ -686,6 +687,36 @@ export default function MosdnsSystemPage() {
     }
   };
 
+  const clearDNSCache = async () => {
+    if (cacheActionSaving) return;
+    if (!window.confirm("确定清空全部 MosDNS DNS 缓存吗？\n\n不会删除规则、订阅、配置或 Mihomo Fake-IP 数据库。清空后首次 DNS 查询可能稍慢。")) return;
+    setCacheActionSaving(true);
+    try {
+      const payload = await api<any>("/api/v1/mosdns/cache/clear", { method: "POST" });
+      if (payload?.success === false) {
+        const failed = Object.keys(payload?.data?.failed || {});
+        throw new Error(failed.length ? `部分缓存清理失败：${failed.join("、")}` : String(payload?.message || "DNS 缓存清理失败"));
+      }
+      showToast(payload?.message || "DNS 缓存已清空");
+      await loadSystem();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "DNS 缓存清理失败");
+    } finally {
+      setCacheActionSaving(false);
+    }
+  };
+
+  const clearGeneratedRules = async () => {
+    if (cacheActionSaving) return;
+    if (!window.confirm("确定清空自动生成的分流规则吗？\n\n将清空 FakeIP、RealIP 和高频域名生成文件，不会清理 DNS 缓存。")) return;
+    setCacheActionSaving(true);
+    try {
+      await runRoutingAction("clear", "生成规则已清空");
+    } finally {
+      setCacheActionSaving(false);
+    }
+  };
+
   const saveAndRestart = async () => {
     setSaving(true);
     const task = cacheData.scheduledTask;
@@ -771,7 +802,9 @@ export default function MosdnsSystemPage() {
           onSaveTask={saveScheduler}
           onHotReload={() => void runRoutingAction("start", "热更新已启动")}
           onSaveRules={() => void runRoutingAction("save", "规则已保存")}
-          onClearBackup={() => void runRoutingAction("clear", "备份已清空")}
+          onClearDNSCache={() => void clearDNSCache()}
+          onClearGeneratedRules={() => void clearGeneratedRules()}
+          actionDisabled={cacheActionSaving}
         />
       </div>
       {activeUpstreamDialog && (

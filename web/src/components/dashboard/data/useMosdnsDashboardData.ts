@@ -25,6 +25,7 @@ export interface MosdnsDashboardData {
   changeScheduledTask: (task: ScheduledTask) => void;
   saveScheduledTask: () => Promise<void>;
   runCacheAction: (action: "start" | "save" | "clear") => Promise<void>;
+  clearDNSCache: () => Promise<void>;
   registerScope: (scope: MosdnsDataScope, delta: 1 | -1) => void;
 }
 

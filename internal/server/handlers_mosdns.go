@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -209,15 +210,42 @@ func (a *App) handleMosDNSRestart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleMosDNSCacheClear(w http.ResponseWriter, r *http.Request) {
-	var err error
-	for _, path := range []string{"/cache/flush", "/api/cache/flush", "/plugins/cache/flush"} {
-		err = httpPostNoBody(a.mosDNSAPIURL(path))
-		if err == nil {
-			writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": map[string]any{"cleared": true}})
-			return
+	cleared := make([]string, 0, len(mosDNSCachePluginTags))
+	failed := map[string]string{}
+	for _, tag := range mosDNSCachePluginTags {
+		path := "/plugins/" + url.PathEscape(tag) + "/flush"
+		if err := a.mosDNSRuntimeJSONRequest(http.MethodGet, path, nil, nil); err != nil {
+			failed[tag] = err.Error()
+			continue
 		}
+		cleared = append(cleared, tag)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": err.Error(), "data": map[string]any{"cleared": false}})
+	data := map[string]any{
+		"cleared":       cleared,
+		"cleared_count": len(cleared),
+		"failed":        failed,
+		"failed_count":  len(failed),
+		"total":         len(mosDNSCachePluginTags),
+	}
+	if len(failed) > 0 {
+		failedTags := make([]string, 0, len(failed))
+		for tag := range failed {
+			failedTags = append(failedTags, tag)
+		}
+		sort.Strings(failedTags)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success": false,
+			"error":   "mosdns_cache_partial_failure",
+			"message": fmt.Sprintf("已清理 %d/%d 个 MosDNS 缓存；失败：%s", len(cleared), len(mosDNSCachePluginTags), strings.Join(failedTags, "、")),
+			"data":    data,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("已清理全部 %d 个 MosDNS 缓存", len(cleared)),
+		"data":    data,
+	})
 }
 
 func (a *App) handleMosDNSClients(w http.ResponseWriter, r *http.Request) {

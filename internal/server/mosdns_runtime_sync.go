@@ -15,6 +15,16 @@ import (
 
 const mosDNSRuntimeSyncTimeout = 3 * time.Second
 
+var mosDNSCachePluginTags = []string{
+	"cache_all",
+	"cache_all_noleak",
+	"cache_cn",
+	"cache_google",
+	"cache_google_node",
+	"cache_node",
+	"cache_cnmihomo",
+}
+
 // yyysuo/mosdns domain_mapper debounces provider notifications for one second
 // before rebuilding its matcher. Flushing the front caches before that rebuild
 // leaves a window where a query can repopulate them with the previous decision.

@@ -391,11 +391,15 @@ function TaskStatusPanel({ status }: { status: TaskStatus }) {
 function OperationsBar({
   onHotReload,
   onSaveRules,
-  onClearBackup,
+  onClearDNSCache,
+  onClearGeneratedRules,
+  disabled,
 }: {
   onHotReload: () => void;
   onSaveRules: () => void;
-  onClearBackup: () => void;
+  onClearDNSCache: () => void;
+  onClearGeneratedRules: () => void;
+  disabled?: boolean;
 }) {
   return (
     <SolidPlate tone="subtle" className="rounded-xl p-4">
@@ -407,6 +411,7 @@ function OperationsBar({
           <GlassButton
             variant="primary"
             onClick={onHotReload}
+            disabled={disabled}
             className="text-sm"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -417,6 +422,7 @@ function OperationsBar({
           </GlassButton>
           <GlassButton
             onClick={onSaveRules}
+            disabled={disabled}
             className="text-sm"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -426,15 +432,26 @@ function OperationsBar({
             保存规则
           </GlassButton>
           <GlassButton
+            onClick={onClearDNSCache}
+            disabled={disabled}
+            className="text-sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            清空 DNS 缓存
+          </GlassButton>
+          <GlassButton
             variant="danger"
-            onClick={onClearBackup}
+            onClick={onClearGeneratedRules}
+            disabled={disabled}
             className="text-sm"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6" />
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             </svg>
-            清空备份
+            清空生成规则
           </GlassButton>
         </div>
         <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-foreground/[0.03] p-2">
@@ -443,7 +460,7 @@ function OperationsBar({
             <path d="M12 16v-4" /><path d="M12 8h.01" />
           </svg>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            提示：热更新会重新分析所有域名的分流规则并更新缓存；保存规则将当前分流规则持久化保存；清空备份会删除全量备份数据以释放存储空间
+            提示：清空 DNS 缓存只清理 MosDNS 运行时解析缓存；清空生成规则会清空自动生成的 FakeIP、RealIP 和高频域名文件。两项操作都不会删除订阅、配置或 Mihomo Fake-IP 数据库。
           </p>
         </div>
       </div>
@@ -459,7 +476,9 @@ interface CacheSystemSectionProps {
   onChangeTask: (t: ScheduledTask) => void;
   onHotReload: () => void;
   onSaveRules: () => void;
-  onClearBackup: () => void;
+  onClearDNSCache: () => void;
+  onClearGeneratedRules: () => void;
+  actionDisabled?: boolean;
   onSaveTask?: () => void;
   cacheDomains?: Partial<Record<CacheStatKey, CacheDomainRow[]>>;
 }
@@ -471,7 +490,9 @@ export function CacheSystemSection({
   onChangeTask,
   onHotReload,
   onSaveRules,
-  onClearBackup,
+  onClearDNSCache,
+  onClearGeneratedRules,
+  actionDisabled,
   onSaveTask,
   cacheDomains = {},
 }: CacheSystemSectionProps) {
@@ -519,7 +540,9 @@ export function CacheSystemSection({
         <OperationsBar
           onHotReload={onHotReload}
           onSaveRules={onSaveRules}
-          onClearBackup={onClearBackup}
+          onClearDNSCache={onClearDNSCache}
+          onClearGeneratedRules={onClearGeneratedRules}
+          disabled={actionDisabled}
         />
       </div>
       {activeCache && activeCard && (
