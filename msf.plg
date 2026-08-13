@@ -1,26 +1,29 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.7.1">
+<!ENTITY version "0.4.7.2">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.7.1">
-<!ENTITY packageName "msf-0.4.7.1-x86_64-1">
+<!ENTITY releaseTag "v0.4.7.2">
+<!ENTITY packageName "msf-0.4.7.2-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "233b95a34024bf2de0b7347979318fc2091576edab327914ab7b8a672e792665">
+<!ENTITY packageSHA256 "58bccb357c902b2b077da988501165ae37eec6ca803e418e55fc5c1dbe4cfbfe">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.7.1
+### msf 0.4.7.2
 
-#### 用户体验修复小版本
+#### 恢复出厂设置优先级与可靠性修复
 
-- 修复 MosDNS DDNS、直连、拦截、代理、直连 IP 与重定向 IP 等规则列表的格式兼容与运行时热同步；订阅更新后会校验实际运行态，并刷新前置 DNS 缓存，避免文件已更新但规则未生效。
-- 统一导入域名规则的 `full`、`domain`、`keyword` 与 `regexp` 格式处理，修复对象或非标准条目进入规则文件后无法匹配的问题。
-- 在 DNS 查询日志中增加独立的“查询结果”列，显示实际应答值并去除重复的记录类型与 TTL；保留原表格列宽关系，并修复对象应答显示为 `[object Object]`。
-- 新增明确的“清空 DNS 缓存”操作，逐项清理全部七个 MosDNS 运行时缓存并报告具体失败项；原有操作更名为“清空生成规则”，避免误认为会清除 DNS 缓存。
-- 清空 DNS 缓存不会删除规则、订阅、配置、自动生成规则或 Mihomo Fake-IP 数据库；相关操作增加独立确认提示和重复点击保护。
+- 修复 MosDNS 在线分流规则源只接受 SRS 二进制的限制；现在同时支持内容合法的 SRS 和 TXT，并以实际内容而非 URL/文件扩展名判定格式。
+- 更新 MosDNS 在线分流的 5 个默认来源：国内加速域名和国外专属域名改用 Loyalsoldier 文本源，中国 IP、中国域名和非中国域名保持 MetaCubeX SRS 源；旧内置 URL 会兼容迁移到新源。
+- 合并更新 MosDNS 默认直连与代理规则，保留旧规则并增加新的软件、硬件、游戏、微软与流媒体域名；跨列表冲突按新规则归属去重。
+- 恢复出厂设置现在拥有最高操作优先级：发起后会立即接管系统、取消正在执行的可取消写操作，并拒绝新的状态变更请求，不再因其他功能占用而持续显示“正在重置”。
+- 重置请求会先以持久化标记落盘，再重新执行当前 MSF 进程；新进程会在恢复任何运行态之前完成清理。即使进程切换或中途异常，重启后也会继续处理该请求，并在连续失败时进入可诊断的安全模式。
+- 增加恢复出厂设置状态接口与前端生命周期轮询，界面可持续跟踪请求、执行、失败和完成状态；重置完成后旧登录令牌立即失效，MosDNS 与 Mihomo 不会被旧运行态重新拉起。
+- 将后台自更新任务纳入重置接管范围，并把 MSF 二进制与 Zashboard 更新改为暂存后原子替换，避免强制停止期间留下截断的可执行文件或不完整的界面目录。
+- 修复 Linux 子进程已退出但尚未回收时被误判为仍在运行的问题，避免恢复出厂设置错误报告组件停止失败。
 
     ]]>
   </CHANGES>
@@ -61,8 +64,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.7.1-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.7.1-x86_64-1.txz
+removepkg msf-0.4.7.2-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.7.2-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
