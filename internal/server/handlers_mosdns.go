@@ -1522,7 +1522,7 @@ func (a *App) writeMosDNSRulePatterns(category string, patterns []string) error 
 
 func normalizeMosDNSRulePattern(category, pattern string) string {
 	pattern = strings.TrimSpace(pattern)
-	if pattern == "" || mosDNSRuleCategoryFile(category) != mosDNSRuleCategoryFile("ddnslist") {
+	if pattern == "" {
 		return pattern
 	}
 	for _, prefix := range []string{"domain:", "full:", "keyword:", "regexp:"} {
@@ -1530,10 +1530,19 @@ func normalizeMosDNSRulePattern(category, pattern string) string {
 			return pattern
 		}
 	}
-	// The MosDNS domain_mapper ignores rules without a matcher prefix. The
-	// DDNS editor intentionally accepts a plain hostname, which means an exact
-	// match and must therefore be persisted and hot-synced as a full rule.
-	return "full:" + pattern
+	categoryFile := mosDNSRuleCategoryFile(category)
+	switch categoryFile {
+	case mosDNSRuleCategoryFile("ddnslist"):
+		// A DDNS entry is normally one dynamic hostname, so keep plain input exact.
+		return "full:" + pattern
+	case mosDNSRuleCategoryFile("whitelist"), mosDNSRuleCategoryFile("blocklist"), mosDNSRuleCategoryFile("greylist"):
+		// The rule editor defaults these categories to domain matching (the root
+		// domain and its subdomains). Apply the same semantics to imports and API
+		// callers. domain_mapper ignores rules without a matcher prefix entirely.
+		return "domain:" + pattern
+	default:
+		return pattern
+	}
 }
 
 func readMosDNSRuleImportRequest(r *http.Request) (string, bool, error) {

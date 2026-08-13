@@ -41,9 +41,9 @@ func TestMosDNSPersonalRulesHotSyncRuntime(t *testing.T) {
 		tag      string
 		pattern  string
 	}{
-		{category: "whitelist", tag: "whitelist", pattern: "domain:direct.example"},
-		{category: "blocklist", tag: "blocklist", pattern: "full:ads.example"},
-		{category: "greylist", tag: "greylist", pattern: "domain:proxy.example"},
+		{category: "whitelist", tag: "whitelist", pattern: "direct.example"},
+		{category: "blocklist", tag: "blocklist", pattern: "ads.example"},
+		{category: "greylist", tag: "greylist", pattern: "proxy.example"},
 		{category: "ddnslist", tag: "ddnslist", pattern: "home.example"},
 		{category: "direct_ip", tag: "direct_ip", pattern: "192.0.2.0/24"},
 		{category: "redirect", tag: "rewrite", pattern: "full:edge.example 192.0.2.10"},
@@ -67,6 +67,8 @@ func TestMosDNSPersonalRulesHotSyncRuntime(t *testing.T) {
 			wantPattern := test.pattern
 			if test.category == "ddnslist" {
 				wantPattern = "full:" + test.pattern
+			} else if slices.Contains([]string{"whitelist", "blocklist", "greylist"}, test.category) {
+				wantPattern = "domain:" + test.pattern
 			}
 			if !slices.Contains(payload.Values, wantPattern) {
 				t.Fatalf("runtime values do not contain %q: %#v", wantPattern, payload.Values)
@@ -97,7 +99,11 @@ func TestNormalizeMosDNSRulePattern(t *testing.T) {
 		{category: "ddnslist", pattern: "domain:example", want: "domain:example"},
 		{category: "ddnslist", pattern: "keyword:home", want: "keyword:home"},
 		{category: "ddnslist", pattern: `regexp:^.+\.example$`, want: `regexp:^.+\.example$`},
-		{category: "whitelist", pattern: "home.example", want: "home.example"},
+		{category: "whitelist", pattern: "home.example", want: "domain:home.example"},
+		{category: "direct", pattern: "home.example", want: "domain:home.example"},
+		{category: "blocklist", pattern: "ads.example", want: "domain:ads.example"},
+		{category: "greylist", pattern: "proxy.example", want: "domain:proxy.example"},
+		{category: "direct_ip", pattern: "192.0.2.0/24", want: "192.0.2.0/24"},
 	}
 	for _, test := range tests {
 		if got := normalizeMosDNSRulePattern(test.category, test.pattern); got != test.want {
@@ -119,23 +125,36 @@ func TestMosDNSDomainMapperBackedTags(t *testing.T) {
 	}
 }
 
-func TestMigrateLegacyMosDNSDDNSRules(t *testing.T) {
+func TestMigrateLegacyMosDNSDomainRules(t *testing.T) {
 	app := newTestApp(t)
-	rel := mosDNSRuleCategoryFile("ddnslist")
-	if err := app.writeTextFile(rel, "home.example\nfull:exact.example\nhome.example\n"); err != nil {
+	tests := []struct {
+		category string
+		input    string
+		want     string
+	}{
+		{category: "whitelist", input: "example.com\nfull:exact.example\nexample.com\n", want: "domain:example.com\nfull:exact.example\n"},
+		{category: "blocklist", input: "ads.example\nkeyword:tracker\n", want: "domain:ads.example\nkeyword:tracker\n"},
+		{category: "greylist", input: "proxy.example\nregexp:^api\\.example$\n", want: "domain:proxy.example\nregexp:^api\\.example$\n"},
+		{category: "ddnslist", input: "home.example\nfull:exact.example\nhome.example\n", want: "full:home.example\nfull:exact.example\n"},
+	}
+	for _, test := range tests {
+		if err := app.writeTextFile(mosDNSRuleCategoryFile(test.category), test.input); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := app.migrateLegacyMosDNSDomainRules(); err != nil {
 		t.Fatal(err)
 	}
-	if err := app.migrateLegacyMosDNSDDNSRules(); err != nil {
-		t.Fatal(err)
+	for _, test := range tests {
+		content, err := app.readTextFile(mosDNSRuleCategoryFile(test.category))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if content != test.want {
+			t.Fatalf("migrated %s rules = %q, want %q", test.category, content, test.want)
+		}
 	}
-	content, err := app.readTextFile(rel)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "full:home.example\nfull:exact.example\n"; content != want {
-		t.Fatalf("migrated DDNS rules = %q, want %q", content, want)
-	}
-	if err := app.migrateLegacyMosDNSDDNSRules(); err != nil {
+	if err := app.migrateLegacyMosDNSDomainRules(); err != nil {
 		t.Fatalf("migration should be idempotent: %v", err)
 	}
 }
@@ -155,6 +174,28 @@ func TestMosDNSDDNSImportNormalizesPlainDomains(t *testing.T) {
 	}
 	if want := "full:one.example\nfull:two.example\n"; content != want {
 		t.Fatalf("imported DDNS rules = %q, want %q", content, want)
+	}
+}
+
+func TestMosDNSDomainListImportsNormalizePlainDomains(t *testing.T) {
+	for _, category := range []string{"whitelist", "blocklist", "greylist"} {
+		t.Run(category, func(t *testing.T) {
+			app := newTestApp(t)
+			token := tokenForRole(t, app, "admin")
+			res := requestJSON(t, app, http.MethodPost, "/api/v1/mosdns/rules/"+category+"/import", token, map[string]any{
+				"content": "example.com\nfull:exact.example\nexample.com\n",
+			})
+			if res.Code != http.StatusOK {
+				t.Fatalf("%s import status=%d body=%s", category, res.Code, res.Body.String())
+			}
+			content, err := app.readTextFile(mosDNSRuleCategoryFile(category))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "domain:example.com\nfull:exact.example\n"; content != want {
+				t.Fatalf("imported %s rules = %q, want %q", category, content, want)
+			}
+		})
 	}
 }
 

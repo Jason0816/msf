@@ -975,42 +975,46 @@ func (a *App) migrateLegacyMosDNSConfig() error {
 	if err := os.Remove(staleForward2); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := a.migrateLegacyMosDNSDDNSRules(); err != nil {
+	if err := a.migrateLegacyMosDNSDomainRules(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (a *App) migrateLegacyMosDNSDDNSRules() error {
-	const category = "ddnslist"
-	rel := mosDNSRuleCategoryFile(category)
-	content, err := a.readTextFile(rel)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
+func (a *App) migrateLegacyMosDNSDomainRules() error {
+	for _, category := range []string{"whitelist", "blocklist", "greylist", "ddnslist"} {
+		rel := mosDNSRuleCategoryFile(category)
+		content, err := a.readTextFile(rel)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
 		}
-		return err
-	}
-	patterns := splitNonEmptyLines(content)
-	normalized := make([]string, 0, len(patterns))
-	seen := make(map[string]bool, len(patterns))
-	for _, pattern := range patterns {
-		pattern = normalizeMosDNSRulePattern(category, pattern)
-		if pattern == "" || seen[pattern] {
+		patterns := splitNonEmptyLines(content)
+		normalized := make([]string, 0, len(patterns))
+		seen := make(map[string]bool, len(patterns))
+		for _, pattern := range patterns {
+			pattern = normalizeMosDNSRulePattern(category, pattern)
+			if pattern == "" || seen[pattern] {
+				continue
+			}
+			seen[pattern] = true
+			normalized = append(normalized, pattern)
+		}
+		next := strings.Join(normalized, "\n")
+		if next != "" {
+			next += "\n"
+		}
+		if next == content {
 			continue
 		}
-		seen[pattern] = true
-		normalized = append(normalized, pattern)
+		a.createConfigHistory("mosdns", rel, content, "auto backup before domain rule normalization", "system")
+		if err := a.writeTextFile(rel, next); err != nil {
+			return err
+		}
 	}
-	next := strings.Join(normalized, "\n")
-	if next != "" {
-		next += "\n"
-	}
-	if next == content {
-		return nil
-	}
-	a.createConfigHistory("mosdns", rel, content, "auto backup before DDNS rule normalization", "system")
-	return a.writeTextFile(rel, next)
+	return nil
 }
 
 func addMosDNSRealAAAABypass(content string) string {
