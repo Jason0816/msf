@@ -1,26 +1,26 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.7">
+<!ENTITY version "0.4.7.1">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.7">
-<!ENTITY packageName "msf-0.4.7-x86_64-1">
+<!ENTITY releaseTag "v0.4.7.1">
+<!ENTITY packageName "msf-0.4.7.1-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "ee4a52faa50e174beaf048f7659ecd7561fbc85aeef2c912e726c03bb08339a0">
+<!ENTITY packageSHA256 "233b95a34024bf2de0b7347979318fc2091576edab327914ab7b8a672e792665">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.7
+### msf 0.4.7.1
 
-#### 稳定性与配置安全更新
+#### 用户体验修复小版本
 
-- 修复 Mihomo 代理组结构化编辑可能把 Controller 运行时展开的订阅节点写入静态配置的问题。保存前现在会检查代理组引用，并调用 Mihomo 核心测试候选配置；无效配置会在写入或重启前被拦截并返回实际错误。
-- 修复服务替换期间旧进程退出可能删除新进程 PID 文件或清除新进程状态的问题。启动失败提示现在只读取本次启动新增的标准输出和错误日志，避免旧日志干扰判断。
-- 为 MosDNS 增加安全的 ALIAPI 上游凭据编辑，支持账户 ID、Access Key、服务器地址和 ECS Mask 校验；Secret 不通过 API 回显，编辑时留空可保留原值，凭据文件权限限制为 `0600`。
-- 修复 Mihomo TProxy 与 Redirect 端口健康检查误报和回环告警：透明代理端口改为读取系统监听表并核对服务进程，不再主动连接端口进行探测。
-- 将默认测速和 Provider 健康检查地址统一为 `https://www.gstatic.com/generate_204`；结构化写回 Mihomo 配置时保持默认模板顺序，并始终把 `proxy-providers` 放在顶层配置末尾。
+- 修复 MosDNS DDNS、直连、拦截、代理、直连 IP 与重定向 IP 等规则列表的格式兼容与运行时热同步；订阅更新后会校验实际运行态，并刷新前置 DNS 缓存，避免文件已更新但规则未生效。
+- 统一导入域名规则的 `full`、`domain`、`keyword` 与 `regexp` 格式处理，修复对象或非标准条目进入规则文件后无法匹配的问题。
+- 在 DNS 查询日志中增加独立的“查询结果”列，显示实际应答值并去除重复的记录类型与 TTL；保留原表格列宽关系，并修复对象应答显示为 `[object Object]`。
+- 新增明确的“清空 DNS 缓存”操作，逐项清理全部七个 MosDNS 运行时缓存并报告具体失败项；原有操作更名为“清空生成规则”，避免误认为会清除 DNS 缓存。
+- 清空 DNS 缓存不会删除规则、订阅、配置、自动生成规则或 Mihomo Fake-IP 数据库；相关操作增加独立确认提示和重复点击保护。
 
     ]]>
   </CHANGES>
@@ -61,8 +61,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.7-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.7-x86_64-1.txz
+removepkg msf-0.4.7.1-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.7.1-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
