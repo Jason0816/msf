@@ -1,12 +1,20 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"compress/zlib"
+	"encoding/binary"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	scdomain "github.com/sagernet/sing/common/domain"
+	"github.com/sagernet/sing/common/varbin"
 )
 
 func TestValidateMosDNSRuleSourceArtifact(t *testing.T) {
@@ -31,12 +39,16 @@ func TestValidateMosDNSRuleSourceArtifact(t *testing.T) {
 	if err := validateMosDNSRuleSourceArtifact(validRoutingText, "srs"); err != nil {
 		t.Fatalf("valid routing text with SRS extension rejected: %v", err)
 	}
+	converted, err := os.ReadFile(validRoutingText)
+	if err != nil || !bytes.HasPrefix(converted, []byte("SRS\x03")) {
+		t.Fatalf("routing text was not compiled to SRS: prefix=%q err=%v", converted[:min(len(converted), 4)], err)
+	}
 	validIPText := filepath.Join(dir, "routing-ip.txt")
 	if err := os.WriteFile(validIPText, []byte("192.0.2.0/24\n2001:db8::/32\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateMosDNSRuleSourceArtifact(validIPText, "srs", "geoipcn"); err != nil {
-		t.Fatalf("valid IP routing text rejected: %v", err)
+	if err := validateMosDNSRuleSourceArtifact(validIPText, "srs", "geoipcn"); err == nil || !strings.Contains(err.Error(), "请使用 SRS 格式") {
+		t.Fatalf("IP routing text should require an SRS source, err=%v", err)
 	}
 	validSRSWithTextExtension := filepath.Join(dir, "routing.txt")
 	if err := os.WriteFile(validSRSWithTextExtension, payload.Bytes(), 0o644); err != nil {
@@ -58,6 +70,116 @@ func TestValidateMosDNSRuleSourceArtifact(t *testing.T) {
 	}
 	if err := validateMosDNSRuleSourceArtifact(validAdguard, "adguard"); err != nil {
 		t.Fatalf("valid AdGuard text rejected: %v", err)
+	}
+}
+
+func TestCompileMosDNSRoutingTextToSRSSupportsLoyalsoldierAttributes(t *testing.T) {
+	text := []byte("domain:a2z.org.cn:@cn\nfull:exact.example:@!cn\nkeyword:edge\nregexp:^api\\.example$\n")
+	compiled, count, err := compileMosDNSRoutingTextToSRS(text, "cuscn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Fatalf("rule count=%d want 4", count)
+	}
+	full, suffix, keywords, regexps, err := decodeMosDNSDomainSRSForTest(compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(full) != 1 || full[0] != "exact.example" || len(suffix) != 1 || suffix[0] != "a2z.org.cn" {
+		t.Fatalf("compiled domains full=%v suffix=%v", full, suffix)
+	}
+	if len(keywords) != 1 || keywords[0] != "edge" || len(regexps) != 1 || regexps[0] != "^api\\.example$" {
+		t.Fatalf("compiled strings keywords=%v regexps=%v", keywords, regexps)
+	}
+}
+
+func TestDownloadMosDNSRoutingTextStoresCompiledSRS(t *testing.T) {
+	app := newTestApp(t)
+	rules := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("domain:a2z.org.cn:@cn\nfull:exact.example\n"))
+	}))
+	defer rules.Close()
+	source := mosDNSRuleSource{
+		ID: "srs:cuscn:unit-text", Name: "unit-text", Type: "cuscn", SourceType: "srs",
+		Files: "srs/unit-text.txt", URL: rules.URL + "/rules.txt", ConfigPath: "configs/mosdns/srs/cuscn.json",
+	}
+	updated, err := app.downloadMosDNSRuleSourceArtifact(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.RuleCount != 2 {
+		t.Fatalf("rule count=%d want 2", updated.RuleCount)
+	}
+	stored, err := os.ReadFile(filepath.Join(app.DataDir, "configs/mosdns/srs/unit-text.txt"))
+	if err != nil || !bytes.HasPrefix(stored, []byte("SRS\x03")) {
+		t.Fatalf("stored artifact is not compiled SRS: prefix=%q err=%v", stored[:min(len(stored), 4)], err)
+	}
+}
+
+func TestCompileCurrentLoyalsoldierFixtures(t *testing.T) {
+	for _, name := range []string{"cn", "nocn"} {
+		path := os.Getenv("MSF_LOYALSOLDIER_" + strings.ToUpper(name) + "_FIXTURE")
+		if path == "" {
+			continue
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		compiled, count, err := compileMosDNSRoutingTextToSRS(content, "cuscn")
+		if err != nil {
+			t.Fatalf("compile %s fixture: %v", name, err)
+		}
+		if count < 1000 || validateMosDNSSRSArtifact(compiled) != nil {
+			t.Fatalf("compiled %s count=%d size=%d", name, count, len(compiled))
+		}
+		t.Logf("compiled %s rules=%d text=%d bytes srs=%d bytes", name, count, len(content), len(compiled))
+	}
+}
+
+func decodeMosDNSDomainSRSForTest(data []byte) (full, suffix, keywords, regexps []string, err error) {
+	if len(data) < 5 || string(data[:3]) != "SRS" {
+		return nil, nil, nil, nil, os.ErrInvalid
+	}
+	zr, err := zlib.NewReader(bytes.NewReader(data[4:]))
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	defer zr.Close()
+	br := bufio.NewReader(zr)
+	if _, err = binary.ReadUvarint(br); err != nil {
+		return
+	}
+	if _, err = br.ReadByte(); err != nil {
+		return
+	}
+	for {
+		var item byte
+		item, err = br.ReadByte()
+		if err != nil || item == 0xFF {
+			if item == 0xFF {
+				err = nil
+			}
+			return
+		}
+		switch item {
+		case 2:
+			var matcher *scdomain.Matcher
+			matcher, err = scdomain.ReadMatcher(br)
+			if err == nil {
+				full, suffix = matcher.Dump()
+			}
+		case 3:
+			keywords, err = varbin.ReadValue[[]string](br, binary.BigEndian)
+		case 4:
+			regexps, err = varbin.ReadValue[[]string](br, binary.BigEndian)
+		default:
+			err = os.ErrInvalid
+		}
+		if err != nil {
+			return
+		}
 	}
 }
 

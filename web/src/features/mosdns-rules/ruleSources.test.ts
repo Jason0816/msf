@@ -14,6 +14,8 @@ describe("MosDNS rule source freshness", () => {
     expect(page).toContain("payload?.success === false");
     expect(page).toContain("部分规则源更新失败");
     expect(page).toContain("failures.length > 0");
+    expect(page).toContain('"error"');
+    expect(dialogs).toContain('t.tone === "error"');
   });
 
   it("accepts routing text or SRS content without forcing the URL extension", () => {

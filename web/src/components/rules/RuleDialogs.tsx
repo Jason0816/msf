@@ -755,6 +755,7 @@ export function ClearConfirmModal({
 export interface ToastItem {
   id: number;
   message: string;
+  tone?: "success" | "error";
 }
 
 export function ToastStack({ toasts }: { toasts: ToastItem[] }) {
@@ -765,7 +766,7 @@ export function ToastStack({ toasts }: { toasts: ToastItem[] }) {
           key={t.id}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-effect-strong shadow-apple-lg border border-border/30 text-sm font-medium text-foreground animate-fade-in"
         >
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          {t.tone === "error" ? <TriangleAlert className="h-4 w-4 text-red-500" /> : <CheckCircle2 className="h-4 w-4 text-green-500" />}
           {t.message}
         </div>
       ))}

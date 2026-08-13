@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"compress/zlib"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +17,9 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	scdomain "github.com/sagernet/sing/common/domain"
+	"github.com/sagernet/sing/common/varbin"
 )
 
 type mosDNSRuleSource struct {
@@ -294,7 +299,8 @@ func (a *App) downloadMosDNSRuleSourceArtifact(source mosDNSRuleSource) (mosDNSR
 		_ = os.Remove(tmp)
 		return source, err
 	}
-	if err := validateMosDNSRuleSourceArtifact(tmp, source.SourceType, source.Type); err != nil {
+	ruleCount, err := prepareMosDNSRuleSourceArtifact(tmp, source.SourceType, source.Type)
+	if err != nil {
 		_ = os.Remove(tmp)
 		return source, err
 	}
@@ -309,7 +315,9 @@ func (a *App) downloadMosDNSRuleSourceArtifact(source mosDNSRuleSource) (mosDNSR
 	source.LocalPath = localRel
 	source.LastUpdated = time.Now().Format(time.RFC3339)
 	source.FileSize = fileSize(dst)
-	if count, ok := countRuleFile(dst); ok || source.RuleCount == 0 {
+	if ruleCount > 0 {
+		source.RuleCount = ruleCount
+	} else if count, ok := countRuleFile(dst); ok || source.RuleCount == 0 {
 		source.RuleCount = count
 	}
 	if err := a.replaceMosDNSRuleSource(source); err != nil {
@@ -318,81 +326,164 @@ func (a *App) downloadMosDNSRuleSourceArtifact(source mosDNSRuleSource) (mosDNSR
 	return source, nil
 }
 
-func validateMosDNSRuleSourceArtifact(path, sourceType string, ruleTypes ...string) error {
+func prepareMosDNSRuleSourceArtifact(path, sourceType, ruleType string) (int, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if len(b) == 0 {
-		return fmt.Errorf("下载的规则文件为空")
+		return 0, fmt.Errorf("下载的规则文件为空")
 	}
 	if len(b) >= 3 && bytes.Equal(b[:3], []byte("SRS")) {
 		if sourceType != "srs" {
-			return fmt.Errorf("下载的广告规则必须是有效文本内容")
+			return 0, fmt.Errorf("下载的广告规则必须是有效文本内容")
 		}
-		return validateMosDNSSRSArtifact(b)
+		return 0, validateMosDNSSRSArtifact(b)
 	}
 	if !utf8.Valid(b) || strings.ContainsRune(string(b), '\x00') {
 		if sourceType == "srs" {
-			return fmt.Errorf("下载的在线分流规则既不是有效 SRS，也不是有效文本")
+			return 0, fmt.Errorf("下载的在线分流规则既不是有效 SRS，也不是有效文本")
 		}
-		return fmt.Errorf("下载的广告规则不是有效文本")
+		return 0, fmt.Errorf("下载的广告规则不是有效文本")
 	}
-	if sourceType == "srs" {
-		ruleType := ""
-		if len(ruleTypes) > 0 {
-			ruleType = ruleTypes[0]
-		}
-		if err := validateMosDNSRoutingText(b, ruleType); err != nil {
-			return err
-		}
+	if sourceType != "srs" {
+		return len(splitNonEmptyLines(string(b))), nil
 	}
-	return nil
+	compiled, count, err := compileMosDNSRoutingTextToSRS(b, ruleType)
+	if err != nil {
+		return 0, err
+	}
+	if err := os.WriteFile(path, compiled, 0644); err != nil {
+		return 0, fmt.Errorf("写入在线分流 SRS 转换结果失败：%w", err)
+	}
+	return count, nil
 }
 
-func validateMosDNSRoutingText(b []byte, ruleType string) error {
+func validateMosDNSRuleSourceArtifact(path, sourceType string, ruleTypes ...string) error {
+	ruleType := ""
+	if len(ruleTypes) > 0 {
+		ruleType = ruleTypes[0]
+	}
+	_, err := prepareMosDNSRuleSourceArtifact(path, sourceType, ruleType)
+	return err
+}
+
+func compileMosDNSRoutingTextToSRS(b []byte, ruleType string) ([]byte, int, error) {
 	lines := splitNonEmptyLines(string(b))
-	valid := 0
+	var fullDomains, suffixDomains, keywords, regexps []string
+	var ipRules []string
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 		if normalizeMosDNSGeositeType(ruleType) == "geoipcn" {
-			value := strings.TrimPrefix(line, "ip_cidr:")
+			value := stripMosDNSRuleAttributes(strings.TrimPrefix(line, "ip_cidr:"))
 			if strings.ContainsRune(value, '/') {
 				if _, err := netip.ParsePrefix(value); err != nil {
-					return fmt.Errorf("下载的在线分流文本第 %d 行不是有效 IP/CIDR：%s", i+1, line)
+					return nil, 0, fmt.Errorf("下载的在线分流文本第 %d 行不是有效 IP/CIDR：%s", i+1, line)
 				}
 			} else if _, err := netip.ParseAddr(value); err != nil {
-				return fmt.Errorf("下载的在线分流文本第 %d 行不是有效 IP/CIDR：%s", i+1, line)
+				return nil, 0, fmt.Errorf("下载的在线分流文本第 %d 行不是有效 IP/CIDR：%s", i+1, line)
 			}
-			valid++
+			ipRules = append(ipRules, value)
 			continue
 		}
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 || parts[1] == "" {
-			return fmt.Errorf("下载的在线分流文本第 %d 行必须使用 domain/full/keyword/regexp 前缀：%s", i+1, line)
+			return nil, 0, fmt.Errorf("下载的在线分流文本第 %d 行必须使用 domain/full/keyword/regexp 前缀：%s", i+1, line)
+		}
+		value := stripMosDNSRuleAttributes(parts[1])
+		if value == "" {
+			return nil, 0, fmt.Errorf("下载的在线分流文本第 %d 行规则内容为空：%s", i+1, line)
 		}
 		switch parts[0] {
 		case "domain", "full":
-			if !validMosDNSRewriteDomain(parts[1]) {
-				return fmt.Errorf("下载的在线分流文本第 %d 行域名格式无效：%s", i+1, line)
+			if !validMosDNSRewriteDomain(value) {
+				return nil, 0, fmt.Errorf("下载的在线分流文本第 %d 行域名格式无效：%s", i+1, line)
+			}
+			if parts[0] == "full" {
+				fullDomains = append(fullDomains, value)
+			} else {
+				suffixDomains = append(suffixDomains, value)
 			}
 		case "keyword":
+			keywords = append(keywords, value)
 		case "regexp":
-			if _, err := regexp.Compile(parts[1]); err != nil {
-				return fmt.Errorf("下载的在线分流文本第 %d 行正则表达式无效：%s", i+1, line)
+			if _, err := regexp.Compile(value); err != nil {
+				return nil, 0, fmt.Errorf("下载的在线分流文本第 %d 行正则表达式无效：%s", i+1, line)
 			}
+			regexps = append(regexps, value)
 		default:
-			return fmt.Errorf("下载的在线分流文本第 %d 行前缀不受支持：%s", i+1, line)
+			return nil, 0, fmt.Errorf("下载的在线分流文本第 %d 行前缀不受支持：%s", i+1, line)
 		}
-		valid++
 	}
-	if valid == 0 {
-		return fmt.Errorf("下载的在线分流文本不包含有效规则")
+	count := len(fullDomains) + len(suffixDomains) + len(keywords) + len(regexps) + len(ipRules)
+	if count == 0 {
+		return nil, 0, fmt.Errorf("下载的在线分流文本不包含有效规则")
 	}
-	return nil
+	if len(ipRules) > 0 {
+		return nil, 0, fmt.Errorf("暂不支持将 IP/CIDR 文本规则转换为 SRS，请使用 SRS 格式的中国 IP 规则源")
+	}
+	compiled, err := encodeMosDNSDomainSRS(fullDomains, suffixDomains, keywords, regexps)
+	if err != nil {
+		return nil, 0, fmt.Errorf("将在线分流文本转换为 SRS 失败：%w", err)
+	}
+	return compiled, count, nil
+}
+
+func stripMosDNSRuleAttributes(value string) string {
+	if index := strings.Index(value, ":@"); index >= 0 {
+		return strings.TrimSpace(value[:index])
+	}
+	return strings.TrimSpace(value)
+}
+
+func encodeMosDNSDomainSRS(fullDomains, suffixDomains, keywords, regexps []string) ([]byte, error) {
+	var out bytes.Buffer
+	out.WriteString("SRS")
+	out.WriteByte(3)
+	zw := zlib.NewWriter(&out)
+	bw := bufio.NewWriter(zw)
+	if _, err := varbin.WriteUvarint(bw, 1); err != nil {
+		return nil, err
+	}
+	if err := bw.WriteByte(0); err != nil {
+		return nil, err
+	}
+	if len(fullDomains)+len(suffixDomains) > 0 {
+		if err := bw.WriteByte(2); err != nil {
+			return nil, err
+		}
+		if err := scdomain.NewMatcher(fullDomains, suffixDomains, false).Write(bw); err != nil {
+			return nil, err
+		}
+	}
+	for _, section := range []struct {
+		item   byte
+		values []string
+	}{{3, keywords}, {4, regexps}} {
+		item, values := section.item, section.values
+		if len(values) == 0 {
+			continue
+		}
+		if err := bw.WriteByte(item); err != nil {
+			return nil, err
+		}
+		if err := varbin.Write(bw, binary.BigEndian, values); err != nil {
+			return nil, err
+		}
+	}
+	if err := bw.WriteByte(0xFF); err != nil {
+		return nil, err
+	}
+	if err := bw.Flush(); err != nil {
+		return nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 func validateMosDNSSRSArtifact(b []byte) error {

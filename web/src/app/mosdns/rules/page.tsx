@@ -176,9 +176,9 @@ export default function MosdnsRulesPage() {
   const adblockRules = useMemo(() => ruleSets.filter((item) => item.sourceType === "adguard" || item.type === "adguard"), [ruleSets]);
   const routingRules = useMemo(() => ruleSets.filter((item) => item.sourceType !== "adguard" && item.type !== "adguard"), [ruleSets]);
 
-  const showToast = useCallback((message: string) => {
+  const showToast = useCallback((message: string, tone: "success" | "error" = "success") => {
     const id = (toastIdRef.current += 1);
-    setToasts((current) => [...current, { id, message }]);
+    setToasts((current) => [...current, { id, message, tone }]);
     window.setTimeout(() => setToasts((current) => current.filter((item) => item.id !== id)), 2500);
   }, []);
 
@@ -402,7 +402,7 @@ export default function MosdnsRulesPage() {
       await loadRuleSets();
       await loadCategories();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "规则源更新失败");
+      showToast(error instanceof Error ? error.message : "规则源更新失败", "error");
     }
   };
 
@@ -425,14 +425,14 @@ export default function MosdnsRulesPage() {
       const failures = Array.isArray(data?.failures) ? data.failures : Array.isArray(payload?.failures) ? payload.failures : [];
       if (failures.length > 0) {
         const names = failures.map((failure: any) => String(failure.name || failure.id || "未知规则源")).join("、");
-        showToast(`部分规则源更新失败：${names}`);
+        showToast(`部分规则源更新失败：${names}`, "error");
       } else {
         showToast("规则源更新完成");
       }
       await loadRuleSets();
       await loadCategories();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "规则源更新失败");
+      showToast(error instanceof Error ? error.message : "规则源更新失败", "error");
     }
   };
 
