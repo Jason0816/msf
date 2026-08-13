@@ -56,3 +56,23 @@ func TestNormalizeMosDNSQueryNameRejectsNonDomains(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeMosDNSQueryMapPreservesAnswerDetails(t *testing.T) {
+	entry := normalizeMosDNSQueryMap(map[string]any{
+		"query_name":    "answer.example",
+		"query_type":    "A",
+		"response_code": "NOERROR",
+		"answers": []any{
+			map[string]any{"type": "CNAME", "ttl": float64(60), "data": "edge.example."},
+			map[string]any{"type": "A", "ttl": float64(30), "data": "192.0.2.10"},
+		},
+	}, 0, "")
+	answers := anySlice(entry["answers"])
+	if len(answers) != 2 {
+		t.Fatalf("answers=%#v, want two records", answers)
+	}
+	second, ok := answers[1].(map[string]any)
+	if !ok || second["type"] != "A" || second["data"] != "192.0.2.10" || second["ttl"] != float64(30) {
+		t.Fatalf("A answer details were not preserved: %#v", answers[1])
+	}
+}

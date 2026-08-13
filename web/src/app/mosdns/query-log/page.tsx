@@ -22,9 +22,10 @@ interface QueryRow {
 
 type ColKey = "domain" | "client" | "type" | "rule" | "status";
 
-const columns: { label: string; key?: ColKey; sort?: boolean; align?: string }[] = [
-  { label: "时间", sort: true },
-  { label: "域名", key: "domain" },
+const columns: { label: string; key?: ColKey; sort?: boolean; align?: string; className?: string }[] = [
+  { label: "时间", sort: true, className: "w-[150px]" },
+  { label: "域名", key: "domain", className: "w-[220px] max-w-[260px]" },
+  { label: "查询结果", className: "min-w-[190px] max-w-[320px]" },
   { label: "客户端", key: "client" },
   { label: "类型", key: "type" },
   { label: "分流规则", key: "rule" },
@@ -63,10 +64,29 @@ function formatMs(value: unknown) {
   return ms.toFixed(2);
 }
 
+function formatAnswerItem(value: unknown) {
+  if (!value || typeof value !== "object") return value ? String(value) : "";
+  const answer = value as Record<string, unknown>;
+  const type = textValue(answer, ["type", "record_type", "qtype"]);
+  const data = textValue(answer, ["data", "value", "answer", "ip", "target"]);
+  const ttl = textValue(answer, ["ttl"]);
+  if (!data) return JSON.stringify(value);
+  return `${type ? `${type}: ` : ""}${data}${ttl ? ` (TTL ${ttl}s)` : ""}`;
+}
+
 function formatAnswer(value: unknown) {
-  if (Array.isArray(value)) return value.map(String).join(", ");
-  if (value && typeof value === "object") return JSON.stringify(value);
-  return value ? String(value) : undefined;
+  if (Array.isArray(value)) {
+    const answers = value.map(formatAnswerItem).filter(Boolean);
+    return answers.length ? answers.join(" · ") : undefined;
+  }
+  const answer = formatAnswerItem(value);
+  return answer || undefined;
+}
+
+function emptyAnswerLabel(status: string) {
+  const normalized = status.toUpperCase();
+  if (["NXDOMAIN", "SERVFAIL", "REFUSED", "FORMERR", "NOTIMP"].includes(normalized)) return "无结果";
+  return "未记录应答";
 }
 
 function normalizeQueryRow(item: unknown, index: number): QueryRow {
@@ -154,8 +174,8 @@ export default function QueryLogPage() {
     let out = allRows.filter((r) => {
       if (query) {
         const match = exact
-          ? r.domain === query || r.client === query
-          : `${r.domain}${r.client}`.toLowerCase().includes(query.toLowerCase());
+          ? r.domain === query || r.client === query || r.answer === query
+          : `${r.domain}${r.client}${r.answer || ""}`.toLowerCase().includes(query.toLowerCase());
         if (!match) return false;
       }
       for (const key of ["domain", "client", "type", "rule", "status"] as ColKey[]) {
@@ -218,7 +238,7 @@ export default function QueryLogPage() {
 
         <div className="border border-border rounded-lg bg-background overflow-hidden">
           <div className="overflow-x-auto max-h-[calc(100vh-220px)] overflow-y-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1120px] table-fixed text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-border bg-muted/30 backdrop-blur">
                   {columns.map((c) => {
@@ -226,7 +246,7 @@ export default function QueryLogPage() {
                     return (
                       <th
                         key={c.label}
-                        className={cn("text-left font-medium text-muted-foreground px-3 py-2 whitespace-nowrap relative bg-muted/30", c.align === "right" && "text-right")}
+                        className={cn("text-left font-medium text-muted-foreground px-3 py-2 whitespace-nowrap relative bg-muted/30", c.className, c.align === "right" && "text-right")}
                       >
                         <span className="inline-flex items-center gap-1.5">
                           {c.label}
@@ -282,14 +302,20 @@ export default function QueryLogPage() {
                 {visible.map((r) => (
                   <tr key={r.id} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">{r.time}</td>
-                    <td className="px-3 py-2 min-w-[220px]">
+                    <td className="px-3 py-2 max-w-[260px]">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium">{r.domain}</span>
+                        <span className="font-medium truncate" title={r.domain}>{r.domain}</span>
                         <button onClick={() => copy(r.domain)} className="text-muted-foreground hover:text-foreground">
                           <Copy className="h-3 w-3" />
                         </button>
                       </div>
-                      {r.answer && <div className="text-xs text-muted-foreground truncate max-w-[320px]">{r.answer}</div>}
+                    </td>
+                    <td className="px-3 py-2 max-w-[320px]">
+                      {r.answer ? (
+                        <div className="font-mono text-xs leading-5 break-all line-clamp-2" title={r.answer}>{r.answer}</div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{emptyAnswerLabel(r.status)}</span>
+                      )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{r.client}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{r.type}</td>
