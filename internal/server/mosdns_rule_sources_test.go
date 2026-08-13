@@ -1,11 +1,44 @@
 package server
 
 import (
+	"bytes"
+	"compress/zlib"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestValidateMosDNSRuleSourceArtifact(t *testing.T) {
+	dir := t.TempDir()
+	validSRS := filepath.Join(dir, "valid.srs")
+	var payload bytes.Buffer
+	payload.WriteString("SRS")
+	payload.WriteByte(3)
+	zw := zlib.NewWriter(&payload)
+	_, _ = zw.Write([]byte{0})
+	_ = zw.Close()
+	if err := os.WriteFile(validSRS, payload.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMosDNSRuleSourceArtifact(validSRS, "srs"); err != nil {
+		t.Fatalf("valid SRS rejected: %v", err)
+	}
+	invalidSRS := filepath.Join(dir, "invalid.srs")
+	if err := os.WriteFile(invalidSRS, []byte("not srs"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMosDNSRuleSourceArtifact(invalidSRS, "srs"); err == nil {
+		t.Fatal("invalid SRS should be rejected")
+	}
+	validAdguard := filepath.Join(dir, "adguard.txt")
+	if err := os.WriteFile(validAdguard, []byte("||example.com^\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMosDNSRuleSourceArtifact(validAdguard, "adguard"); err != nil {
+		t.Fatalf("valid AdGuard text rejected: %v", err)
+	}
+}
 
 func TestMosDNSRuleSourcesUseLocalArtifactModificationTime(t *testing.T) {
 	app := newTestApp(t)
@@ -55,8 +88,8 @@ func TestMosDNSRuleSourcesUseLocalArtifactModificationTime(t *testing.T) {
 func TestCurrentBuiltInMosDNSRuleSourceURLRepairsRemovedGeositePrefix(t *testing.T) {
 	cases := map[string]string{
 		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-geolocation-!cn%40cn.srs": "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geolocation-!cn%40cn.srs",
-		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":                  "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs",
-		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-tiktok.srs":                    "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/tiktok.srs",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":             "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-tiktok.srs":               "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/tiktok.srs",
 	}
 	for legacy, want := range cases {
 		if got := currentBuiltInMosDNSRuleSourceURL(legacy); got != want {

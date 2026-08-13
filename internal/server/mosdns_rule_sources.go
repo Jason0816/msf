@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -99,6 +101,10 @@ func (a *App) handleMosDNSRuleSourceCreate(w http.ResponseWriter, r *http.Reques
 	source, _ := a.findMosDNSRuleSource(req.ID)
 	runtimeSource, err := a.syncMosDNSRuleSourceRuntime(source, true)
 	if err != nil {
+		_ = a.writeMosDNSRuleSourceConfig(configRel, items[:len(items)-1])
+		if runtimeSource.ID != "" {
+			_ = a.deleteMosDNSRuleSourceRuntimeWithoutCacheFlush(runtimeSource)
+		}
 		writeError(w, http.StatusConflict, "runtime_sync_failed", err.Error())
 		return
 	}
@@ -249,6 +255,27 @@ func (a *App) handleMosDNSRuleSourcesUpdateAll(w http.ResponseWriter, r *http.Re
 }
 
 func (a *App) updateMosDNSRuleSource(source mosDNSRuleSource) (mosDNSRuleSource, error) {
+	source, err := a.downloadMosDNSRuleSourceArtifact(source)
+	if err != nil {
+		return source, err
+	}
+	runtimeSource, err := a.syncMosDNSRuleSourceRuntime(source, false)
+	if err != nil {
+		source.Warning = err.Error()
+		return source, err
+	}
+	if runtimeSource.ID != "" {
+		source = runtimeSource
+	}
+	next, _ := a.findMosDNSRuleSource(source.ID)
+	if next.ID != "" {
+		next.Warning = source.Warning
+		return next, nil
+	}
+	return source, nil
+}
+
+func (a *App) downloadMosDNSRuleSourceArtifact(source mosDNSRuleSource) (mosDNSRuleSource, error) {
 	if source.URL == "" {
 		return source, fmt.Errorf("rule source %s has empty url", source.ID)
 	}
@@ -262,6 +289,10 @@ func (a *App) updateMosDNSRuleSource(source mosDNSRuleSource) (mosDNSRuleSource,
 	}
 	tmp := filepath.Join(a.DataDir, "data", "rule-source-downloads", source.ID+".download")
 	if err := a.downloadFile(source.URL, tmp, nil); err != nil {
+		_ = os.Remove(tmp)
+		return source, err
+	}
+	if err := validateMosDNSRuleSourceArtifact(tmp, source.SourceType); err != nil {
 		_ = os.Remove(tmp)
 		return source, err
 	}
@@ -282,20 +313,39 @@ func (a *App) updateMosDNSRuleSource(source mosDNSRuleSource) (mosDNSRuleSource,
 	if err := a.replaceMosDNSRuleSource(source); err != nil {
 		return source, err
 	}
-	runtimeSource, err := a.syncMosDNSRuleSourceRuntime(source, false)
-	if err != nil {
-		source.Warning = err.Error()
-		return source, err
-	}
-	if runtimeSource.ID != "" {
-		source = runtimeSource
-	}
-	next, _ := a.findMosDNSRuleSource(source.ID)
-	if next.ID != "" {
-		next.Warning = source.Warning
-		return next, nil
-	}
 	return source, nil
+}
+
+func validateMosDNSRuleSourceArtifact(path, sourceType string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if len(b) == 0 {
+		return fmt.Errorf("下载的规则文件为空")
+	}
+	if sourceType != "srs" {
+		if !utf8.Valid(b) || strings.ContainsRune(string(b), '\x00') {
+			return fmt.Errorf("下载的广告规则不是有效文本")
+		}
+		return nil
+	}
+	if len(b) < 5 || !bytes.Equal(b[:3], []byte("SRS")) || b[3] > 3 {
+		return fmt.Errorf("下载的在线分流规则不是有效 SRS 文件")
+	}
+	zr, err := zlib.NewReader(bytes.NewReader(b[4:]))
+	if err != nil {
+		return fmt.Errorf("下载的在线分流规则不是有效 SRS 压缩数据：%w", err)
+	}
+	_, copyErr := io.Copy(io.Discard, zr)
+	closeErr := zr.Close()
+	if copyErr != nil {
+		return fmt.Errorf("下载的在线分流规则损坏：%w", copyErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("下载的在线分流规则损坏：%w", closeErr)
+	}
+	return nil
 }
 
 func (a *App) filteredMosDNSRuleSources(r *http.Request) []mosDNSRuleSource {
@@ -517,8 +567,8 @@ func (s *mosDNSRuleSource) hydrateRuntimeFields() {
 func currentBuiltInMosDNSRuleSourceURL(raw string) string {
 	legacy := map[string]string{
 		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-geolocation-!cn%40cn.srs": "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geolocation-!cn%40cn.srs",
-		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":                  "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs",
-		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-tiktok.srs":                    "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/tiktok.srs",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-cn%40!cn.srs":             "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/cn%40!cn.srs",
+		"https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/geosite-tiktok.srs":               "https://raw.githubusercontent.com/nekolsd/sing-geosite/refs/heads/rule-set/tiktok.srs",
 	}
 	if current := legacy[strings.TrimSpace(raw)]; current != "" {
 		return current

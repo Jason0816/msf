@@ -227,6 +227,13 @@ func (a *App) createCompatRuleSource(req mosDNSRuleSource) (mosDNSRuleSource, in
 		runtimeSource, err = a.syncMosDNSRuleSourceRuntime(source, true)
 	}
 	if err != nil {
+		if !replaced {
+			rollback := items[:len(items)-1]
+			_ = a.writeMosDNSRuleSourceConfig(configRel, rollback)
+			if runtimeSource.ID != "" {
+				_ = a.deleteMosDNSRuleSourceRuntimeWithoutCacheFlush(runtimeSource)
+			}
+		}
 		return source, http.StatusConflict, err
 	}
 	return runtimeSource, status, nil

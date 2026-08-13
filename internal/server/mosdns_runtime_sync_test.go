@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -312,14 +314,32 @@ func TestMosDNSRuleSourceRuntimeTagMapping(t *testing.T) {
 func TestMosDNSRuleSourcesUsePluginRuntimeAPIs(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")
-	calls := make(chan mosDNSRuntimeCall, 4)
+	previousSourceWait := waitForMosDNSRuleSourcePropagation
+	waits := 0
+	waitForMosDNSRuleSourcePropagation = func() { waits++ }
+	t.Cleanup(func() { waitForMosDNSRuleSourcePropagation = previousSourceWait })
+	rules := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".srs") {
+			var compressed bytes.Buffer
+			compressed.WriteString("SRS")
+			compressed.WriteByte(3)
+			zw := zlib.NewWriter(&compressed)
+			_, _ = zw.Write([]byte{0})
+			_ = zw.Close()
+			_, _ = w.Write(compressed.Bytes())
+			return
+		}
+		_, _ = w.Write([]byte("||example.com^\n"))
+	}))
+	defer rules.Close()
+	calls := make(chan mosDNSRuntimeCall, 8)
 	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		calls <- mosDNSRuntimeCall{Method: r.Method, Path: r.URL.Path, Body: body}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/plugins/adguard/rules" {
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": "runtime-adguard-id", "name": "unit-adguard", "url": "https://example.com/adguard.txt",
+				"id": "runtime-adguard-id", "name": "unit-adguard", "url": rules.URL + "/adguard.txt",
 				"enabled": true, "auto_update": true, "update_interval_hours": 24,
 			})
 			return
@@ -332,7 +352,7 @@ func TestMosDNSRuleSourcesUsePluginRuntimeAPIs(t *testing.T) {
 
 	srs := requestJSON(t, app, http.MethodPost, "/api/v1/mosdns/rule-sets", token, map[string]any{
 		"source_type": "srs", "name": "unit-srs", "type": "cusnocn", "files": "srs/unit-srs.srs",
-		"url": "https://example.com/unit-srs.srs", "enabled": true,
+		"url": rules.URL + "/unit-srs.srs", "enabled": true,
 	})
 	if srs.Code != http.StatusCreated || !strings.Contains(srs.Body.String(), `"restart_required":false`) {
 		t.Fatalf("create SRS source status=%d body=%s", srs.Code, srs.Body.String())
@@ -345,7 +365,7 @@ func TestMosDNSRuleSourcesUsePluginRuntimeAPIs(t *testing.T) {
 
 	adguard := requestJSON(t, app, http.MethodPost, "/api/v1/mosdns/rule-sets", token, map[string]any{
 		"source_type": "adguard", "name": "unit-adguard", "type": "adguard",
-		"url": "https://example.com/adguard.txt", "enabled": true, "auto_update": true,
+		"url": rules.URL + "/adguard.txt", "enabled": true, "auto_update": true,
 	})
 	if adguard.Code != http.StatusCreated || !strings.Contains(adguard.Body.String(), "runtime-adguard-id") {
 		t.Fatalf("create AdGuard source status=%d body=%s", adguard.Code, adguard.Body.String())
@@ -354,10 +374,51 @@ func TestMosDNSRuleSourcesUsePluginRuntimeAPIs(t *testing.T) {
 	if adguardCall.Method != http.MethodPost || adguardCall.Path != "/plugins/adguard/rules" {
 		t.Fatalf("AdGuard runtime call = %s %s", adguardCall.Method, adguardCall.Path)
 	}
+	var createPayload mosDNSRuleSource
+	if err := json.Unmarshal(adguardCall.Body, &createPayload); err != nil || createPayload.Enabled {
+		t.Fatalf("AdGuard create should be initially disabled: payload=%s err=%v", adguardCall.Body, err)
+	}
+	adguardEnableCall := <-calls
+	if adguardEnableCall.Method != http.MethodPut || adguardEnableCall.Path != "/plugins/adguard/rules/runtime-adguard-id" {
+		t.Fatalf("AdGuard enable runtime call = %s %s", adguardEnableCall.Method, adguardEnableCall.Path)
+	}
 	assertMosDNSFrontCacheFlushes(t, calls)
 	config, err := os.ReadFile(filepath.Join(app.DataDir, "configs/mosdns/adguard/config.json"))
 	if err != nil || !strings.Contains(string(config), "runtime-adguard-id") {
 		t.Fatalf("AdGuard runtime id should be reconciled locally: config=%s err=%v", string(config), err)
+	}
+	if waits != 2 {
+		t.Fatalf("rule source propagation waits=%d, want 2", waits)
+	}
+}
+
+func TestMosDNSRuleSourceCreateRollsBackFailedInitialDownload(t *testing.T) {
+	app := newTestApp(t)
+	token := tokenForRole(t, app, "admin")
+	badRules := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("not an srs file"))
+	}))
+	defer badRules.Close()
+	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer controller.Close()
+	app.setSetting("mosdns_api_endpoint", controller.URL)
+	markMosDNSRunningForTest(t, app)
+
+	res := requestJSON(t, app, http.MethodPost, "/api/v1/mosdns/rule-sets", token, map[string]any{
+		"source_type": "srs", "name": "broken-source", "type": "cusnocn", "files": "srs/broken.srs",
+		"url": badRules.URL + "/broken.srs", "enabled": true,
+	})
+	if res.Code != http.StatusConflict || !strings.Contains(res.Body.String(), "首次下载失败") {
+		t.Fatalf("failed create status=%d body=%s", res.Code, res.Body.String())
+	}
+	if _, ok := app.findMosDNSRuleSource("broken-source"); ok {
+		t.Fatal("failed source create should roll back local configuration")
+	}
+	if _, err := os.Stat(filepath.Join(app.DataDir, "configs/mosdns/srs/broken.srs")); !os.IsNotExist(err) {
+		t.Fatalf("failed source artifact should not remain, err=%v", err)
 	}
 }
 

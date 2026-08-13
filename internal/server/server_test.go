@@ -3,6 +3,7 @@ package server
 import (
 	"archive/zip"
 	"bytes"
+	"compress/zlib"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -1326,6 +1327,16 @@ func TestMosDNSRuleSourceManagementAndUpdate(t *testing.T) {
 func TestMosDNSMSFCompatRuleAndSystemEndpoints(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")
+	ruleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload bytes.Buffer
+		payload.WriteString("SRS")
+		payload.WriteByte(3)
+		zw := zlib.NewWriter(&payload)
+		_, _ = zw.Write([]byte{0})
+		_ = zw.Close()
+		_, _ = w.Write(payload.Bytes())
+	}))
+	defer ruleServer.Close()
 
 	adguard := requestJSON(t, app, http.MethodGet, "/api/v1/mosdns/adguard/rules", token, nil)
 	if adguard.Code != http.StatusOK || !strings.Contains(adguard.Body.String(), "httpdns") || !strings.Contains(adguard.Body.String(), "pcdn1") {
@@ -1340,7 +1351,7 @@ func TestMosDNSMSFCompatRuleAndSystemEndpoints(t *testing.T) {
 		t.Fatalf("geosite filter mismatch: status=%d body=%s", filtered.Code, filtered.Body.String())
 	}
 	upsert := requestJSON(t, app, http.MethodPut, "/api/v1/mosdns/geosite/rules/cusnocn/unit_rule", token, map[string]any{
-		"name": "unit_rule", "type": "cusnocn", "files": "srs/unit_rule.srs", "url": "https://example.com/unit_rule.srs", "enabled": true,
+		"name": "unit_rule", "type": "cusnocn", "files": "srs/unit_rule.srs", "url": ruleServer.URL + "/unit_rule.srs", "enabled": true,
 	})
 	if upsert.Code != http.StatusOK || !strings.Contains(upsert.Body.String(), "unit_rule") {
 		t.Fatalf("geosite upsert failed: status=%d body=%s", upsert.Code, upsert.Body.String())

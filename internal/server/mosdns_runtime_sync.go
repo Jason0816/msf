@@ -22,6 +22,13 @@ var waitForMosDNSRulePropagation = func() {
 	time.Sleep(1200 * time.Millisecond)
 }
 
+// Rule-source plugins rebuild asynchronously. AdGuard first applies its own
+// 500ms debounce and all domain providers then notify domain_mapper, whose
+// rebuild is debounced for another second.
+var waitForMosDNSRuleSourcePropagation = func() {
+	time.Sleep(1700 * time.Millisecond)
+}
+
 func (a *App) syncMosDNSPluginValues(tag string, values []string) error {
 	if !a.Services.Status("mosdns").Running {
 		return nil
@@ -59,17 +66,25 @@ func (a *App) flushMosDNSFrontCaches() error {
 
 func (a *App) syncMosDNSRuleSourceRuntime(source mosDNSRuleSource, create bool) (mosDNSRuleSource, error) {
 	if !a.Services.Status("mosdns").Running {
+		if create && source.Enabled {
+			return a.downloadMosDNSRuleSourceArtifact(source)
+		}
 		return source, nil
 	}
 	if source.SourceType == "adguard" {
 		method := http.MethodPut
 		path := "/plugins/adguard/rules/" + url.PathEscape(source.ID)
+		payload := source
 		if create {
 			method = http.MethodPost
 			path = "/plugins/adguard/rules"
+			// The upstream create API starts an asynchronous download immediately
+			// for enabled sources. Create it disabled so MSM can perform and verify
+			// the first download before enabling the runtime matcher.
+			payload.Enabled = false
 		}
 		var runtimeSource mosDNSRuleSource
-		if err := a.mosDNSRuntimeJSONRequest(method, path, source, &runtimeSource); err != nil {
+		if err := a.mosDNSRuntimeJSONRequest(method, path, payload, &runtimeSource); err != nil {
 			return source, fmt.Errorf("规则源已保存到文件，但 MosDNS 热同步失败；请重启 MosDNS 后生效：%w", err)
 		}
 		if runtimeSource.ID != "" {
@@ -77,20 +92,41 @@ func (a *App) syncMosDNSRuleSourceRuntime(source mosDNSRuleSource, create bool) 
 			runtimeSource.Type = "adguard"
 			runtimeSource.ConfigPath = "configs/mosdns/adguard/config.json"
 			runtimeSource.hydrateRuntimeFields()
+			runtimeSource.Enabled = source.Enabled
 			if create && runtimeSource.ID != source.ID {
 				if err := a.replaceMosDNSRuleSource(runtimeSource); err != nil {
 					return source, fmt.Errorf("MosDNS 已创建运行时规则源，但本地元数据同步失败：%w", err)
 				}
 			}
+			if create && runtimeSource.Enabled {
+				var err error
+				runtimeSource, err = a.downloadMosDNSRuleSourceArtifact(runtimeSource)
+				if err != nil {
+					return runtimeSource, fmt.Errorf("规则源配置已创建，但首次下载失败：%w", err)
+				}
+				path = "/plugins/adguard/rules/" + url.PathEscape(runtimeSource.ID)
+				if err := a.mosDNSRuntimeJSONRequest(http.MethodPut, path, runtimeSource, nil); err != nil {
+					return runtimeSource, fmt.Errorf("规则源已下载，但 MosDNS 热同步失败；请重启 MosDNS 后生效：%w", err)
+				}
+			}
+			waitForMosDNSRuleSourcePropagation()
 			if err := a.flushMosDNSFrontCaches(); err != nil {
 				return runtimeSource, fmt.Errorf("规则源已热同步，但 DNS 缓存清理失败；测试前请手动清理 MosDNS 缓存：%w", err)
 			}
 			return runtimeSource, nil
 		}
+		waitForMosDNSRuleSourcePropagation()
 		if err := a.flushMosDNSFrontCaches(); err != nil {
 			return source, fmt.Errorf("规则源已热同步，但 DNS 缓存清理失败；测试前请手动清理 MosDNS 缓存：%w", err)
 		}
 		return source, nil
+	}
+	if create && source.Enabled {
+		var err error
+		source, err = a.downloadMosDNSRuleSourceArtifact(source)
+		if err != nil {
+			return source, fmt.Errorf("规则源配置已创建，但首次下载失败：%w", err)
+		}
 	}
 
 	tag := mosDNSRuleSourcePluginTag(source.Type)
@@ -101,6 +137,7 @@ func (a *App) syncMosDNSRuleSourceRuntime(source mosDNSRuleSource, create bool) 
 	if err := a.mosDNSRuntimeJSONRequest(http.MethodPut, path, source, nil); err != nil {
 		return source, fmt.Errorf("规则源已保存到文件，但 MosDNS 热同步失败；请重启 MosDNS 后生效：%w", err)
 	}
+	waitForMosDNSRuleSourcePropagation()
 	if err := a.flushMosDNSFrontCaches(); err != nil {
 		return source, fmt.Errorf("规则源已热同步，但 DNS 缓存清理失败；测试前请手动清理 MosDNS 缓存：%w", err)
 	}
@@ -114,6 +151,7 @@ func (a *App) deleteMosDNSRuleSourceRuntime(source mosDNSRuleSource) error {
 	if !a.Services.Status("mosdns").Running {
 		return nil
 	}
+	waitForMosDNSRuleSourcePropagation()
 	if err := a.flushMosDNSFrontCaches(); err != nil {
 		return fmt.Errorf("规则源已从 MosDNS 运行时删除，但 DNS 缓存清理失败；测试前请手动清理 MosDNS 缓存：%w", err)
 	}
