@@ -716,6 +716,7 @@ export default function MosdnsRulesPage() {
       {editingRule && (
         <EditRuleModal
           rule={editingRule}
+          categoryId={activeCat}
           onClose={() => setEditingRule(null)}
           onSave={(mode, value) => void editRule(editingRule, mode, value)}
         />

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -21,6 +22,10 @@ type mosDNSRuntimeCall struct {
 func TestMosDNSPersonalRulesHotSyncRuntime(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")
+	previousWait := waitForMosDNSRulePropagation
+	waits := 0
+	waitForMosDNSRulePropagation = func() { waits++ }
+	t.Cleanup(func() { waitForMosDNSRulePropagation = previousWait })
 	calls := make(chan mosDNSRuntimeCall, 16)
 	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -39,7 +44,7 @@ func TestMosDNSPersonalRulesHotSyncRuntime(t *testing.T) {
 		{category: "whitelist", tag: "whitelist", pattern: "domain:direct.example"},
 		{category: "blocklist", tag: "blocklist", pattern: "full:ads.example"},
 		{category: "greylist", tag: "greylist", pattern: "domain:proxy.example"},
-		{category: "ddnslist", tag: "ddnslist", pattern: "full:home.example"},
+		{category: "ddnslist", tag: "ddnslist", pattern: "home.example"},
 		{category: "direct_ip", tag: "direct_ip", pattern: "192.0.2.0/24"},
 		{category: "redirect", tag: "rewrite", pattern: "full:edge.example 192.0.2.10"},
 	}
@@ -59,24 +64,106 @@ func TestMosDNSPersonalRulesHotSyncRuntime(t *testing.T) {
 			if err := json.Unmarshal(call.Body, &payload); err != nil {
 				t.Fatal(err)
 			}
-			found := false
-			for _, value := range payload.Values {
-				if value == test.pattern {
-					found = true
-					break
-				}
+			wantPattern := test.pattern
+			if test.category == "ddnslist" {
+				wantPattern = "full:" + test.pattern
 			}
-			if !found {
-				t.Fatalf("runtime values do not contain %q: %#v", test.pattern, payload.Values)
+			if !slices.Contains(payload.Values, wantPattern) {
+				t.Fatalf("runtime values do not contain %q: %#v", wantPattern, payload.Values)
+			}
+			if test.category == "ddnslist" {
+				content, err := app.readTextFile(mosDNSRuleCategoryFile(test.category))
+				if err != nil || content != wantPattern+"\n" {
+					t.Fatalf("persisted DDNS rules = %q, err=%v; want %q", content, err, wantPattern+"\n")
+				}
 			}
 			assertMosDNSFrontCacheFlushes(t, calls)
 		})
+	}
+	if waits != 4 {
+		t.Fatalf("domain_mapper propagation waits=%d, want 4", waits)
+	}
+}
+
+func TestNormalizeMosDNSRulePattern(t *testing.T) {
+	tests := []struct {
+		category string
+		pattern  string
+		want     string
+	}{
+		{category: "ddnslist", pattern: "home.example", want: "full:home.example"},
+		{category: "ddns", pattern: " home.example ", want: "full:home.example"},
+		{category: "ddnslist", pattern: "full:home.example", want: "full:home.example"},
+		{category: "ddnslist", pattern: "domain:example", want: "domain:example"},
+		{category: "ddnslist", pattern: "keyword:home", want: "keyword:home"},
+		{category: "ddnslist", pattern: `regexp:^.+\.example$`, want: `regexp:^.+\.example$`},
+		{category: "whitelist", pattern: "home.example", want: "home.example"},
+	}
+	for _, test := range tests {
+		if got := normalizeMosDNSRulePattern(test.category, test.pattern); got != test.want {
+			t.Errorf("normalizeMosDNSRulePattern(%q, %q) = %q, want %q", test.category, test.pattern, got, test.want)
+		}
+	}
+}
+
+func TestMosDNSDomainMapperBackedTags(t *testing.T) {
+	for _, tag := range []string{"whitelist", "blocklist", "greylist", "ddnslist"} {
+		if !mosDNSDomainMapperBackedTag(tag) {
+			t.Errorf("%s should wait for domain_mapper propagation", tag)
+		}
+	}
+	for _, tag := range []string{"direct_ip", "rewrite", "client_ip"} {
+		if mosDNSDomainMapperBackedTag(tag) {
+			t.Errorf("%s should not wait for domain_mapper propagation", tag)
+		}
+	}
+}
+
+func TestMigrateLegacyMosDNSDDNSRules(t *testing.T) {
+	app := newTestApp(t)
+	rel := mosDNSRuleCategoryFile("ddnslist")
+	if err := app.writeTextFile(rel, "home.example\nfull:exact.example\nhome.example\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.migrateLegacyMosDNSDDNSRules(); err != nil {
+		t.Fatal(err)
+	}
+	content, err := app.readTextFile(rel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "full:home.example\nfull:exact.example\n"; content != want {
+		t.Fatalf("migrated DDNS rules = %q, want %q", content, want)
+	}
+	if err := app.migrateLegacyMosDNSDDNSRules(); err != nil {
+		t.Fatalf("migration should be idempotent: %v", err)
+	}
+}
+
+func TestMosDNSDDNSImportNormalizesPlainDomains(t *testing.T) {
+	app := newTestApp(t)
+	token := tokenForRole(t, app, "admin")
+	res := requestJSON(t, app, http.MethodPost, "/api/v1/mosdns/rules/ddnslist/import", token, map[string]any{
+		"content": "one.example\nfull:two.example\none.example\n",
+	})
+	if res.Code != http.StatusOK {
+		t.Fatalf("DDNS import status=%d body=%s", res.Code, res.Body.String())
+	}
+	content, err := app.readTextFile(mosDNSRuleCategoryFile("ddnslist"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "full:one.example\nfull:two.example\n"; content != want {
+		t.Fatalf("imported DDNS rules = %q, want %q", content, want)
 	}
 }
 
 func TestMosDNSClientListHotSyncsAddAndRemove(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")
+	previousWait := waitForMosDNSRulePropagation
+	waitForMosDNSRulePropagation = func() {}
+	t.Cleanup(func() { waitForMosDNSRulePropagation = previousWait })
 	calls := make(chan mosDNSRuntimeCall, 4)
 	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)

@@ -315,13 +315,13 @@ export function AddRuleModal({
   onClose: () => void;
   onAdd: (pattern: string) => void;
 }) {
-  const [mode, setMode] = useState("domain");
-  const [value, setValue] = useState("");
-  const [target, setTarget] = useState("");
   const normalizedCategory = categoryId === "rewrite" ? "redirect" : categoryId;
   const isDDNS = normalizedCategory === "ddnslist";
   const isDirectIP = normalizedCategory === "direct_ip";
   const isRedirect = normalizedCategory === "redirect";
+  const [mode, setMode] = useState(isDDNS ? "full" : "domain");
+  const [value, setValue] = useState("");
+  const [target, setTarget] = useState("");
   const canSubmit = isRedirect ? Boolean(value.trim() && target.trim()) : Boolean(value.trim());
 
   const submit = () => {
@@ -330,7 +330,7 @@ export function AddRuleModal({
       onAdd(`${rulePatternFor(mode, value)} ${target.trim()}`);
       return;
     }
-    onAdd(isDDNS || isDirectIP ? value.trim() : rulePatternFor(mode, value));
+    onAdd(isDirectIP ? value.trim() : rulePatternFor(mode, value));
   };
 
   const labelCls = "text-sm font-bold text-foreground mb-3 flex items-center gap-2";
@@ -348,19 +348,34 @@ export function AddRuleModal({
       <div className="p-6 space-y-5">
         {isDDNS && (
           <>
-            <div>
-              <label className={labelCls}>
-                <span className="h-1 w-1 rounded-full bg-primary" />
-                域名
-              </label>
-              <input
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="例如: example.com"
-                className={inputCls}
-                autoFocus
-              />
-              <p className={hintCls}>直接输入域名即可</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className={labelCls}>
+                  <span className="h-1 w-1 rounded-full bg-primary" />
+                  匹配规则
+                </label>
+                <select value={mode} onChange={(e) => setMode(e.target.value)} className={inputCls} autoFocus>
+                  {MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className={hintCls}>默认完整匹配，仅匹配当前 DDNS 主机名</p>
+              </div>
+              <div>
+                <label className={labelCls}>
+                  <span className="h-1 w-1 rounded-full bg-primary" />
+                  域名或表达式
+                </label>
+                <input
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder={mode === "regexp" ? "例如: ^.+\\.example\\.com$" : "例如: home.example.com"}
+                  className={inputCls}
+                />
+                <p className={hintCls}>根据左侧匹配规则填写对应内容</p>
+              </div>
             </div>
             <div className="bg-gradient-to-br from-muted/40 to-muted/20 rounded-xl p-5 border-2 border-border/30 shadow-inner">
               <label className={labelCls}>
@@ -368,7 +383,12 @@ export function AddRuleModal({
                 示例
               </label>
               <div className="space-y-2 text-xs text-muted-foreground font-mono">
-                {["example.com", "ddns.example.com"].map((ex) => (
+                {[
+                  "full:home.example.com（仅当前主机名）",
+                  "domain:example.com（根域名及其子域名）",
+                  "keyword:example（包含关键词）",
+                  "regexp:^.+\\.example\\.com$（正则匹配）",
+                ].map((ex) => (
                   <div key={ex} className={exampleItemCls}>
                     • {ex}
                   </div>
@@ -543,6 +563,7 @@ export function AddRuleModal({
 
 export function EditRuleModal({
   rule,
+  categoryId,
   onClose,
   onSave,
 }: {
@@ -551,10 +572,12 @@ export function EditRuleModal({
     content: string;
     pattern?: string;
   };
+  categoryId?: string;
   onClose: () => void;
   onSave: (mode: string, value: string) => void;
 }) {
-  const initialMode = rule.mode === "默认" ? "domain" : rule.mode;
+  const isDDNS = categoryId === "ddnslist" || categoryId === "ddns";
+  const initialMode = rule.mode === "默认" ? (isDDNS ? "full" : "domain") : rule.mode;
   const [mode, setMode] = useState(initialMode);
   const [value, setValue] = useState(rule.content);
   const originalRule = rule.pattern || `${initialMode}:${rule.content}`;

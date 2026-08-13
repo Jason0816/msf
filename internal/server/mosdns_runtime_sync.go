@@ -15,6 +15,13 @@ import (
 
 const mosDNSRuntimeSyncTimeout = 3 * time.Second
 
+// yyysuo/mosdns domain_mapper debounces provider notifications for one second
+// before rebuilding its matcher. Flushing the front caches before that rebuild
+// leaves a window where a query can repopulate them with the previous decision.
+var waitForMosDNSRulePropagation = func() {
+	time.Sleep(1200 * time.Millisecond)
+}
+
 func (a *App) syncMosDNSPluginValues(tag string, values []string) error {
 	if !a.Services.Status("mosdns").Running {
 		return nil
@@ -23,10 +30,22 @@ func (a *App) syncMosDNSPluginValues(tag string, values []string) error {
 	if err := a.mosDNSRuntimeJSONRequest(http.MethodPost, "/plugins/"+url.PathEscape(tag)+"/post", payload, nil); err != nil {
 		return fmt.Errorf("名单已保存到文件，但 MosDNS 热同步失败；请重启 MosDNS 后生效：%w", err)
 	}
+	if mosDNSDomainMapperBackedTag(tag) {
+		waitForMosDNSRulePropagation()
+	}
 	if err := a.flushMosDNSFrontCaches(); err != nil {
 		return fmt.Errorf("名单已热同步，但 DNS 缓存清理失败；测试前请手动清理 MosDNS 缓存：%w", err)
 	}
 	return nil
+}
+
+func mosDNSDomainMapperBackedTag(tag string) bool {
+	switch tag {
+	case "whitelist", "blocklist", "greylist", "ddnslist":
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *App) flushMosDNSFrontCaches() error {
