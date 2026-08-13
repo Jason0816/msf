@@ -2,9 +2,33 @@
 
 ## 未发布
 
+## v0.4.7.2 - 2026-08-13
+
+### 中文
+
+#### 恢复出厂设置优先级与可靠性修复
+
 - 修复 MosDNS 在线分流规则源只接受 SRS 二进制的限制；现在同时支持内容合法的 SRS 和 TXT，并以实际内容而非 URL/文件扩展名判定格式。
 - 更新 MosDNS 在线分流的 5 个默认来源：国内加速域名和国外专属域名改用 Loyalsoldier 文本源，中国 IP、中国域名和非中国域名保持 MetaCubeX SRS 源；旧内置 URL 会兼容迁移到新源。
 - 合并更新 MosDNS 默认直连与代理规则，保留旧规则并增加新的软件、硬件、游戏、微软与流媒体域名；跨列表冲突按新规则归属去重。
+- 恢复出厂设置现在拥有最高操作优先级：发起后会立即接管系统、取消正在执行的可取消写操作，并拒绝新的状态变更请求，不再因其他功能占用而持续显示“正在重置”。
+- 重置请求会先以持久化标记落盘，再重新执行当前 MSF 进程；新进程会在恢复任何运行态之前完成清理。即使进程切换或中途异常，重启后也会继续处理该请求，并在连续失败时进入可诊断的安全模式。
+- 增加恢复出厂设置状态接口与前端生命周期轮询，界面可持续跟踪请求、执行、失败和完成状态；重置完成后旧登录令牌立即失效，MosDNS 与 Mihomo 不会被旧运行态重新拉起。
+- 将后台自更新任务纳入重置接管范围，并把 MSF 二进制与 Zashboard 更新改为暂存后原子替换，避免强制停止期间留下截断的可执行文件或不完整的界面目录。
+- 修复 Linux 子进程已退出但尚未回收时被误判为仍在运行的问题，避免恢复出厂设置错误报告组件停止失败。
+
+### English
+
+#### Factory Reset priority and reliability fixes
+
+- Removed the SRS-only restriction from MosDNS online routing sources. Valid SRS and TXT content are now both accepted, with format detection based on actual content instead of the URL or filename extension.
+- Updated the five default MosDNS online routing sources: China acceleration and overseas-only domains now use Loyalsoldier text sources, while China IP, China domains, and non-China domains retain MetaCubeX SRS sources. Legacy built-in URLs are migrated compatibly.
+- Merged and refreshed the default MosDNS direct and proxy rules, preserving existing entries while adding software, hardware, gaming, Microsoft, and streaming domains. Cross-list conflicts are deduplicated according to the new ownership rules.
+- Factory Reset now has the highest operation priority. Once accepted, it takes control immediately, cancels active cancellable writes, and rejects new state-changing requests instead of remaining stuck behind another feature.
+- Reset intent is durably recorded before the MSF process re-executes. The replacement process completes cleanup before restoring any runtime state, resumes an interrupted request after restart, and enters a diagnosable safe mode after repeated failures.
+- Added a Factory Reset status endpoint and frontend lifecycle polling for requested, running, failed, and completed states. A completed reset invalidates previous login tokens and does not restore the prior MosDNS or Mihomo runtime.
+- Brought detached self-update tasks under reset control and changed MSF binary and Zashboard updates to staged atomic replacement, preventing truncated executables or partial UI directories when operations are stopped.
+- Fixed Linux child processes that had exited but were not yet reaped being mistaken for live processes, preventing false component-stop failures during Factory Reset.
 
 ## v0.4.7.1 - 2026-08-13
 
