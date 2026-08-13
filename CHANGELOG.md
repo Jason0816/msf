@@ -1,5 +1,27 @@
 # 更新日志
 
+## v0.4.7.1 - 2026-08-13
+
+### 中文
+
+#### 用户体验修复小版本
+
+- 修复 MosDNS DDNS、直连、拦截、代理、直连 IP 与重定向 IP 等规则列表的格式兼容与运行时热同步；订阅更新后会校验实际运行态，并刷新前置 DNS 缓存，避免文件已更新但规则未生效。
+- 统一导入域名规则的 `full`、`domain`、`keyword` 与 `regexp` 格式处理，修复对象或非标准条目进入规则文件后无法匹配的问题。
+- 在 DNS 查询日志中增加独立的“查询结果”列，显示实际应答值并去除重复的记录类型与 TTL；保留原表格列宽关系，并修复对象应答显示为 `[object Object]`。
+- 新增明确的“清空 DNS 缓存”操作，逐项清理全部七个 MosDNS 运行时缓存并报告具体失败项；原有操作更名为“清空生成规则”，避免误认为会清除 DNS 缓存。
+- 清空 DNS 缓存不会删除规则、订阅、配置、自动生成规则或 Mihomo Fake-IP 数据库；相关操作增加独立确认提示和重复点击保护。
+
+### English
+
+#### User experience maintenance release
+
+- Fixed format compatibility and runtime hot synchronization for MosDNS DDNS, direct, block, proxy, direct-IP, and redirect-IP rule lists. Subscription updates now validate the live runtime state and flush front DNS caches so updated files take effect immediately.
+- Unified imported domain-rule handling for `full`, `domain`, `keyword`, and `regexp` entries, preventing object-shaped or nonstandard values from becoming ineffective rules.
+- Added a dedicated DNS answer column to the query log, showing only response values without redundant record types or TTLs. The original table proportions are preserved, and object answers no longer render as `[object Object]`.
+- Added an explicit “Clear DNS Cache” action that flushes all seven MosDNS runtime caches and reports individual failures. The previous action is now named “Clear Generated Rules” to avoid implying that it clears DNS caches.
+- Clearing DNS caches does not delete rules, subscriptions, configuration, generated routing rules, or the Mihomo Fake-IP database. Both destructive actions now have distinct confirmations and duplicate-click protection.
+
 ## v0.4.7 - 2026-08-13
 
 ### 中文
