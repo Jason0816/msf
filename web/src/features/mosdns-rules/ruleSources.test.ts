@@ -24,4 +24,13 @@ describe("MosDNS rule source freshness", () => {
     }
     expect(page).toContain("categoryId={activeCat}");
   });
+
+  it("preserves the special direct IP and redirect formats while editing", () => {
+    expect(dialogs).toContain('const isDirectIP = normalizedCategory === "direct_ip"');
+    expect(dialogs).toContain('const isRedirect = normalizedCategory === "redirect"');
+    expect(dialogs).toContain("isRedirect ? target.trim() : undefined");
+    expect(page).toContain('normalizedCategory === "direct_ip"');
+    expect(page).toContain('normalizedCategory === "redirect"');
+    expect(page).toContain('`${patternFor(mode, value)} ${String(target || "").trim()}`');
+  });
 });

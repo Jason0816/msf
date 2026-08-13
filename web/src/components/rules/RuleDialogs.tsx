@@ -574,13 +574,21 @@ export function EditRuleModal({
   };
   categoryId?: string;
   onClose: () => void;
-  onSave: (mode: string, value: string) => void;
+  onSave: (mode: string, value: string, target?: string) => void;
 }) {
-  const isDDNS = categoryId === "ddnslist" || categoryId === "ddns";
+  const normalizedCategory = categoryId === "rewrite" ? "redirect" : categoryId;
+  const isDDNS = normalizedCategory === "ddnslist" || normalizedCategory === "ddns";
+  const isDirectIP = normalizedCategory === "direct_ip";
+  const isRedirect = normalizedCategory === "redirect";
   const initialMode = rule.mode === "默认" ? (isDDNS ? "full" : "domain") : rule.mode;
-  const [mode, setMode] = useState(initialMode);
-  const [value, setValue] = useState(rule.content);
+  const redirectMatch = isRedirect
+    ? (rule.pattern || `${initialMode}:${rule.content}`).match(/^(domain|full|keyword|regexp):([^\s]+)\s+(.+)$/)
+    : null;
+  const [mode, setMode] = useState(redirectMatch?.[1] || initialMode);
+  const [value, setValue] = useState(redirectMatch?.[2] || rule.content);
+  const [target, setTarget] = useState(redirectMatch?.[3] || "");
   const originalRule = rule.pattern || `${initialMode}:${rule.content}`;
+  const canSave = isRedirect ? Boolean(value.trim() && target.trim()) : Boolean(value.trim());
 
   return (
     <ModalShell onClose={onClose} className="max-w-[600px]">
@@ -602,8 +610,8 @@ export function EditRuleModal({
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
+        <div className={`grid grid-cols-1 ${isRedirect ? "md:grid-cols-3" : isDirectIP ? "" : "md:grid-cols-2"} gap-5`}>
+          {!isDirectIP && <div>
             <label className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
               <span className="h-1 w-1 rounded-full bg-primary" />
               匹配规则
@@ -619,11 +627,11 @@ export function EditRuleModal({
                 </option>
               ))}
             </select>
-          </div>
+          </div>}
           <div>
             <label className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
               <span className="h-1 w-1 rounded-full bg-primary" />
-              规则值
+              {isDirectIP ? "IP 或 CIDR" : isRedirect ? "原域名" : "规则值"}
             </label>
             <input
               value={value}
@@ -631,6 +639,20 @@ export function EditRuleModal({
               className={inputCls}
             />
           </div>
+          {isRedirect && (
+            <div>
+              <label className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <span className="h-1 w-1 rounded-full bg-primary" />
+                重定向目标
+              </label>
+              <input
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                placeholder="例如: 1.2.3.4"
+                className={inputCls}
+              />
+            </div>
+          )}
         </div>
       </div>
       <div className="p-6 border-t-2 border-border/30 flex justify-end gap-3 bg-gradient-to-r from-muted/20 to-transparent">
@@ -638,7 +660,8 @@ export function EditRuleModal({
           <X className="h-4 w-4" />取消
         </button>
         <button
-          onClick={() => value.trim() && onSave(mode, value.trim())}
+          aria-disabled={!canSave}
+          onClick={() => canSave && onSave(mode, value.trim(), isRedirect ? target.trim() : undefined)}
           className={primaryCls}
         >
           <Check className="h-4 w-4" />保存

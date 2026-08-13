@@ -297,12 +297,18 @@ export default function MosdnsRulesPage() {
     }
   };
 
-  const editRule = async (rule: PageRule, mode: string, value: string) => {
+  const editRule = async (rule: PageRule, mode: string, value: string, target?: string) => {
     if (!activeCat) return;
     try {
+      const normalizedCategory = activeCat === "rewrite" ? "redirect" : activeCat;
+      const newPattern = normalizedCategory === "direct_ip"
+        ? value.trim()
+        : normalizedCategory === "redirect"
+          ? `${patternFor(mode, value)} ${String(target || "").trim()}`
+          : patternFor(mode, value);
       await api(`/api/v1/mosdns/rules/${encodeURIComponent(activeCat)}`, {
         method: "PUT",
-        body: JSON.stringify({ old_pattern: rule.pattern, new_pattern: patternFor(mode, value) }),
+        body: JSON.stringify({ old_pattern: rule.pattern, new_pattern: newPattern }),
       });
       setEditingRule(null);
       showToast("规则已更新");
@@ -718,7 +724,7 @@ export default function MosdnsRulesPage() {
           rule={editingRule}
           categoryId={activeCat}
           onClose={() => setEditingRule(null)}
-          onSave={(mode, value) => void editRule(editingRule, mode, value)}
+          onSave={(mode, value, target) => void editRule(editingRule, mode, value, target)}
         />
       )}
       {ruleSetModal && (

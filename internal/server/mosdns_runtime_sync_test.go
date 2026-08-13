@@ -199,6 +199,48 @@ func TestMosDNSDomainListImportsNormalizePlainDomains(t *testing.T) {
 	}
 }
 
+func TestMosDNSSpecialRuleValidation(t *testing.T) {
+	tests := []struct {
+		category string
+		patterns []string
+		wantErr  bool
+	}{
+		{category: "direct_ip", patterns: []string{"192.0.2.1", "2001:db8::/32"}},
+		{category: "direct_ip", patterns: []string{"domain:192.0.2.1"}, wantErr: true},
+		{category: "direct_ip", patterns: []string{"192.0.2.0/99"}, wantErr: true},
+		{category: "redirect", patterns: []string{"full:edge.example 192.0.2.10", "domain:old.example new.example"}},
+		{category: "redirect", patterns: []string{"full:edge.example"}, wantErr: true},
+		{category: "redirect", patterns: []string{"edge.example 192.0.2.10"}, wantErr: true},
+		{category: "redirect", patterns: []string{"regexp:[ 192.0.2.10"}, wantErr: true},
+		{category: "redirect", patterns: []string{"full:edge.example not/a/target"}, wantErr: true},
+	}
+	for _, test := range tests {
+		err := validateMosDNSRulePatterns(test.category, test.patterns)
+		if (err != nil) != test.wantErr {
+			t.Errorf("validateMosDNSRulePatterns(%q, %#v) err=%v, wantErr=%v", test.category, test.patterns, err, test.wantErr)
+		}
+	}
+}
+
+func TestMosDNSSpecialRuleImportRejectsInvalidEntries(t *testing.T) {
+	for _, test := range []struct {
+		category string
+		content  string
+	}{
+		{category: "direct_ip", content: "domain:192.0.2.1\n"},
+		{category: "redirect", content: "full:edge.example\n"},
+	} {
+		t.Run(test.category, func(t *testing.T) {
+			app := newTestApp(t)
+			token := tokenForRole(t, app, "admin")
+			res := requestJSON(t, app, http.MethodPost, "/api/v1/mosdns/rules/"+test.category+"/import", token, map[string]any{"content": test.content})
+			if res.Code != http.StatusBadRequest || !strings.Contains(res.Body.String(), `"error":"write_failed"`) {
+				t.Fatalf("invalid %s import status=%d body=%s", test.category, res.Code, res.Body.String())
+			}
+		})
+	}
+}
+
 func TestMosDNSClientListHotSyncsAddAndRemove(t *testing.T) {
 	app := newTestApp(t)
 	token := tokenForRole(t, app, "admin")

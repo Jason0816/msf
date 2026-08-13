@@ -7,9 +7,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1508,6 +1510,9 @@ func (a *App) writeMosDNSRulePatterns(category string, patterns []string) error 
 		seen[pattern] = true
 		out = append(out, pattern)
 	}
+	if err := validateMosDNSRulePatterns(category, out); err != nil {
+		return err
+	}
 	content := strings.Join(out, "\n")
 	if content != "" {
 		content += "\n"
@@ -1518,6 +1523,75 @@ func (a *App) writeMosDNSRulePatterns(category string, patterns []string) error 
 	}
 	tag := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
 	return a.syncMosDNSPluginValues(tag, out)
+}
+
+func validateMosDNSRulePatterns(category string, patterns []string) error {
+	switch mosDNSRuleCategoryFile(category) {
+	case mosDNSRuleCategoryFile("direct_ip"):
+		for i, pattern := range patterns {
+			if strings.ContainsRune(pattern, '/') {
+				if _, err := netip.ParsePrefix(pattern); err != nil {
+					return fmt.Errorf("直连 IP 第 %d 行不是有效的 IP 或 CIDR：%s", i+1, pattern)
+				}
+			} else if _, err := netip.ParseAddr(pattern); err != nil {
+				return fmt.Errorf("直连 IP 第 %d 行不是有效的 IP 或 CIDR：%s", i+1, pattern)
+			}
+		}
+	case mosDNSRuleCategoryFile("rewrite"):
+		for i, pattern := range patterns {
+			fields := strings.Fields(pattern)
+			if len(fields) != 2 {
+				return fmt.Errorf("重定向第 %d 行必须为“匹配规则 目标 IP/域名”：%s", i+1, pattern)
+			}
+			if err := validateMosDNSRewriteMatcher(fields[0]); err != nil {
+				return fmt.Errorf("重定向第 %d 行的匹配规则无效：%w", i+1, err)
+			}
+			if net.ParseIP(fields[1]) == nil && !validMosDNSRewriteDomain(fields[1]) {
+				return fmt.Errorf("重定向第 %d 行的目标不是有效 IP 或域名：%s", i+1, fields[1])
+			}
+		}
+	}
+	return nil
+}
+
+func validateMosDNSRewriteMatcher(value string) error {
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 || parts[1] == "" {
+		return fmt.Errorf("必须使用 domain/full/keyword/regexp 前缀：%s", value)
+	}
+	switch parts[0] {
+	case "domain", "full":
+		if !validMosDNSRewriteDomain(parts[1]) {
+			return fmt.Errorf("域名格式无效：%s", parts[1])
+		}
+	case "keyword":
+		return nil
+	case "regexp":
+		if _, err := regexp.Compile(parts[1]); err != nil {
+			return fmt.Errorf("正则表达式无效：%s", parts[1])
+		}
+	default:
+		return fmt.Errorf("不支持的匹配前缀：%s", parts[0])
+	}
+	return nil
+}
+
+func validMosDNSRewriteDomain(value string) bool {
+	value = strings.TrimSuffix(strings.TrimSpace(value), ".")
+	if value == "" || len(value) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, ch := range label {
+			if (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') && ch != '-' && ch != '_' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func normalizeMosDNSRulePattern(category, pattern string) string {
