@@ -30,12 +30,7 @@ func (a *App) SetConfiguredRuntimeDesired(cfg SetupConfig) {
 func (a *App) RestoreConfiguredRuntime(ctx context.Context) RuntimeRestoreReport {
 	a.networkRuntimeMu.Lock()
 	defer a.networkRuntimeMu.Unlock()
-	if a.resetInProgress.Load() {
-		return RuntimeRestoreReport{Errors: []string{"system factory reset is in progress"}}
-	}
-	a.resetGate.RLock()
-	defer a.resetGate.RUnlock()
-	if a.resetInProgress.Load() {
+	if phase, _ := a.operations.status(); phase != resetPhaseIdle {
 		return RuntimeRestoreReport{Errors: []string{"system factory reset is in progress"}}
 	}
 	report := RuntimeRestoreReport{Initialized: a.IsInitialized()}

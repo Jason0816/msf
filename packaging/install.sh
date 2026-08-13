@@ -145,7 +145,14 @@ BIN_DEST="$BIN_DIR/$APP_NAME"
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME.service"
 
 mkdir -p "$BIN_DIR" "$DATA_DIR"
-install -m 0755 "$BIN_SRC" "$BIN_DEST"
+BIN_TMP="$BIN_DIR/.${APP_NAME}.new.$$"
+cleanup_install_tmp() {
+  rm -f "$BIN_TMP"
+}
+trap cleanup_install_tmp EXIT HUP INT TERM
+install -m 0755 "$BIN_SRC" "$BIN_TMP"
+"$BIN_TMP" version >/dev/null
+mv -f "$BIN_TMP" "$BIN_DEST"
 rm -f "$BIN_DIR/$LEGACY_APP_NAME"
 "$BIN_DEST" migrate --config "$DATA_DIR"
 

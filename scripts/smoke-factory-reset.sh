@@ -67,8 +67,25 @@ TOKEN="$(printf '%s' "$LOGIN" | python3 -c 'import json,sys; print(json.load(sys
 [ -n "$TOKEN" ] || { echo "login did not return a token" >&2; exit 1; }
 
 RESET="$(request POST /api/v1/setup/reset '{"current_password":"old-password-123","delete_components":false}' "$TOKEN")"
-printf '%s' "$RESET" | grep -q '"factory_reset":true' || { echo "$RESET" >&2; exit 1; }
+printf '%s' "$RESET" | grep -q '"restart_scheduled":true' || { echo "$RESET" >&2; exit 1; }
 printf '%s' "$RESET" | grep -q '"requires_reinitialize":true' || { echo "$RESET" >&2; exit 1; }
+
+reset_ready=false
+attempt=0
+while [ "$attempt" -lt 200 ]; do
+  CHECK="$(curl -fsS "http://127.0.0.1:$PORT/api/v1/setup/check" 2>/dev/null || true)"
+  if printf '%s' "$CHECK" | grep -q '"is_initialized":false'; then
+    reset_ready=true
+    break
+  fi
+  if ! kill -0 "$PID" >/dev/null 2>&1; then
+    cat "$LOG" >&2
+    exit 1
+  fi
+  attempt=$((attempt + 1))
+  sleep 0.1
+done
+[ "$reset_ready" = true ] || { cat "$LOG" >&2; echo "factory reset did not complete" >&2; exit 1; }
 
 OLD_STATUS="$(curl -sS -o "$ROOT/old-token.json" -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:$PORT/api/v1/users")"
 [ "$OLD_STATUS" = "401" ] || { cat "$ROOT/old-token.json" >&2; echo "old token status=$OLD_STATUS" >&2; exit 1; }

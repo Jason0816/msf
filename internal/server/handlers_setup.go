@@ -824,7 +824,7 @@ func (a *App) handleSetupReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.resetMu.TryLock() {
-		writeError(w, http.StatusConflict, "reset_in_progress", "system factory reset is already in progress")
+		a.writeResetConflict(w)
 		return
 	}
 	defer a.resetMu.Unlock()
@@ -836,24 +836,137 @@ func (a *App) handleSetupReset(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	a.resetInProgress.Store(true)
-	defer a.resetInProgress.Store(false)
-	a.resetGate.Lock()
-	defer a.resetGate.Unlock()
-
 	deleteComponents := req.DeleteComponents || req.DeleteBinaries
-	result, err := a.factoryReset(r.Context(), factoryResetOptions{DeleteComponents: deleteComponents})
+	request := newFactoryResetRequest(deleteComponents)
+	phase, _ := a.operations.status()
+	if phase == resetPhaseFailed {
+		previous, ok, err := readFactoryResetRequest(a.DataDir)
+		if err != nil || !ok {
+			message := "factory reset request marker is missing"
+			if err != nil {
+				message = err.Error()
+			}
+			writeError(w, http.StatusInternalServerError, "factory_reset_request_failed", message)
+			return
+		}
+		previous.Phase = resetPhaseRequested
+		previous.Attempt = 0
+		previous.LastError = ""
+		previous.DeleteComponents = deleteComponents
+		previous.RequestedAt = time.Now()
+		request = previous
+		if err := writeFactoryResetRequest(a.DataDir, request); err != nil {
+			writeError(w, http.StatusInternalServerError, "factory_reset_request_failed", err.Error())
+			return
+		}
+		if !a.operations.retryFailedReset(request.ResetID) {
+			a.writeResetConflict(w)
+			return
+		}
+	} else if phase != resetPhaseIdle {
+		a.writeResetConflict(w)
+		return
+	} else {
+		if err := writeFactoryResetRequest(a.DataDir, request); err != nil {
+			writeError(w, http.StatusInternalServerError, "factory_reset_request_failed", err.Error())
+			return
+		}
+		if !a.operations.requestReset(request.ResetID) {
+			_ = removeFactoryResetRequest(a.DataDir)
+			a.writeResetConflict(w)
+			return
+		}
+	}
+
+	// Tests and embedded callers without a process-restart hook retain an
+	// in-process path. Production serve always injects a restart hook.
+	if a.requestProcessRestart == nil {
+		a.operations.setPhase(resetPhaseRunning)
+		result, err := a.factoryReset(r.Context(), factoryResetOptions{DeleteComponents: deleteComponents, RestoreRuntimeOnFailure: true})
+		if err != nil {
+			request.Phase = resetPhaseFailed
+			request.LastError = err.Error()
+			_ = writeFactoryResetRequest(a.DataDir, request)
+			a.operations.setPhase(resetPhaseFailed)
+			writeError(w, http.StatusInternalServerError, "factory_reset_failed", err.Error())
+			return
+		}
+		_ = removeFactoryResetRequest(a.DataDir)
+		a.operations = newOperationController()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success":               true,
+			"factory_reset":         result.FactoryReset,
+			"requires_reinitialize": result.RequiresReinitialize,
+			"deleted_components":    result.DeletedComponents,
+			"retained_components":   result.RetainedComponents,
+			"deleted_binaries":      deleteComponents,
+		})
+		return
+	}
+
+	a.operations.cancelOperations()
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"success":               true,
+		"reset_id":              request.ResetID,
+		"phase":                 resetPhaseRequested,
+		"restart_scheduled":     true,
+		"requires_reinitialize": true,
+	})
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		drainCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		remaining := a.operations.waitForDrain(drainCtx)
+		if len(remaining) > 0 {
+			log.Printf("factory reset %s is forcing process restart with %d operations still active", request.ResetID, len(remaining))
+		}
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		if err := a.stopDetachedSelfUpdate(stopCtx); err != nil {
+			log.Printf("factory reset %s could not stop detached self update: %v", request.ResetID, err)
+		}
+		stopCancel()
+		a.operations.setPhase(resetPhaseRestarting)
+		request.Phase = resetPhaseRestarting
+		_ = writeFactoryResetRequest(a.DataDir, request)
+		if err := a.requestProcessRestart("factory_reset"); err != nil {
+			request.Phase = resetPhaseFailed
+			request.LastError = err.Error()
+			_ = writeFactoryResetRequest(a.DataDir, request)
+			a.operations.setPhase(resetPhaseFailed)
+			log.Printf("factory reset %s failed to restart process: %v", request.ResetID, err)
+		}
+	}()
+}
+
+func (a *App) writeResetConflict(w http.ResponseWriter) {
+	phase, resetID := a.operations.status()
+	writeJSON(w, http.StatusConflict, map[string]any{
+		"success":  false,
+		"error":    "reset_in_progress",
+		"message":  "system factory reset is already in progress",
+		"reset_id": resetID,
+		"phase":    phase,
+	})
+}
+
+func (a *App) handleSetupResetStatus(w http.ResponseWriter, _ *http.Request) {
+	request, ok, err := readFactoryResetRequest(a.DataDir)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "factory_reset_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "reset_status_failed", err.Error())
+		return
+	}
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{"success": true, "phase": resetPhaseIdle, "requires_reinitialize": !a.IsInitialized()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":               true,
-		"factory_reset":         result.FactoryReset,
-		"requires_reinitialize": result.RequiresReinitialize,
-		"deleted_components":    result.DeletedComponents,
-		"retained_components":   result.RetainedComponents,
-		"deleted_binaries":      deleteComponents,
+		"success":               request.Phase != resetPhaseFailed,
+		"reset_id":              request.ResetID,
+		"phase":                 request.Phase,
+		"requested_at":          request.RequestedAt,
+		"attempt":               request.Attempt,
+		"last_error":            request.LastError,
+		"requires_reinitialize": true,
 	})
 }
 

@@ -2988,16 +2988,39 @@ function ResetTab({ showToast }: { showToast: (message: string) => void }) {
   const [password, setPassword] = useState("");
   const [resetting, setResetting] = useState(false);
 
+	const waitForFactoryReset = async (resetId: string) => {
+		const deadline = Date.now() + 90_000;
+		while (Date.now() < deadline) {
+			try {
+				const status = await api<any>("/api/v1/setup/reset/status", { skipAuth: true });
+				if (status?.phase === "reset_failed") {
+					throw new Error(status.last_error || `恢复出厂设置失败（${resetId}）`);
+				}
+				const check = await api<any>("/api/v1/setup/check", { skipAuth: true });
+				if (check?.is_initialized === false) return;
+			} catch (error) {
+				if (error instanceof Error && error.message.includes("恢复出厂设置失败")) throw error;
+				// Process re-exec briefly makes the HTTP service unavailable.
+			}
+			await new Promise((resolve) => window.setTimeout(resolve, 750));
+		}
+		throw new Error(`恢复出厂设置等待超时，请重新打开页面检查（${resetId}）`);
+	};
+
   const resetSystem = async () => {
     setResetting(true);
     try {
-      await api("/api/v1/setup/reset", {
+			const response = await api<any>("/api/v1/setup/reset", {
         method: "POST",
         body: JSON.stringify({ delete_components: deleteBinaries, current_password: password }),
       });
       setConfirmOpen(false);
       setPassword("");
       clearSession();
+			if (response?.restart_scheduled) {
+				showToast("恢复出厂设置已接管，正在重新启动服务");
+				await waitForFactoryReset(String(response.reset_id || "unknown"));
+			}
       window.location.replace("/setup");
     } catch (error) {
       showToast(errorMessage(error));

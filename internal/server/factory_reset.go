@@ -28,7 +28,8 @@ const (
 )
 
 type factoryResetOptions struct {
-	DeleteComponents bool
+	DeleteComponents        bool
+	RestoreRuntimeOnFailure bool
 }
 
 type factoryResetResult struct {
@@ -210,6 +211,9 @@ func (a *App) factoryReset(ctx context.Context, opts factoryResetOptions) (resul
 	runtimeSnapshot := a.captureFactoryResetRuntime()
 	defer func() {
 		if returnErr == nil {
+			return
+		}
+		if !opts.RestoreRuntimeOnFailure {
 			return
 		}
 		if err := factoryResetRestoreRuntime(a, runtimeSnapshot); err != nil {

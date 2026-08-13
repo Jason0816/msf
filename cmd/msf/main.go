@@ -234,6 +234,12 @@ func serve(dataDir, host string, port int) error {
 		return err
 	}
 	defer app.Close()
+	resetCtx, resetCancel := context.WithTimeout(context.Background(), 90*time.Second)
+	resetCompleted, resetErr := app.CompletePendingFactoryReset(resetCtx)
+	resetCancel()
+	if resetErr != nil {
+		return fmt.Errorf("complete pending factory reset: %w", resetErr)
+	}
 	app.LogInfo("app/app.go:114", "MSF 后端服务启动中...", nil)
 	app.LogInfo("app/app.go:115", "使用配置目录", map[string]any{"path": dataDir})
 
@@ -256,15 +262,17 @@ func serve(dataDir, host string, port int) error {
 	}
 	defer os.Remove(filepath.Join(dataDir, "msf.pid"))
 
-	go func() {
-		restoreCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		report := app.RestoreConfiguredRuntime(restoreCtx)
-		if len(report.Errors) > 0 {
-			app.LogError("app/app.go:298", "启动恢复完成但存在错误", map[string]any{"errors": report.Errors})
-			log.Printf("runtime restore completed with errors: %v", report.Errors)
-		}
-	}()
+	if !resetCompleted {
+		go func() {
+			restoreCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			report := app.RestoreConfiguredRuntime(restoreCtx)
+			if len(report.Errors) > 0 {
+				app.LogError("app/app.go:298", "启动恢复完成但存在错误", map[string]any{"errors": report.Errors})
+				log.Printf("runtime restore completed with errors: %v", report.Errors)
+			}
+		}()
+	}
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", host, port),
@@ -296,8 +304,9 @@ func serve(dataDir, host string, port int) error {
 
 func serverOptions(dataDir string) server.Options {
 	return server.Options{
-		DataDir: dataDir,
-		Version: version,
+		DataDir:               dataDir,
+		Version:               version,
+		RequestProcessRestart: reexecCurrentProcess,
 		Build: server.BuildInfo{
 			Commit:       buildCommit,
 			Tag:          buildTag,

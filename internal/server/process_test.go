@@ -32,3 +32,26 @@ func TestRemovePIDFileOnlyRemovesOwnedProcess(t *testing.T) {
 		t.Fatalf("owned PID file should be removed, stat err=%v", err)
 	}
 }
+
+func TestProcessZombieCrossHandlesSpacesAndParenthesesInComm(t *testing.T) {
+	oldRoot := processProcRoot
+	root := t.TempDir()
+	processProcRoot = root
+	t.Cleanup(func() { processProcRoot = oldRoot })
+	pidDir := filepath.Join(root, "123")
+	if err := os.MkdirAll(pidDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pidDir, "stat"), []byte("123 (worker name)) Z 1 2 3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !processZombieCross(123) {
+		t.Fatal("zombie process was treated as alive")
+	}
+	if err := os.WriteFile(filepath.Join(pidDir, "stat"), []byte("123 (worker name)) S 1 2 3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if processZombieCross(123) {
+		t.Fatal("running process was treated as zombie")
+	}
+}

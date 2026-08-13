@@ -24,6 +24,8 @@ type ServiceManager struct {
 	procs map[string]*exec.Cmd
 }
 
+var processProcRoot = "/proc"
+
 type ServiceStatus struct {
 	Name        string  `json:"name"`
 	DisplayName string  `json:"display_name"`
@@ -215,7 +217,11 @@ func (sm *ServiceManager) stop(ctx context.Context, name string, persistDesired 
 			}
 			return sm.Status(name), nil
 		}
-		time.Sleep(200 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return sm.Status(name), ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
 	}
 	killErr := proc.Signal(syscall.SIGKILL)
 	killDeadline := time.Now().Add(2 * time.Second)
@@ -227,7 +233,11 @@ func (sm *ServiceManager) stop(ctx context.Context, name string, persistDesired 
 			}
 			return sm.Status(name), nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return sm.Status(name), ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 	if killErr != nil {
 		return sm.Status(name), fmt.Errorf("failed to stop %s process %d: SIGTERM=%v SIGKILL=%w", name, pid, termErr, killErr)
@@ -377,7 +387,22 @@ func processAliveCross(pid int) bool {
 	if runtime.GOOS == "windows" {
 		return true
 	}
-	return proc.Signal(syscall.Signal(0)) == nil
+	if proc.Signal(syscall.Signal(0)) != nil {
+		return false
+	}
+	return runtime.GOOS != "linux" || !processZombieCross(pid)
+}
+
+func processZombieCross(pid int) bool {
+	body, err := os.ReadFile(filepath.Join(processProcRoot, strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return false
+	}
+	// /proc/<pid>/stat starts with "pid (comm) state" and comm may contain
+	// spaces or parentheses, so locate the final closing parenthesis.
+	text := string(body)
+	end := strings.LastIndex(text, ") ")
+	return end >= 0 && len(text) > end+2 && text[end+2] == 'Z'
 }
 
 func tailFile(path string, maxLines int) ([]string, error) {

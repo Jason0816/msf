@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -519,8 +521,12 @@ func (a *App) startSelfUpdateInstaller(archivePath string) error {
 	if serverSystemdAvailable() {
 		unit := "msf-self-update-" + time.Now().Format("20060102150405")
 		runArgs := systemdRunSelfUpdateArgs(unit, installScript, args)
+		if err := a.writeSelfUpdateTask(selfUpdateTask{Kind: "systemd", Unit: unit, StartedAt: time.Now()}); err != nil {
+			return fmt.Errorf("record self update task: %w", err)
+		}
 		out, err := exec.Command("systemd-run", runArgs...).CombinedOutput()
 		if err != nil {
+			a.clearSelfUpdateTask()
 			return fmt.Errorf("start update installer: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 		a.setSelfUpdateState("restarting", "restarting", 97, "安装任务已启动，服务即将重启", "", "info", "安装任务已交给 systemd-run，服务即将重启")
@@ -528,12 +534,25 @@ func (a *App) startSelfUpdateInstaller(archivePath string) error {
 	}
 	go func() {
 		cmdArgs := append([]string{installScript}, args...)
-		cmd := exec.Command("sh", cmdArgs...)
+		cmd := processGroupCommand("sh", cmdArgs...)
 		cmd.Dir = workDir
+		var output bytes.Buffer
+		cmd.Stdout = &output
+		cmd.Stderr = &output
 		a.setSelfUpdateState("restarting", "restarting", 97, "正在执行安装脚本，服务即将重启", "", "info", "正在执行安装脚本")
-		out, err := cmd.CombinedOutput()
+		if err := cmd.Start(); err != nil {
+			a.setSelfUpdateState("failed", "failed", 95, "安装更新失败", err.Error(), "error", "安装更新失败: "+err.Error())
+			return
+		}
+		if err := a.writeSelfUpdateTask(selfUpdateTask{Kind: "process", PID: cmd.Process.Pid, StartedAt: time.Now()}); err != nil {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			a.setSelfUpdateState("failed", "failed", 95, "安装更新失败", err.Error(), "error", "安装更新失败: "+err.Error())
+			return
+		}
+		err := cmd.Wait()
+		a.clearSelfUpdateTask()
 		if err != nil {
-			errText := fmt.Sprintf("%v: %s", err, strings.TrimSpace(string(out)))
+			errText := fmt.Sprintf("%v: %s", err, strings.TrimSpace(output.String()))
 			a.setSelfUpdateState("failed", "failed", 95, "安装更新失败", errText, "error", "安装更新失败: "+errText)
 			return
 		}

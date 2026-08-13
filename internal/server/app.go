@@ -18,7 +18,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/scoltzero/msf/internal/cloudflareredirect"
@@ -28,9 +27,10 @@ import (
 const apiPrefix = "/api/v1"
 
 type Options struct {
-	DataDir string
-	Version string
-	Build   BuildInfo
+	DataDir               string
+	Version               string
+	Build                 BuildInfo
+	RequestProcessRestart func(reason string) error
 }
 
 type BuildInfo struct {
@@ -63,8 +63,8 @@ type App struct {
 	mihomoTrafficTotalsLast mihomoTrafficTotalsSample
 	secretMu                sync.RWMutex
 	resetMu                 sync.Mutex
-	resetGate               sync.RWMutex
-	resetInProgress         atomic.Bool
+	operations              *operationController
+	requestProcessRestart   func(reason string) error
 	configApplyMu           sync.Mutex
 	networkRuntimeMu        sync.Mutex
 	networkStateMu          sync.RWMutex
@@ -103,7 +103,18 @@ func New(opts Options) (*App, error) {
 	}
 	db.SetMaxOpenConns(1)
 
-	app := &App{DataDir: opts.DataDir, Version: opts.Version, Build: opts.Build, DB: db}
+	app := &App{
+		DataDir:               opts.DataDir,
+		Version:               opts.Version,
+		Build:                 opts.Build,
+		DB:                    db,
+		operations:            newOperationController(),
+		requestProcessRestart: opts.RequestProcessRestart,
+	}
+	if request, ok, readErr := readFactoryResetRequest(opts.DataDir); readErr == nil && ok {
+		app.operations.resetID = request.ResetID
+		app.operations.phase = request.Phase
+	}
 	if err := app.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -197,25 +208,31 @@ func (a *App) withCommonMiddleware(next http.Handler) http.Handler {
 			rec.WriteHeader(http.StatusNoContent)
 			return
 		}
-		if r.URL.Path == "/api/v1/setup/reset" && a.resetInProgress.Load() {
-			writeError(rec, http.StatusConflict, "reset_in_progress", "system factory reset is already in progress")
-			return
-		}
-		if r.URL.Path == "/api/v1/setup/activate" && a.resetInProgress.Load() {
-			writeError(rec, http.StatusServiceUnavailable, "system_resetting", "system factory reset is in progress")
-			return
-		}
-		if r.URL.Path != "/api/v1/setup/reset" && r.URL.Path != "/api/v1/setup/activate" && requestMutatesState(r) {
-			if a.resetInProgress.Load() {
-				writeError(rec, http.StatusServiceUnavailable, "system_resetting", "system factory reset is in progress")
+		if requestMutatesState(r) && r.URL.Path != "/api/v1/setup/reset" {
+			var accepted bool
+			var finish func()
+			r, finish, accepted = a.operations.begin(r)
+			if !accepted {
+				phase, resetID := a.operations.status()
+				writeJSON(rec, http.StatusServiceUnavailable, map[string]any{
+					"success":  false,
+					"error":    "system_resetting",
+					"message":  "系统恢复出厂设置已接管，当前操作已拒绝",
+					"reset_id": resetID,
+					"phase":    phase,
+				})
 				return
 			}
-			a.resetGate.RLock()
-			defer a.resetGate.RUnlock()
-			if a.resetInProgress.Load() {
-				writeError(rec, http.StatusServiceUnavailable, "system_resetting", "system factory reset is in progress")
-				return
-			}
+			defer finish()
+		}
+		if phase, _ := a.operations.status(); phase == resetPhaseFailed && !factoryResetSafeModePath(r.URL.Path) {
+			writeJSON(rec, http.StatusServiceUnavailable, map[string]any{
+				"success": false,
+				"error":   "factory_reset_failed",
+				"message": "恢复出厂设置失败，系统已进入安全模式",
+				"phase":   phase,
+			})
+			return
 		}
 		if strings.HasPrefix(r.URL.Path, apiPrefix) && !a.publicAPI(r.URL.Path) {
 			identity, err := a.authenticateRequest(r)
@@ -233,6 +250,15 @@ func (a *App) withCommonMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(rec, r)
 	})
+}
+
+func factoryResetSafeModePath(path string) bool {
+	switch path {
+	case "/api/v1/version", "/api/v1/setup/check", "/api/v1/setup/reset", "/api/v1/setup/reset/status":
+		return true
+	default:
+		return !strings.HasPrefix(path, apiPrefix)
+	}
 }
 
 func requestMutatesState(r *http.Request) bool {
@@ -257,6 +283,7 @@ func (a *App) publicAPI(path string) bool {
 		"/api/v1/setup/preflight",
 		"/api/v1/setup/initialize",
 		"/api/v1/setup/activate",
+		"/api/v1/setup/reset/status",
 		"/api/v1/auth/login",
 		"/api/v1/auth/refresh",
 		"/api/v1/license-activation/status",
@@ -286,6 +313,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/setup/initialize", a.handleSetupInitialize)
 	mux.HandleFunc("POST /api/v1/setup/activate", a.handleSetupActivate)
 	mux.HandleFunc("POST /api/v1/setup/reset", a.handleSetupReset)
+	mux.HandleFunc("GET /api/v1/setup/reset/status", a.handleSetupResetStatus)
 	mux.HandleFunc("GET /api/v1/setup/download/{component}", a.handleSetupDownload)
 
 	mux.HandleFunc("POST /api/v1/auth/login", a.handleLogin)

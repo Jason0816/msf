@@ -157,13 +157,38 @@ func installZashboardArchive(src, uiDir string) error {
 		return fmt.Errorf("zashboard package does not contain index.html")
 	}
 	root := filepath.Dir(index)
-	if err := os.RemoveAll(uiDir); err != nil {
+	parent := filepath.Dir(uiDir)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
 	}
-	if err := copyDir(root, uiDir); err != nil {
+	staging, err := os.MkdirTemp(parent, ".zashboard-staging-*")
+	if err != nil {
 		return err
 	}
-	return patchZashboardIndex(uiDir)
+	defer os.RemoveAll(staging)
+	if err := copyDir(root, staging); err != nil {
+		return err
+	}
+	if err := patchZashboardIndex(staging); err != nil {
+		return err
+	}
+	backup := filepath.Join(parent, ".zashboard-backup-"+randomHex(6))
+	hadCurrent := fileExists(uiDir)
+	if hadCurrent {
+		if err := os.Rename(uiDir, backup); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(staging, uiDir); err != nil {
+		if hadCurrent {
+			_ = os.Rename(backup, uiDir)
+		}
+		return err
+	}
+	if hadCurrent {
+		_ = os.RemoveAll(backup)
+	}
+	return nil
 }
 
 func validateUploadedLinuxBinary(path string) error {
