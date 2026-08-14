@@ -2,8 +2,21 @@
 
 ## 未发布
 
+## v0.4.7.3 - 2026-08-14
+
+### 中文
+
+#### MosDNS 文本分流规则修复
+
 - 修复 Loyalsoldier 文本分流规则中 `:@cn` / `:@!cn` 属性被误判为非法域名的问题；MSF 现在会解析属性、验证规则并在落盘前编译为 MosDNS `sd_set_light` 可实际加载的 SRS。
 - 修复 MosDNS 规则源更新失败提示仍显示绿色成功图标的问题，失败现在显示红色警告图标。
+
+### English
+
+#### MosDNS text routing rule fixes
+
+- Fixed Loyalsoldier text routing rule attributes such as `:@cn` and `:@!cn` being rejected as invalid domains. MSF now parses the attributes, validates the rules, and compiles them into SRS files that MosDNS `sd_set_light` can load before writing them to disk.
+- Fixed failed MosDNS rule-source updates still showing a green success icon. Failed updates now display a red warning icon.
 
 ## v0.4.7.2 - 2026-08-13
 
