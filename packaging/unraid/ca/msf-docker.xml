@@ -7,7 +7,7 @@
   <MyIP/>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/scoltzero/msf/issues</Support>
+  <Support>https://forums.unraid.net/topic/200222-plugin-msf-mosdns-and-mihomo-management/</Support>
   <Project>https://github.com/scoltzero/msf</Project>
   <Overview>MSF Docker is a free, open-source, TUN-only DNS and proxy gateway that manages MosDNS and Mihomo through one WebUI. The recommended Unraid deployment gives the container a dedicated LAN IPv4 address on br0.</Overview>
   <Description>MSF combines MosDNS DNS routing with Mihomo TUN proxying and provides setup, provider, rule, service, traffic, and status management in one WebUI. This Docker application uses macvlan-tun mode and requires a dedicated LAN IPv4 address, /dev/net/tun, NET_ADMIN, and NET_RAW. After setup, point the router DHCP DNS and the FakeIP static route to the container IP. Persistent application data is stored under /mnt/user/appdata/msf-docker by default. Container updates are managed from Unraid Docker rather than the in-app updater.</Description>

@@ -9,7 +9,7 @@ msf installs a lightweight Utilities page entry plus a self-managed local servic
 After you complete the in-app setup wizard, msf can run MosDNS (DNS), Mihomo (proxy/TProxy), and the required nftables rules. Online MosDNS/Mihomo/Zashboard core downloads are verified against GitHub Release API asset SHA-256 digests before install; local uploads remain user-supplied files and are not marked as project-verified. Default sample subscriptions/nodes are inert placeholders only. Persistent data lives under /mnt/user/appdata/msf.
 Update and remove msf from the Unraid Plugins page (not via the in-app updater).
 </Overview>
-<Support>https://github.com/scoltzero/msf/issues</Support>
+<Support>https://forums.unraid.net/topic/200222-plugin-msf-mosdns-and-mihomo-management/</Support>
 <Project>https://github.com/scoltzero/msf</Project>
 <Category>Network:Management Tools:System Plugins:</Category>
 <Beta>False</Beta>

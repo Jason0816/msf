@@ -23,7 +23,7 @@
 3. 有效的 **plugin 包装 XML** ✅（`ca/msf.xml`）
 4. 有效的 **Docker Container v2 XML** ✅（`ca/msf-docker.xml`）
 5. **`ca_profile.xml`** 含非空 `<Profile>` ✅（仓库根）
-6. **Support 链接** ✅（GitHub Issues）
+6. **Support 链接** ✅（公开的 Unraid Plugin Support 主题）
 
 ## Docker 模板默认行为
 
@@ -48,13 +48,12 @@
 ## 上架后的维护义务（官方明示）
 
 - 随新 Unraid 版本更新保持兼容。
-- 在 Support 链接（GitHub Issues）响应支持请求。
+- 在公开的 Unraid Support 主题响应支持请求。
 - beta/实验版要在 `<Beta>` 标记或版本号上明确标注。
 
-## 可选增强
+## 支持入口
 
-- 若想用 Unraid 论坛支持帖替代 GitHub Issues：在 forums.unraid.net 发帖后，把帖子 URL 同时填到
-  - `ca/msf.xml` 的 `<Support>`
-  - `ca_profile.xml` 的 `<Forum>`（取消注释）
-  - 根 `msf.plg` 的 `support=` 属性（及 `packaging/unraid/msf.plg.in` 模板）
+- 插件版、Docker 版和仓库 Profile 统一使用公开的 Unraid Plugin Support 主题：
+  `https://forums.unraid.net/topic/200222-plugin-msf-mosdns-and-mihomo-management/`
+- GitHub Issues 继续用于项目缺陷跟踪，但不再作为 CA 的主 Support 入口。
 - 捐赠入口：在 `ca_profile.xml` 取消注释 `<DonateLink>`/`<DonateText>`。

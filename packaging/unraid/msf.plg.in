@@ -9,7 +9,7 @@
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
 <!ENTITY packageSHA256 "__PACKAGE_SHA256__">
 ]>
-<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://github.com/&githubRepo;/issues" icon="network-wired" min="6.12.0">
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://forums.unraid.net/topic/200222-plugin-msf-mosdns-and-mihomo-management/" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
 ### msf __PLUGIN_VERSION__
