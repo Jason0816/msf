@@ -14,7 +14,7 @@
 | `../msf.png` | 256×256 列表图标（被 Profile、插件和 Docker 模板引用） |
 | `../../../msf.plg` | CA 与旧安装的兼容入口；安装后由清单内的 GitHub Latest Release 地址检查更新 |
 
-> CA 的插件入口继续读取 `main/msf.plg`，以兼容已经发布的旧清单；清单内部的 `pluginURL` 使用 `releases/latest/download/msf.plg`，后续更新始终跟随最新正式 Release。
+> CA 模板的 `<PluginURL>` 与插件清单内部的 `pluginURL` 必须完全一致。两者统一使用 `releases/latest/download/msf.plg`，后续更新始终跟随最新正式 Release，避免被 CA 判定为模板地址不匹配。
 
 ## 上架前置条件（CA 官方要求）
 
@@ -38,7 +38,7 @@
 
 1. 把本次新增/修改的文件 commit 并 push 到 `main`（包括 `ca_profile.xml`、`packaging/unraid/ca/msf.xml` 和 `packaging/unraid/ca/msf-docker.xml`）。
 2. 确认 raw 链接可公网访问，例如：
-   - `https://raw.githubusercontent.com/scoltzero/msf/main/msf.plg`
+   - `https://github.com/scoltzero/msf/releases/latest/download/msf.plg`
    - `https://raw.githubusercontent.com/scoltzero/msf/main/packaging/unraid/ca/msf-docker.xml`
    - `https://raw.githubusercontent.com/scoltzero/msf/main/packaging/unraid/msf.png`
 3. 打开 **https://ca.unraid.net/submit** → Start Submission，填入仓库地址 `https://github.com/scoltzero/msf`。

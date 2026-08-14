@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Plugin>
 <Name>msf</Name>
-<PluginURL>https://raw.githubusercontent.com/scoltzero/msf/main/msf.plg</PluginURL>
+<PluginURL>https://github.com/scoltzero/msf/releases/latest/download/msf.plg</PluginURL>
 <Icon>https://raw.githubusercontent.com/scoltzero/msf/main/packaging/unraid/msf.png</Icon>
 <Overview>
 A free and open-source, user-facing all-in-one management tool for DNS and proxy (mihomo / sing-box, in development), packaged for Unraid.
