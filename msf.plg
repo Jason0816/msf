@@ -1,23 +1,23 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.7.3">
+<!ENTITY version "0.4.7.4">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.7.3">
-<!ENTITY packageName "msf-0.4.7.3-x86_64-1">
+<!ENTITY releaseTag "v0.4.7.4">
+<!ENTITY packageName "msf-0.4.7.4-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "88ede503f468b00752bd963e63067d1bd35c41910361545149faeb8a2cab6c90">
+<!ENTITY packageSHA256 "df9a3c2e500d846a648c1cf3e6c93f837398250a425b8827daa980054e72dce5">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://forums.unraid.net/topic/200222-plugin-msf-mosdns-and-mihomo-management/" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.7.3
+### msf 0.4.7.4
 
-#### MosDNS 文本分流规则修复
+#### Unraid Community Applications 模板修复
 
-- 修复 Loyalsoldier 文本分流规则中 `:@cn` / `:@!cn` 属性被误判为非法域名的问题；MSF 现在会解析属性、验证规则并在落盘前编译为 MosDNS `sd_set_light` 可实际加载的 SRS。
-- 修复 MosDNS 规则源更新失败提示仍显示绿色成功图标的问题，失败现在显示红色警告图标。
+- 修复 CA 插件 XML 模板的 `PluginURL` 与发布版 `.plg` 内 `pluginURL` 不一致的问题；两者现在统一使用 `releases/latest/download/msf.plg`，避免插件被 CA 自动列入 blacklist。
+- 将 Unraid 插件清单、CA 插件与 Docker 模板以及仓库 Profile 的 Support 入口统一为已公开的 MSF Plugin Support 主题，方便 Unraid 用户集中提交安装、兼容性和使用问题；GitHub Issues 继续用于项目缺陷跟踪。
 
     ]]>
   </CHANGES>
@@ -58,8 +58,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.7.3-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.7.3-x86_64-1.txz
+removepkg msf-0.4.7.4-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.7.4-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
