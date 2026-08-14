@@ -2,6 +2,22 @@
 
 ## 未发布
 
+## v0.4.7.4 - 2026-08-15
+
+### 中文
+
+#### Unraid Community Applications 模板修复
+
+- 修复 CA 插件 XML 模板的 `PluginURL` 与发布版 `.plg` 内 `pluginURL` 不一致的问题；两者现在统一使用 `releases/latest/download/msf.plg`，避免插件被 CA 自动列入 blacklist。
+- 将 Unraid 插件清单、CA 插件与 Docker 模板以及仓库 Profile 的 Support 入口统一为已公开的 MSF Plugin Support 主题，方便 Unraid 用户集中提交安装、兼容性和使用问题；GitHub Issues 继续用于项目缺陷跟踪。
+
+### English
+
+#### Unraid Community Applications template fixes
+
+- Fixed the CA plugin XML `PluginURL` not matching the `pluginURL` embedded in the released `.plg`. Both now use `releases/latest/download/msf.plg`, preventing CA from automatically blacklisting the plugin for a manifest URL mismatch.
+- Unified the Support destination used by the Unraid plugin manifest, CA plugin and Docker templates, and repository profile on the public MSF Plugin Support topic. Unraid users now have one place for installation, compatibility, and usage questions, while GitHub Issues remains available for project defect tracking.
+
 ## v0.4.7.3 - 2026-08-14
 
 ### 中文
