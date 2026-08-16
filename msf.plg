@@ -1,23 +1,24 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.7.4">
+<!ENTITY version "0.4.7.5">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.7.4">
-<!ENTITY packageName "msf-0.4.7.4-x86_64-1">
+<!ENTITY releaseTag "v0.4.7.5">
+<!ENTITY packageName "msf-0.4.7.5-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "df9a3c2e500d846a648c1cf3e6c93f837398250a425b8827daa980054e72dce5">
+<!ENTITY packageSHA256 "3b78a4819fe89d91e1f27ed8e87ad97131937ff35b9e5676964cd28cd4ef549d">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://forums.unraid.net/topic/200222-plugin-msf-mosdns-and-mihomo-management/" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.7.4
+### msf 0.4.7.5
 
-#### Unraid Community Applications 模板修复
+#### Mihomo 官方更新源修复
 
-- 修复 CA 插件 XML 模板的 `PluginURL` 与发布版 `.plg` 内 `pluginURL` 不一致的问题；两者现在统一使用 `releases/latest/download/msf.plg`，避免插件被 CA 自动列入 blacklist。
-- 将 Unraid 插件清单、CA 插件与 Docker 模板以及仓库 Profile 的 Support 入口统一为已公开的 MSF Plugin Support 主题，方便 Unraid 用户集中提交安装、兼容性和使用问题；GitHub Issues 继续用于项目缺陷跟踪。
+- 修复 Linux、Unraid、Docker 与 macOS 的 Mihomo 组件更新错误查询固定镜像 Release 的问题；现在统一查询 `MetaCubeX/mihomo` 官方最新 Release，并按系统架构和 Release 标签选择对应的版本化资产。
+- 停止提供已停更的 Alpha 核心选项，现有 Alpha 配置会兼容迁移为 Meta；同时清除旧镜像地址的缓存更新信息，避免继续显示或下载过期来源。
+- Mihomo 最新版本改为直接采用官方 Release 标签，并继续要求 GitHub Release 资产提供有效的 SHA-256 digest，确保自动更新来源与下载内容均可验证。
 
     ]]>
   </CHANGES>
@@ -58,8 +59,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.7.4-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.7.4-x86_64-1.txz
+removepkg msf-0.4.7.5-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.7.5-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
