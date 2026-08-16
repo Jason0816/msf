@@ -2,6 +2,24 @@
 
 ## 未发布
 
+## v0.4.7.5 - 2026-08-16
+
+### 中文
+
+#### Mihomo 官方更新源修复
+
+- 修复 Linux、Unraid、Docker 与 macOS 的 Mihomo 组件更新错误查询固定镜像 Release 的问题；现在统一查询 `MetaCubeX/mihomo` 官方最新 Release，并按系统架构和 Release 标签选择对应的版本化资产。
+- 停止提供已停更的 Alpha 核心选项，现有 Alpha 配置会兼容迁移为 Meta；同时清除旧镜像地址的缓存更新信息，避免继续显示或下载过期来源。
+- Mihomo 最新版本改为直接采用官方 Release 标签，并继续要求 GitHub Release 资产提供有效的 SHA-256 digest，确保自动更新来源与下载内容均可验证。
+
+### English
+
+#### Official Mihomo update source fixes
+
+- Fixed Mihomo component updates on Linux, Unraid, Docker, and macOS querying a fixed mirror release. Updates now use the latest official `MetaCubeX/mihomo` release and select the matching versioned asset for the runtime platform, architecture, and release tag.
+- Removed the discontinued Alpha core option. Existing Alpha configurations are migrated compatibly to Meta, and cached update metadata from the old mirror is cleared to prevent stale sources from being shown or downloaded.
+- Mihomo's latest version now comes directly from the official release tag. Automatic updates continue to require a valid SHA-256 digest supplied by the GitHub Release asset so both the source and downloaded content remain verifiable.
+
 ## v0.4.7.4 - 2026-08-15
 
 ### 中文
