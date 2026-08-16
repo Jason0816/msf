@@ -254,9 +254,7 @@ func applySetupStringDefaults(cfg *SetupConfig) {
 	if cfg.WebPort == "" {
 		cfg.WebPort = "7777"
 	}
-	if cfg.MihomoCoreType == "" {
-		cfg.MihomoCoreType = "meta"
-	}
+	cfg.MihomoCoreType = "meta"
 	if cfg.DNSOn == "" {
 		cfg.DNSOn = "127.0.0.1"
 	}
@@ -469,7 +467,7 @@ func (a *App) applyStructuredSetupSection(cfg *SetupConfig, section string, raw 
 			if !oneOf(v, "meta", "mihomo") {
 				return false, false, false, fmt.Errorf("invalid mihomo_core_type")
 			}
-			cfg.MihomoCoreType = v
+			cfg.MihomoCoreType = "meta"
 			changed = true
 			regenerateRequired = true
 		case "proxy_core", "proxyCore":

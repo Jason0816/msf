@@ -38,7 +38,8 @@ func TestSystemSetupsTimezoneMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rows.Close()
-	found := false
+	foundTimezone := false
+	foundMihomoCoreType := false
 	for rows.Next() {
 		var cid int
 		var name, typ string
@@ -48,11 +49,17 @@ func TestSystemSetupsTimezoneMigration(t *testing.T) {
 			t.Fatal(err)
 		}
 		if name == "timezone" {
-			found = true
+			foundTimezone = true
+		}
+		if name == "mihomo_core_type" {
+			foundMihomoCoreType = true
 		}
 	}
-	if !found {
+	if !foundTimezone {
 		t.Fatal("system_setups should have timezone column")
+	}
+	if !foundMihomoCoreType {
+		t.Fatal("system_setups should have mihomo_core_type column")
 	}
 }
 

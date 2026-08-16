@@ -216,6 +216,9 @@ func (a *App) migrate() error {
 	if err := a.ensureSystemSetupsTimezoneColumn(); err != nil {
 		return err
 	}
+	if err := a.ensureSystemSetupsMihomoCoreTypeColumn(); err != nil {
+		return err
+	}
 	if err := a.migrateLegacyRows(); err != nil {
 		return err
 	}
@@ -227,6 +230,12 @@ func (a *App) migrateLegacyRows() error {
 		return err
 	}
 	if _, err := a.DB.Exec(`update config_histories set file_path=replace(file_path,'msm_manual.yaml','msf_manual.yaml') where file_path like '%msm_manual.yaml%'`); err != nil {
+		return err
+	}
+	if _, err := a.DB.Exec(`update system_setups set mihomo_core_type='meta', updated_at=? where lower(trim(coalesce(mihomo_core_type,''))) != 'meta'`, time.Now()); err != nil {
+		return err
+	}
+	if _, err := a.DB.Exec(`update component_update_info set latest_version='-', has_update=false, download_url='', download_digest='', verified_digest='', verified=false, verification_source='', status='idle', progress=0, error_message='', updated_at=? where component='mihomo' and download_url like '%baozaodetudou/mssb%'`, time.Now()); err != nil {
 		return err
 	}
 	return nil
@@ -261,6 +270,12 @@ func (a *App) ensureComponentUpdateInfoComplianceColumns() error {
 func (a *App) ensureSystemSetupsTimezoneColumn() error {
 	return a.ensureTableColumns("system_setups", map[string]string{
 		"timezone": "text default 'Asia/Shanghai'",
+	})
+}
+
+func (a *App) ensureSystemSetupsMihomoCoreTypeColumn() error {
+	return a.ensureTableColumns("system_setups", map[string]string{
+		"mihomo_core_type": "text default 'meta'",
 	})
 }
 

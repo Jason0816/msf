@@ -73,7 +73,7 @@ interface SubscriptionRow {
 interface InitConfigState {
   iface: string;
   proxyCore: "Mihomo" | "无";
-  mihomoType: "Meta" | "Alpha";
+  mihomoType: "Meta";
   proxyMode: "nft" | "tun";
   autoDns: boolean;
   dnsEnable: string;
@@ -517,7 +517,7 @@ function setupToInitConfig(raw: any, forceTun = false, forceAutoDNS = false): In
   return {
     iface: String(data.selected_interface || data.selectedInterface || ""),
     proxyCore: String(data.proxy_core || data.proxyCore || "mihomo").toLowerCase() === "none" ? "无" : "Mihomo",
-    mihomoType: String(data.mihomo_core_type || data.mihomoCoreType || "meta").toLowerCase() === "alpha" ? "Alpha" : "Meta",
+    mihomoType: "Meta",
     proxyMode: forceTun || String(data.linux_proxy_mode || "nft").toLowerCase() === "tun" ? "tun" : "nft",
     autoDns: forceAutoDNS || (data.auto_set_dns ?? data.autoSetDNS ?? true),
     dnsEnable: String(data.dns_on || data.dnsOn || "127.0.0.1"),
@@ -542,7 +542,7 @@ function initConfigToSetupPayload(config: InitConfigState) {
   return {
     selected_interface: config.iface,
     proxy_core: config.proxyCore === "无" ? "none" : "mihomo",
-    mihomo_core_type: config.mihomoType.toLowerCase(),
+    mihomo_core_type: "meta",
     linux_proxy_mode: config.proxyMode,
     auto_set_dns: config.autoDns,
     dns_on: config.dnsEnable,
@@ -991,15 +991,7 @@ function InitConfigEditor({
           </Field>
           <div className="border-t border-border/60 pt-4">
             <Field label="Mihomo 核心类型">
-              <select
-                value={draft.mihomoType}
-                onChange={(event) => setDraft((current) => ({ ...current, mihomoType: event.target.value as InitConfigState["mihomoType"] }))}
-                className={`${inputClass} h-12 text-base`}
-              >
-                <option>请选择核心类型</option>
-                <option>Meta</option>
-                <option>Alpha</option>
-              </select>
+              <div className={`${inputClass} flex h-12 items-center text-base`}>Meta（官方稳定版）</div>
             </Field>
           </div>
         </div>

@@ -57,27 +57,18 @@ func (a *App) componentDownloadOptions() (string, bool) {
 	return normalizeMihomoCoreType(coreType), amd64v3
 }
 
-func componentDownloadURLFor(component, goos, goarch, mihomoCoreType string, amd64v3 bool) string {
+func componentDownloadURLFor(component, goos, goarch, _ string, amd64v3 bool) string {
 	switch component {
 	case "mihomo":
-		if goos == "darwin" {
-			switch goarch {
-			case "arm64":
-				return "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo-darwin-arm64.gz"
-			case "amd64":
-				return "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo-darwin-amd64-compatible.gz"
-			default:
-				return ""
-			}
-		}
-		if goos != "linux" {
+		if goos != "linux" && goos != "darwin" {
 			return ""
 		}
-		arch := mihomoAssetArch(goarch, amd64v3)
-		if arch == "" {
+		if goarch != "amd64" && goarch != "arm64" {
 			return ""
 		}
-		return fmt.Sprintf("https://github.com/baozaodetudou/mssb/releases/download/mihomo/mihomo-%s-linux-%s.tar.gz", normalizeMihomoCoreType(mihomoCoreType), arch)
+		// Official Mihomo assets include the release tag in every filename, so
+		// the concrete download URL is selected from the GitHub Release metadata.
+		return "https://github.com/MetaCubeX/mihomo/releases/latest"
 	case "mosdns":
 		if goos == "darwin" {
 			switch goarch {
@@ -102,27 +93,10 @@ func componentDownloadURLFor(component, goos, goarch, mihomoCoreType string, amd
 	}
 }
 
-func normalizeMihomoCoreType(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "alpha":
-		return "alpha"
-	default:
-		return "meta"
-	}
-}
-
-func mihomoAssetArch(goarch string, amd64v3 bool) string {
-	switch goarch {
-	case "amd64":
-		if amd64v3 {
-			return "amd64v3"
-		}
-		return "amd64"
-	case "arm64":
-		return "arm64"
-	default:
-		return ""
-	}
+func normalizeMihomoCoreType(_ string) string {
+	// Alpha is no longer maintained. Preserve compatibility with databases
+	// that still contain "alpha" by migrating all selections to stable Meta.
+	return "meta"
 }
 
 func mosDNSAssetArch(goarch string, amd64v3 bool) string {
@@ -240,7 +214,7 @@ func (a *App) componentDownloadAssetFromRelease(component string, release github
 	component = normalizeComponent(component)
 	asset, ok := a.componentReleaseAsset(release, component)
 	if !ok {
-		want := downloadAssetName(a.componentDownloadURL(component))
+		want := a.componentReleaseAssetName(release, component)
 		if want == "" {
 			want = component
 		}

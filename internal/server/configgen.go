@@ -54,9 +54,7 @@ func (c *SetupConfig) defaults() {
 	if c.WebPort == "" {
 		c.WebPort = "7777"
 	}
-	if c.MihomoCoreType == "" {
-		c.MihomoCoreType = "meta"
-	}
+	c.MihomoCoreType = "meta"
 	if c.DNSOn == "" {
 		c.DNSOn = "127.0.0.1"
 	}

@@ -198,16 +198,16 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 			goos:          "linux",
 			goarch:        "amd64",
 			mihomoCore:    "meta",
-			wantSubstring: "mihomo-meta-linux-amd64.tar.gz",
+			wantSubstring: "MetaCubeX/mihomo/releases/latest",
 		},
 		{
-			name:          "mihomo alpha amd64v3",
+			name:          "legacy mihomo alpha uses official meta release",
 			component:     "mihomo",
 			goos:          "linux",
 			goarch:        "amd64",
 			mihomoCore:    "alpha",
 			amd64v3:       true,
-			wantSubstring: "mihomo-alpha-linux-amd64v3.tar.gz",
+			wantSubstring: "MetaCubeX/mihomo/releases/latest",
 		},
 		{
 			name:          "mihomo arm64",
@@ -216,7 +216,7 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 			goarch:        "arm64",
 			mihomoCore:    "meta",
 			amd64v3:       true,
-			wantSubstring: "mihomo-meta-linux-arm64.tar.gz",
+			wantSubstring: "MetaCubeX/mihomo/releases/latest",
 		},
 		{
 			name:          "mosdns amd64v3",
@@ -240,7 +240,7 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 			goos:          "darwin",
 			goarch:        "arm64",
 			mihomoCore:    "meta",
-			wantSubstring: "mihomo-darwin-arm64.gz",
+			wantSubstring: "MetaCubeX/mihomo/releases/latest",
 		},
 		{
 			name:          "mihomo darwin amd64 compatible",
@@ -248,7 +248,7 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 			goos:          "darwin",
 			goarch:        "amd64",
 			mihomoCore:    "meta",
-			wantSubstring: "mihomo-darwin-amd64-compatible.gz",
+			wantSubstring: "MetaCubeX/mihomo/releases/latest",
 		},
 		{
 			name:          "mosdns darwin arm64",
@@ -280,6 +280,64 @@ func TestComponentDownloadURLForRuntimeArch(t *testing.T) {
 				t.Fatalf("componentDownloadURLFor() = %q, want substring %q", got, tt.wantSubstring)
 			}
 		})
+	}
+	if got := normalizeMihomoCoreType("alpha"); got != "meta" {
+		t.Fatalf("legacy alpha core type should migrate to meta, got %q", got)
+	}
+}
+
+func TestMihomoOfficialReleaseAssetNameForRuntimeArch(t *testing.T) {
+	release := githubRelease{TagName: "v1.19.30"}
+	tests := []struct {
+		name    string
+		goos    string
+		goarch  string
+		amd64v3 bool
+		want    string
+	}{
+		{name: "linux amd64", goos: "linux", goarch: "amd64", want: "mihomo-linux-amd64-v1.19.30.gz"},
+		{name: "linux amd64 v3", goos: "linux", goarch: "amd64", amd64v3: true, want: "mihomo-linux-amd64-v3-v1.19.30.gz"},
+		{name: "linux arm64", goos: "linux", goarch: "arm64", want: "mihomo-linux-arm64-v1.19.30.gz"},
+		{name: "darwin amd64", goos: "darwin", goarch: "amd64", want: "mihomo-darwin-amd64-compatible-v1.19.30.gz"},
+		{name: "darwin arm64", goos: "darwin", goarch: "arm64", want: "mihomo-darwin-arm64-v1.19.30.gz"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := componentReleaseAssetNameFor(release, "mihomo", tt.goos, tt.goarch, tt.amd64v3, "")
+			if got != tt.want {
+				t.Fatalf("componentReleaseAssetNameFor() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLegacyMihomoAlphaAndMirrorMetadataMigrateToOfficialMeta(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	if _, err := app.DB.Exec(`insert into system_setups(created_at,updated_at,username,mihomo_core_type) values(?,?,?,?)`, now, now, "legacy", "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.DB.Exec(`insert into component_update_info(component,current_version,latest_version,has_update,download_url,status,progress,created_at,updated_at) values(?,?,?,?,?,?,?,?,?)`,
+		"mihomo", "v1.19.29", "v1.19.29", false, "https://github.com/baozaodetudou/mssb/releases/download/mihomo/mihomo-meta-linux-amd64.tar.gz", "checked", 0, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.migrateLegacyRows(); err != nil {
+		t.Fatal(err)
+	}
+	var coreType string
+	if err := app.DB.QueryRow(`select mihomo_core_type from system_setups where username='legacy'`).Scan(&coreType); err != nil {
+		t.Fatal(err)
+	}
+	if coreType != "meta" {
+		t.Fatalf("legacy core type = %q, want meta", coreType)
+	}
+	var latestVersion, downloadURL, status string
+	var hasUpdate bool
+	if err := app.DB.QueryRow(`select latest_version,has_update,download_url,status from component_update_info where component='mihomo'`).Scan(&latestVersion, &hasUpdate, &downloadURL, &status); err != nil {
+		t.Fatal(err)
+	}
+	if latestVersion != "-" || hasUpdate || downloadURL != "" || status != "idle" {
+		t.Fatalf("stale mirror metadata was not cleared: latest=%q hasUpdate=%v url=%q status=%q", latestVersion, hasUpdate, downloadURL, status)
 	}
 }
 
@@ -790,12 +848,8 @@ func TestComponentRemoteVersionParsesReleaseMetadata(t *testing.T) {
 		t.Fatalf("legacy mosdns remote version = %q", got)
 	}
 
-	mihomoBody := "更新 [mihomo Meta 版](https://github.com/MetaCubeX/mihomo/tree/Meta)至 v1.19.27，发布于 2026-06-06\n更新 [mihomo Alpha 版](https://github.com/MetaCubeX/mihomo/tree/Alpha)至 checksums.txt，发布于 2026-06-06"
-	if got := mihomoReleaseBodyVersion(mihomoBody, "meta"); got != "v1.19.27" {
-		t.Fatalf("mihomo meta remote version = %q", got)
-	}
-	if got := mihomoReleaseBodyVersion(mihomoBody, "alpha"); got != "v1.19.27" {
-		t.Fatalf("mihomo alpha fallback version = %q", got)
+	if got := app.componentRemoteVersion("mihomo", githubRelease{TagName: "v1.19.30"}); got != "v1.19.30" {
+		t.Fatalf("mihomo official remote version = %q", got)
 	}
 
 	if got := app.componentRemoteVersion("zashboard", githubRelease{TagName: "v3.7.1"}); got != "v3.7.1" {

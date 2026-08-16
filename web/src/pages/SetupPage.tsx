@@ -1610,26 +1610,12 @@ export function SetupPage() {
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold">Mihomo</span>
                         <span className="mt-1 block text-xs text-muted-foreground">通用代理平台，支持多种协议</span>
-                        <span className="mt-3 block border-t border-border pt-3">
-                          <span className="mb-2 block text-xs text-muted-foreground">Mihomo Core</span>
-                          <span className="flex gap-2">
-                            {["meta", "alpha"].map((core) => (
-                              <span
-                                key={core}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  update("mihomo_core_type", core);
-                                }}
-                                className={cn(
-                                  "rounded-md px-3 py-1.5 text-xs font-medium",
-                                  form.mihomo_core_type === core ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                                )}
-                              >
-                                {core}
-                              </span>
-                            ))}
+                          <span className="mt-3 block border-t border-border pt-3">
+                            <span className="mb-2 block text-xs text-muted-foreground">Mihomo Core</span>
+                            <span className="inline-flex rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground">
+                              Meta（官方稳定版）
+                            </span>
                           </span>
-                        </span>
                       </span>
                       <Circle className="h-4 w-4 fill-primary text-primary" />
                     </button>

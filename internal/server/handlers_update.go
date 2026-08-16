@@ -912,23 +912,11 @@ func (a *App) componentUpdateState(component string) map[string]any {
 }
 
 func (a *App) componentRemoteInfo(component string) (githubRelease, error) {
-	if runtime.GOOS == "darwin" {
-		switch normalizeComponent(component) {
-		case "mosdns":
-			return a.fetchLatestRelease("yyysuo", "mosdns")
-		case "mihomo":
-			return a.fetchLatestRelease("MetaCubeX", "mihomo")
-		case "zashboard":
-			return a.fetchLatestRelease("Zephyruso", "zashboard")
-		default:
-			return githubRelease{}, fmt.Errorf("unknown component %s", component)
-		}
-	}
 	switch normalizeComponent(component) {
 	case "mosdns":
 		return a.fetchLatestRelease("yyysuo", "mosdns")
 	case "mihomo":
-		return a.fetchReleaseByTag("baozaodetudou", "mssb", "mihomo")
+		return a.fetchLatestRelease("MetaCubeX", "mihomo")
 	case "zashboard":
 		return a.fetchLatestRelease("Zephyruso", "zashboard")
 	default:
@@ -941,7 +929,6 @@ var componentCommitTokenRE = regexp.MustCompile(`(?i)\b[0-9a-f]{7,40}\b`)
 
 func (a *App) componentRemoteVersion(component string, release githubRelease) string {
 	component = normalizeComponent(component)
-	mihomoCoreType, _ := a.componentDownloadOptions()
 	switch component {
 	case "mosdns":
 		if tag := strings.TrimSpace(release.TagName); strings.HasPrefix(strings.ToLower(tag), "v5-ph-srs-") {
@@ -954,7 +941,7 @@ func (a *App) componentRemoteVersion(component string, release githubRelease) st
 			return v
 		}
 	case "mihomo":
-		if v := mihomoReleaseBodyVersion(release.Body, mihomoCoreType); v != "" {
+		if v := strings.TrimSpace(release.TagName); v != "" {
 			return v
 		}
 	case "zashboard":
@@ -987,28 +974,6 @@ func releaseBodyFieldVersion(body, field string) string {
 		}
 	}
 	return ""
-}
-
-func mihomoReleaseBodyVersion(body, coreType string) string {
-	coreType = normalizeMihomoCoreType(coreType)
-	var fallback string
-	for _, line := range strings.Split(body, "\n") {
-		lower := strings.ToLower(line)
-		if !strings.Contains(lower, "mihomo") {
-			continue
-		}
-		version := firstVersionToken(line)
-		if version == "" {
-			continue
-		}
-		if strings.Contains(lower, coreType) {
-			return version
-		}
-		if fallback == "" {
-			fallback = version
-		}
-	}
-	return fallback
 }
 
 func cleanReleaseVersionCandidate(value string) string {
@@ -1522,29 +1487,7 @@ func (a *App) componentReleaseAssetURL(release githubRelease, component string) 
 }
 
 func (a *App) componentReleaseAsset(release githubRelease, component string) (githubAsset, bool) {
-	if runtime.GOOS == "darwin" {
-		component = normalizeComponent(component)
-		want := ""
-		switch component {
-		case "mosdns":
-			want = "mosdns-darwin-" + runtime.GOARCH + ".zip"
-		case "mihomo":
-			tag := strings.TrimSpace(release.TagName)
-			if runtime.GOARCH == "arm64" {
-				want = "mihomo-darwin-arm64-" + tag + ".gz"
-			} else if runtime.GOARCH == "amd64" {
-				want = "mihomo-darwin-amd64-compatible-" + tag + ".gz"
-			}
-		}
-		if want != "" {
-			for _, asset := range release.Assets {
-				if strings.EqualFold(asset.Name, want) {
-					return asset, true
-				}
-			}
-		}
-	}
-	want := downloadAssetName(a.componentDownloadURL(component))
+	want := a.componentReleaseAssetName(release, component)
 	if want == "" {
 		return githubAsset{}, false
 	}
@@ -1554,6 +1497,45 @@ func (a *App) componentReleaseAsset(release githubRelease, component string) (gi
 		}
 	}
 	return githubAsset{}, false
+}
+
+func (a *App) componentReleaseAssetName(release githubRelease, component string) string {
+	_, amd64v3 := a.componentDownloadOptions()
+	return componentReleaseAssetNameFor(release, component, runtime.GOOS, runtime.GOARCH, amd64v3, a.componentDownloadURL(component))
+}
+
+func componentReleaseAssetNameFor(release githubRelease, component, goos, goarch string, amd64v3 bool, fallbackURL string) string {
+	component = normalizeComponent(component)
+	if component == "mihomo" {
+		tag := strings.TrimSpace(release.TagName)
+		if tag == "" {
+			return ""
+		}
+		switch goos {
+		case "linux":
+			switch goarch {
+			case "arm64":
+				return "mihomo-linux-arm64-" + tag + ".gz"
+			case "amd64":
+				if amd64v3 {
+					return "mihomo-linux-amd64-v3-" + tag + ".gz"
+				}
+				return "mihomo-linux-amd64-" + tag + ".gz"
+			}
+		case "darwin":
+			switch goarch {
+			case "arm64":
+				return "mihomo-darwin-arm64-" + tag + ".gz"
+			case "amd64":
+				return "mihomo-darwin-amd64-compatible-" + tag + ".gz"
+			}
+		}
+		return ""
+	}
+	if component == "mosdns" && goos == "darwin" && (goarch == "amd64" || goarch == "arm64") {
+		return "mosdns-darwin-" + goarch + ".zip"
+	}
+	return downloadAssetName(fallbackURL)
 }
 
 func downloadAssetName(rawURL string) string {
