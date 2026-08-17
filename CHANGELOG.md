@@ -2,6 +2,22 @@
 
 ## 未发布
 
+## v0.4.7.7 - 2026-08-17
+
+### 中文
+
+#### Mihomo AMD64 指令集版本选择修复
+
+- 修复 Linux、Unraid 与 Docker 在未启用 AMD64 v3 优化时仍下载 Mihomo 无后缀 v3 二进制的问题；普通 x86_64 CPU 现在明确优先选择官方 `amd64-v1` 资产，避免老 CPU 因不支持 x86-64-v3 指令集而无法启动。
+- 启用 AMD64 v3 时明确优先选择 `amd64-v3`，缺失时依次回退到 `amd64-v1` 和无后缀资产；未启用 v3 时仅按 `amd64-v1`、无后缀的顺序选择。回退只在 Release 中不存在首选资产时发生，下载地址或 SHA-256 digest 异常仍会直接报错。
+
+### English
+
+#### Mihomo AMD64 instruction-level selection fixes
+
+- Fixed Linux, Unraid, and Docker downloading Mihomo's unversioned v3 binary even when AMD64 v3 optimization was disabled. Standard x86_64 systems now explicitly prefer the official `amd64-v1` asset, preventing older CPUs without x86-64-v3 support from failing to start Mihomo.
+- When AMD64 v3 is enabled, MSF now prefers `amd64-v3` and falls back to `amd64-v1`, then the unversioned asset. Without v3 enabled, it selects `amd64-v1` before the unversioned asset. Fallback occurs only when the preferred asset is absent from the Release; an invalid download URL or SHA-256 digest still fails explicitly.
+
 ## v0.4.7.5 - 2026-08-16
 
 ### 中文
