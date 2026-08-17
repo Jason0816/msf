@@ -1,24 +1,23 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "msf">
 <!ENTITY author "luochuhan">
-<!ENTITY version "0.4.7.5">
+<!ENTITY version "0.4.7.7">
 <!ENTITY githubRepo "scoltzero/msf">
-<!ENTITY releaseTag "v0.4.7.5">
-<!ENTITY packageName "msf-0.4.7.5-x86_64-1">
+<!ENTITY releaseTag "v0.4.7.7">
+<!ENTITY packageName "msf-0.4.7.7-x86_64-1">
 <!ENTITY packageFile "&packageName;.txz">
 <!ENTITY packageURL "https://github.com/&githubRepo;/releases/download/&releaseTag;/&packageFile;">
-<!ENTITY packageSHA256 "3b78a4819fe89d91e1f27ed8e87ad97131937ff35b9e5676964cd28cd4ef549d">
+<!ENTITY packageSHA256 "d84ecb8a93ed67cbc06126f4552b9e2e41dda2a110fd5d0607eace98b8b18f67">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="https://github.com/&githubRepo;/releases/latest/download/msf.plg" launch="Utilities/&name;" support="https://forums.unraid.net/topic/200222-plugin-msf-mosdns-and-mihomo-management/" icon="network-wired" min="6.12.0">
   <CHANGES>
     <![CDATA[
-### msf 0.4.7.5
+### msf 0.4.7.7
 
-#### Mihomo 官方更新源修复
+#### Mihomo AMD64 指令集版本选择修复
 
-- 修复 Linux、Unraid、Docker 与 macOS 的 Mihomo 组件更新错误查询固定镜像 Release 的问题；现在统一查询 `MetaCubeX/mihomo` 官方最新 Release，并按系统架构和 Release 标签选择对应的版本化资产。
-- 停止提供已停更的 Alpha 核心选项，现有 Alpha 配置会兼容迁移为 Meta；同时清除旧镜像地址的缓存更新信息，避免继续显示或下载过期来源。
-- Mihomo 最新版本改为直接采用官方 Release 标签，并继续要求 GitHub Release 资产提供有效的 SHA-256 digest，确保自动更新来源与下载内容均可验证。
+- 修复 Linux、Unraid 与 Docker 在未启用 AMD64 v3 优化时仍下载 Mihomo 无后缀 v3 二进制的问题；普通 x86_64 CPU 现在明确优先选择官方 `amd64-v1` 资产，避免老 CPU 因不支持 x86-64-v3 指令集而无法启动。
+- 启用 AMD64 v3 时明确优先选择 `amd64-v3`，缺失时依次回退到 `amd64-v1` 和无后缀资产；未启用 v3 时仅按 `amd64-v1`、无后缀的顺序选择。回退只在 Release 中不存在首选资产时发生，下载地址或 SHA-256 digest 异常仍会直接报错。
 
     ]]>
   </CHANGES>
@@ -59,8 +58,8 @@ set +e
 if [ -x /etc/rc.d/rc.msf ]; then
   /etc/rc.d/rc.msf stop
 fi
-removepkg msf-0.4.7.5-x86_64-1
-rm -f /boot/config/plugins/msf/msf-0.4.7.5-x86_64-1.txz
+removepkg msf-0.4.7.7-x86_64-1
+rm -f /boot/config/plugins/msf/msf-0.4.7.7-x86_64-1.txz
 echo "msf plugin removed. Persistent data remains under /mnt/user/appdata/msf unless you delete it manually."
       ]]>
     </INLINE>
