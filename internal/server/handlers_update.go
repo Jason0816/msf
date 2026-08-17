@@ -1487,13 +1487,16 @@ func (a *App) componentReleaseAssetURL(release githubRelease, component string) 
 }
 
 func (a *App) componentReleaseAsset(release githubRelease, component string) (githubAsset, bool) {
-	want := a.componentReleaseAssetName(release, component)
-	if want == "" {
-		return githubAsset{}, false
-	}
-	for _, asset := range release.Assets {
-		if strings.EqualFold(asset.Name, want) {
-			return asset, true
+	_, amd64v3 := a.componentDownloadOptions()
+	return componentReleaseAssetFor(release, component, runtime.GOOS, runtime.GOARCH, amd64v3, a.componentDownloadURL(component))
+}
+
+func componentReleaseAssetFor(release githubRelease, component, goos, goarch string, amd64v3 bool, fallbackURL string) (githubAsset, bool) {
+	for _, want := range componentReleaseAssetNamesFor(release, component, goos, goarch, amd64v3, fallbackURL) {
+		for _, asset := range release.Assets {
+			if strings.EqualFold(asset.Name, want) {
+				return asset, true
+			}
 		}
 	}
 	return githubAsset{}, false
@@ -1505,37 +1508,55 @@ func (a *App) componentReleaseAssetName(release githubRelease, component string)
 }
 
 func componentReleaseAssetNameFor(release githubRelease, component, goos, goarch string, amd64v3 bool, fallbackURL string) string {
+	names := componentReleaseAssetNamesFor(release, component, goos, goarch, amd64v3, fallbackURL)
+	if len(names) == 0 {
+		return ""
+	}
+	return names[0]
+}
+
+func componentReleaseAssetNamesFor(release githubRelease, component, goos, goarch string, amd64v3 bool, fallbackURL string) []string {
 	component = normalizeComponent(component)
 	if component == "mihomo" {
 		tag := strings.TrimSpace(release.TagName)
 		if tag == "" {
-			return ""
+			return nil
 		}
 		switch goos {
 		case "linux":
 			switch goarch {
 			case "arm64":
-				return "mihomo-linux-arm64-" + tag + ".gz"
+				return []string{"mihomo-linux-arm64-" + tag + ".gz"}
 			case "amd64":
 				if amd64v3 {
-					return "mihomo-linux-amd64-v3-" + tag + ".gz"
+					return []string{
+						"mihomo-linux-amd64-v3-" + tag + ".gz",
+						"mihomo-linux-amd64-v1-" + tag + ".gz",
+						"mihomo-linux-amd64-" + tag + ".gz",
+					}
 				}
-				return "mihomo-linux-amd64-" + tag + ".gz"
+				return []string{
+					"mihomo-linux-amd64-v1-" + tag + ".gz",
+					"mihomo-linux-amd64-" + tag + ".gz",
+				}
 			}
 		case "darwin":
 			switch goarch {
 			case "arm64":
-				return "mihomo-darwin-arm64-" + tag + ".gz"
+				return []string{"mihomo-darwin-arm64-" + tag + ".gz"}
 			case "amd64":
-				return "mihomo-darwin-amd64-compatible-" + tag + ".gz"
+				return []string{"mihomo-darwin-amd64-compatible-" + tag + ".gz"}
 			}
 		}
-		return ""
+		return nil
 	}
 	if component == "mosdns" && goos == "darwin" && (goarch == "amd64" || goarch == "arm64") {
-		return "mosdns-darwin-" + goarch + ".zip"
+		return []string{"mosdns-darwin-" + goarch + ".zip"}
 	}
-	return downloadAssetName(fallbackURL)
+	if name := downloadAssetName(fallbackURL); name != "" {
+		return []string{name}
+	}
+	return nil
 }
 
 func downloadAssetName(rawURL string) string {

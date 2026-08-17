@@ -295,7 +295,7 @@ func TestMihomoOfficialReleaseAssetNameForRuntimeArch(t *testing.T) {
 		amd64v3 bool
 		want    string
 	}{
-		{name: "linux amd64", goos: "linux", goarch: "amd64", want: "mihomo-linux-amd64-v1.19.30.gz"},
+		{name: "linux amd64", goos: "linux", goarch: "amd64", want: "mihomo-linux-amd64-v1-v1.19.30.gz"},
 		{name: "linux amd64 v3", goos: "linux", goarch: "amd64", amd64v3: true, want: "mihomo-linux-amd64-v3-v1.19.30.gz"},
 		{name: "linux arm64", goos: "linux", goarch: "arm64", want: "mihomo-linux-arm64-v1.19.30.gz"},
 		{name: "darwin amd64", goos: "darwin", goarch: "amd64", want: "mihomo-darwin-amd64-compatible-v1.19.30.gz"},
@@ -306,6 +306,39 @@ func TestMihomoOfficialReleaseAssetNameForRuntimeArch(t *testing.T) {
 			got := componentReleaseAssetNameFor(release, "mihomo", tt.goos, tt.goarch, tt.amd64v3, "")
 			if got != tt.want {
 				t.Fatalf("componentReleaseAssetNameFor() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMihomoOfficialReleaseAssetFallbacks(t *testing.T) {
+	const tag = "v1.19.30"
+	asset := func(name string) githubAsset {
+		return githubAsset{Name: name, BrowserDownloadURL: "https://example.invalid/" + name}
+	}
+	v3 := asset("mihomo-linux-amd64-v3-" + tag + ".gz")
+	v1 := asset("mihomo-linux-amd64-v1-" + tag + ".gz")
+	unversioned := asset("mihomo-linux-amd64-" + tag + ".gz")
+	tests := []struct {
+		name    string
+		amd64v3 bool
+		assets  []githubAsset
+		want    string
+	}{
+		{name: "v1 selected explicitly", assets: []githubAsset{unversioned, v1, v3}, want: v1.Name},
+		{name: "v1 falls back to unversioned", assets: []githubAsset{unversioned}, want: unversioned.Name},
+		{name: "v3 selected explicitly", amd64v3: true, assets: []githubAsset{unversioned, v1, v3}, want: v3.Name},
+		{name: "v3 falls back to v1", amd64v3: true, assets: []githubAsset{unversioned, v1}, want: v1.Name},
+		{name: "v3 falls back to unversioned last", amd64v3: true, assets: []githubAsset{unversioned}, want: unversioned.Name},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := componentReleaseAssetFor(githubRelease{TagName: tag, Assets: tt.assets}, "mihomo", "linux", "amd64", tt.amd64v3, "")
+			if !ok {
+				t.Fatal("componentReleaseAssetFor() did not select an asset")
+			}
+			if got.Name != tt.want {
+				t.Fatalf("componentReleaseAssetFor() = %q, want %q", got.Name, tt.want)
 			}
 		})
 	}
